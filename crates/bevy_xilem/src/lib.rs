@@ -60,8 +60,10 @@ pub mod widgets;
 pub use bevy_app;
 pub use bevy_ecs;
 pub use bevy_input;
+pub use bevy_tasks;
 pub use bevy_tweening;
 pub use bevy_window;
+pub use rfd;
 pub use xilem;
 pub use xilem_masonry;
 
@@ -99,7 +101,8 @@ pub mod prelude {
     };
 
     pub use crate::{
-        bevy_app, bevy_ecs, bevy_input, bevy_tweening, bevy_window, xilem, xilem_masonry,
+        bevy_app, bevy_ecs, bevy_input, bevy_tasks, bevy_tweening, bevy_window, rfd, xilem,
+        xilem_masonry,
     };
 }
 

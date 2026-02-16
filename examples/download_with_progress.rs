@@ -2,7 +2,6 @@ use std::{
     fs::File,
     io::{Read, Write},
     sync::Arc,
-    thread,
     time::{Duration, Instant},
 };
 
@@ -12,8 +11,9 @@ use bevy_xilem::{
     apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
-    button, emit_ui_action, resolve_style, resolve_style_for_classes, run_app_with_window_options,
-    text_input,
+    bevy_tasks::{IoTaskPool, TaskPoolBuilder},
+    button, emit_ui_action, resolve_style, resolve_style_for_classes, rfd,
+    run_app_with_window_options, switch, text_input,
     xilem::{
         core::fork,
         view::{
@@ -30,6 +30,7 @@ const DEFAULT_URL: &str = "https://hil-speed.hetzner.com/100MB.bin";
 #[derive(Resource, Debug, Clone)]
 struct DownloadState {
     url: String,
+    use_system_dialog: bool,
     in_progress: bool,
     downloaded_bytes: u64,
     total_bytes: Option<u64>,
@@ -42,6 +43,7 @@ impl Default for DownloadState {
     fn default() -> Self {
         Self {
             url: DEFAULT_URL.to_string(),
+            use_system_dialog: false,
             in_progress: false,
             downloaded_bytes: 0,
             total_bytes: None,
@@ -55,9 +57,15 @@ impl Default for DownloadState {
 #[derive(Debug, Clone)]
 enum DownloadEvent {
     SetUrl(String),
+    SetUseSystemDialog(bool),
     StartDownload,
     DismissDialog,
     Tick,
+    ShowSystemDialog {
+        title: String,
+        description: String,
+    },
+    SystemDialogClosed,
     WorkerStarted {
         total_bytes: Option<u64>,
         target: String,
@@ -74,6 +82,14 @@ enum DownloadEvent {
 
 #[derive(Component, Debug, Clone, Copy)]
 struct DownloadRootView;
+
+fn ensure_io_task_pool() {
+    IoTaskPool::get_or_init(|| {
+        TaskPoolBuilder::new()
+            .thread_name("bevy_xilem IO Task Pool".to_string())
+            .build()
+    });
+}
 
 fn url_file_name(url: &str) -> String {
     reqwest::Url::parse(url)
@@ -106,98 +122,117 @@ fn format_bytes(bytes: u64) -> String {
 }
 
 fn spawn_download_worker(entity: Entity, url: String) {
-    thread::spawn(move || {
-        let fail = |msg: String| {
-            emit_ui_action(entity, DownloadEvent::WorkerFailed(msg));
-        };
+    ensure_io_task_pool();
+    IoTaskPool::get()
+        .spawn(async move {
+            let fail = |msg: String| {
+                emit_ui_action(entity, DownloadEvent::WorkerFailed(msg));
+            };
 
-        let file_name = url_file_name(&url);
-        let target = std::env::current_dir()
-            .map(|dir| dir.join(&file_name))
-            .unwrap_or_else(|_| file_name.into());
-        let target_text = target.display().to_string();
+            let file_name = url_file_name(&url);
+            let target = std::env::current_dir()
+                .map(|dir| dir.join(&file_name))
+                .unwrap_or_else(|_| file_name.into());
+            let target_text = target.display().to_string();
 
-        let client = reqwest::blocking::Client::new();
-        let mut response = match client.get(&url).send() {
-            Ok(response) => response,
-            Err(err) => {
-                fail(format!("Request failed: {err}"));
-                return;
-            }
-        };
-
-        if !response.status().is_success() {
-            fail(format!("HTTP {}", response.status()));
-            return;
-        }
-
-        let total_bytes = response.content_length();
-        emit_ui_action(
-            entity,
-            DownloadEvent::WorkerStarted {
-                total_bytes,
-                target: target_text.clone(),
-            },
-        );
-
-        let mut file = match File::create(&target) {
-            Ok(file) => file,
-            Err(err) => {
-                fail(format!("Cannot create target file: {err}"));
-                return;
-            }
-        };
-
-        let mut buffer = vec![0_u8; 64 * 1024];
-        let mut downloaded_bytes = 0_u64;
-        let mut last_emit = Instant::now();
-
-        loop {
-            let read_count = match response.read(&mut buffer) {
-                Ok(n) => n,
+            let client = reqwest::blocking::Client::new();
+            let mut response = match client.get(&url).send() {
+                Ok(response) => response,
                 Err(err) => {
-                    fail(format!("Read failed: {err}"));
+                    fail(format!("Request failed: {err}"));
                     return;
                 }
             };
 
-            if read_count == 0 {
-                break;
-            }
-
-            if let Err(err) = file.write_all(&buffer[..read_count]) {
-                fail(format!("Write failed: {err}"));
+            if !response.status().is_success() {
+                fail(format!("HTTP {}", response.status()));
                 return;
             }
 
-            downloaded_bytes += u64::try_from(read_count).unwrap_or(0);
+            let total_bytes = response.content_length();
+            emit_ui_action(
+                entity,
+                DownloadEvent::WorkerStarted {
+                    total_bytes,
+                    target: target_text.clone(),
+                },
+            );
 
-            if last_emit.elapsed() >= Duration::from_millis(HEARTBEAT_MS) {
-                emit_ui_action(
-                    entity,
-                    DownloadEvent::WorkerProgress {
-                        downloaded_bytes,
-                        total_bytes,
-                    },
-                );
-                last_emit = Instant::now();
+            let mut file = match File::create(&target) {
+                Ok(file) => file,
+                Err(err) => {
+                    fail(format!("Cannot create target file: {err}"));
+                    return;
+                }
+            };
+
+            let mut buffer = vec![0_u8; 64 * 1024];
+            let mut downloaded_bytes = 0_u64;
+            let mut last_emit = Instant::now();
+
+            loop {
+                let read_count = match response.read(&mut buffer) {
+                    Ok(n) => n,
+                    Err(err) => {
+                        fail(format!("Read failed: {err}"));
+                        return;
+                    }
+                };
+
+                if read_count == 0 {
+                    break;
+                }
+
+                if let Err(err) = file.write_all(&buffer[..read_count]) {
+                    fail(format!("Write failed: {err}"));
+                    return;
+                }
+
+                downloaded_bytes += u64::try_from(read_count).unwrap_or(0);
+
+                if last_emit.elapsed() >= Duration::from_millis(HEARTBEAT_MS) {
+                    emit_ui_action(
+                        entity,
+                        DownloadEvent::WorkerProgress {
+                            downloaded_bytes,
+                            total_bytes,
+                        },
+                    );
+                    last_emit = Instant::now();
+                }
             }
-        }
 
-        emit_ui_action(
-            entity,
-            DownloadEvent::WorkerProgress {
-                downloaded_bytes,
-                total_bytes,
-            },
-        );
-        emit_ui_action(
-            entity,
-            DownloadEvent::WorkerFinished {
-                target: target_text,
-            },
-        );
-    });
+            emit_ui_action(
+                entity,
+                DownloadEvent::WorkerProgress {
+                    downloaded_bytes,
+                    total_bytes,
+                },
+            );
+            emit_ui_action(
+                entity,
+                DownloadEvent::WorkerFinished {
+                    target: target_text,
+                },
+            );
+        })
+        .detach();
+}
+
+fn spawn_system_dialog(entity: Entity, title: String, description: String) {
+    ensure_io_task_pool();
+    IoTaskPool::get()
+        .spawn(async move {
+            let _ = rfd::MessageDialog::new()
+                .set_title(&title)
+                .set_description(&description)
+                .set_level(rfd::MessageLevel::Info)
+                .set_buttons(rfd::MessageButtons::Ok)
+                .show();
+
+            emit_ui_action(entity, DownloadEvent::SystemDialogClosed);
+        })
+        .detach();
 }
 
 fn progress_value(state: &DownloadState) -> Option<f64> {
@@ -248,6 +283,27 @@ fn project_download_root(_: &DownloadRootView, ctx: ProjectionCtx<'_>) -> UiView
         &row_style,
     );
 
+    let dialog_mode_row = apply_widget_style(
+        flex_row((
+            apply_label_style(label("Completion dialog:"), &status_style),
+            switch(
+                ctx.entity,
+                state.use_system_dialog,
+                DownloadEvent::SetUseSystemDialog,
+            ),
+            apply_label_style(
+                label(if state.use_system_dialog {
+                    "System"
+                } else {
+                    "Modal"
+                }),
+                &status_style,
+            ),
+        ))
+        .main_axis_alignment(MainAxisAlignment::Start),
+        &row_style,
+    );
+
     let progress_text = match state.total_bytes {
         Some(total) if total > 0 => format!(
             "{} / {} ({:.1}%)",
@@ -268,6 +324,7 @@ fn project_download_root(_: &DownloadRootView, ctx: ProjectionCtx<'_>) -> UiView
         title.into_any_flex(),
         url_row.into_any_flex(),
         action_row.into_any_flex(),
+        dialog_mode_row.into_any_flex(),
         progress_bar(progress_value(&state)).into_any_flex(),
         apply_label_style(label(progress_text), &status_style).into_any_flex(),
         apply_label_style(label(target_text), &status_style).into_any_flex(),
@@ -453,6 +510,13 @@ fn drain_download_events(world: &mut World) {
             DownloadEvent::SetUrl(url) => {
                 world.resource_mut::<DownloadState>().url = url;
             }
+            DownloadEvent::SetUseSystemDialog(value) => {
+                let mut state = world.resource_mut::<DownloadState>();
+                state.use_system_dialog = value;
+                if value {
+                    state.completed_dialog = None;
+                }
+            }
             DownloadEvent::StartDownload => {
                 let (entity, url, should_start) = {
                     let mut state = world.resource_mut::<DownloadState>();
@@ -478,6 +542,15 @@ fn drain_download_events(world: &mut World) {
                 world.resource_mut::<DownloadState>().completed_dialog = None;
             }
             DownloadEvent::Tick => {}
+            DownloadEvent::ShowSystemDialog { title, description } => {
+                spawn_system_dialog(event.entity, title, description);
+            }
+            DownloadEvent::SystemDialogClosed => {
+                let mut state = world.resource_mut::<DownloadState>();
+                if !state.in_progress {
+                    state.status = "Download complete (system dialog closed).".to_string();
+                }
+            }
             DownloadEvent::WorkerStarted {
                 total_bytes,
                 target,
@@ -498,11 +571,32 @@ fn drain_download_events(world: &mut World) {
                 state.status = "Downloading...".to_string();
             }
             DownloadEvent::WorkerFinished { target } => {
-                let mut state = world.resource_mut::<DownloadState>();
-                state.in_progress = false;
-                state.status = "Download complete.".to_string();
-                state.active_target = Some(target.clone());
-                state.completed_dialog = Some(format!("Saved to: {target}"));
+                let (use_system_dialog, message) = {
+                    let mut state = world.resource_mut::<DownloadState>();
+                    state.in_progress = false;
+                    state.active_target = Some(target.clone());
+
+                    let message = format!("Saved to: {target}");
+                    if state.use_system_dialog {
+                        state.completed_dialog = None;
+                        state.status = "Download complete. Opening system dialog...".to_string();
+                        (true, message)
+                    } else {
+                        state.status = "Download complete.".to_string();
+                        state.completed_dialog = Some(message.clone());
+                        (false, message)
+                    }
+                };
+
+                if use_system_dialog {
+                    emit_ui_action(
+                        event.entity,
+                        DownloadEvent::ShowSystemDialog {
+                            title: "Download finished".to_string(),
+                            description: message,
+                        },
+                    );
+                }
             }
             DownloadEvent::WorkerFailed(message) => {
                 let mut state = world.resource_mut::<DownloadState>();

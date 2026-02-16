@@ -210,6 +210,10 @@ Built-in `UiButton` projector maps to `ecs_button(...)` with action `BuiltinUiAc
 To minimize dependency friction, `bevy_xilem` re-exports commonly needed Bevy/Xilem crates and
 provides a dual control-view naming scheme:
 
+- Runtime-adjacent integration crates used by examples/apps (for example `bevy_tasks` task pools
+  and `rfd` native dialogs) are also re-exported, so downstream apps can stay version-aligned with
+  `bevy_xilem`.
+
 - ECS event-adapted controls are exported with ergonomic names (`button`, `checkbox`, `slider`,
   `switch`, `text_button`, `text_input`, ...).
 - Original `xilem_masonry::view` controls are re-exported with `xilem_` prefixes
