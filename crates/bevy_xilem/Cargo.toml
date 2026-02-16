@@ -11,6 +11,9 @@ crossbeam-channel.workspace = true
 xilem.workspace = true
 xilem_masonry.workspace = true
 
+[dev-dependencies]
+num-traits.workspace = true
+
 [[example]]
 name = "calculator"
 path = "../../examples/calculator.rs"
@@ -18,3 +21,7 @@ path = "../../examples/calculator.rs"
 [[example]]
 name = "todo_list"
 path = "../../examples/todo_list.rs"
+
+[[example]]
+name = "chess"
+path = "../../examples/chess.rs"

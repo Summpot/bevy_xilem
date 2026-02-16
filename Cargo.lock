@@ -603,6 +603,7 @@ dependencies = [
  "bevy_app",
  "bevy_ecs",
  "crossbeam-channel",
+ "num-traits",
  "xilem",
  "xilem_masonry",
 ]
