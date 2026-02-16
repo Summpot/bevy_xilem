@@ -7,3 +7,16 @@ license.workspace = true
 [dependencies]
 bevy_app.workspace = true
 bevy_ecs.workspace = true
+xilem_masonry.workspace = true
+
+[dev-dependencies]
+crossbeam-channel = "0.5.15"
+xilem.workspace = true
+
+[[example]]
+name = "calculator"
+path = "../../examples/calculator.rs"
+
+[[example]]
+name = "todo_list"
+path = "../../examples/todo_list.rs"

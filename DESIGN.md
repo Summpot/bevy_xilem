@@ -12,7 +12,7 @@ The repository currently implements:
 
 - ECS-based UI state components
 - A projector registry for component-to-view mapping
-- Recursive synthesis from ECS entities to a UI intermediate representation (IR)
+- Recursive synthesis from ECS entities directly to type-erased Xilem views
 - Bevy plugin wiring for event collection and synthesis execution
 - Synthesis runtime metrics
 
@@ -38,23 +38,18 @@ UI entities are modeled with explicit components:
   - `UiLabel { text: String }`
   - `UiButton { label: String }`
 
-## Implemented View IR
+## Implemented View Projection (Real Xilem)
 
-Synthesis produces `UiViewNode` values:
+Synthesis produces real Xilem views directly:
 
-- `FlexColumn`
-- `Label`
-- `Button`
-- `Unhandled` (no matching projector)
-- `MissingEntity` (child reference points to a non-spawned entity)
-- `Cycle` (recursion guard for cyclic references)
+- `UiProjector` returns `UiView` (`Arc<AnyWidgetView<(), ()>>`)
+- `SynthesizedUiViews` stores `Vec<UiView>` each update cycle
+- Built-in component projectors map to Xilem view constructors:
+  - `UiFlexColumn` -> `xilem_masonry::view::flex_col`
+  - `UiLabel` -> `xilem_masonry::view::label`
+  - `UiButton` -> `xilem_masonry::view::text_button`
 
-This IR is stored in the `SynthesizedUiTrees` resource each update cycle.
-
-`UiViewNode` is currently a temporary compatibility layer.
-
-- **Planned direction**: `UiProjector` will eventually return `Box<dyn AnyView>` directly.
-- **Target architecture**: bypass the IR step entirely once Xilem is linked, so closures and widget payloads are not forced through an enum representation.
+Fallback handling for unhandled / missing / cycle cases is also represented as concrete Xilem views (labels/flex containers), not enum IR nodes.
 
 ## Projector Registry
 
@@ -75,8 +70,8 @@ Behavior:
 1. Gather all `UiRoot` entities.
 2. Recursively synthesize child nodes first.
 3. Apply projector dispatch for the current entity.
-4. Emit fallback nodes for unhandled/missing/cycle cases.
-5. Write resulting root trees to `SynthesizedUiTrees`.
+4. Emit fallback Xilem views for unhandled/missing/cycle cases.
+5. Write resulting root views to `SynthesizedUiViews`.
 
 ## Event Collection
 
@@ -88,7 +83,7 @@ Behavior:
 
 ## Runtime Metrics
 
-`UiSynthesisStats` is updated every synthesis pass and includes:
+`UiSynthesisStats` is updated during synthesis traversal and includes:
 
 - `root_count`
 - `node_count`
@@ -104,7 +99,7 @@ This makes synthesis behavior observable without external instrumentation.
 
 - Initializes resources:
   - `UiProjectorRegistry`
-  - `SynthesizedUiTrees`
+  - `SynthesizedUiViews`
   - `UiSynthesisStats`
   - `UiEventSender`
   - `UiEventInbox`
@@ -117,7 +112,7 @@ This makes synthesis behavior observable without external instrumentation.
 
 The crate contains tests that verify:
 
-- Correct synthesis for built-in nodes
+- Successful synthesis for built-in components
 - Projector override behavior (last registration takes precedence)
 - Cycle detection behavior
 - Plugin integration (events + synthesis + metrics)
@@ -127,8 +122,7 @@ The crate contains tests that verify:
 
 The following are not implemented in the current codebase:
 
-- Direct conversion from `UiViewNode` into live Xilem widget trees
-- Masonry runtime driving and widget diff application
+- Plugin-level Masonry runtime driving and widget diff application (windowed runtime wiring currently lives in examples)
 - Render backend integration (e.g., Vello/RenderGraph path)
 - Input routing from window/input backends into UI actions
 
