@@ -5,6 +5,9 @@ Date: 2026-02-16
 This document describes the **current implementation** after the architecture pivot to
 **headless Masonry + Bevy-driven scheduling/input**.
 
+> Note: “headless” here describes the internal retained runtime ownership model,
+> not that end-user apps/examples must be non-GUI.
+
 ## Purpose
 
 `bevy_xilem` integrates Bevy ECS state management with a retained Masonry UI tree, while using
@@ -18,7 +21,8 @@ The framework now avoids the high-level `xilem::Xilem::new_simple` runner comple
 
 - Bevy owns scheduling and window/input message flow.
 - Masonry is driven as a retained UI runtime resource from Bevy systems.
-- No Winit event loop is started by `bevy_xilem` itself.
+- `bevy_xilem` also provides a windowed bridge runner for GUI examples/apps,
+  while preserving Bevy-driven synthesis updates.
 
 ### 2) Headless retained runtime resource
 
@@ -109,6 +113,20 @@ and registers systems:
 
 It also registers built-in projectors.
 
+## Windowed example runner
+
+`bevy_xilem` provides:
+
+- `run_app(bevy_app, title)`
+- `run_app_with_window_options(bevy_app, title, configure_window)`
+
+This bridge runs a GUI window through `Xilem::new` (not `Xilem::new_simple`) and,
+on each frame, advances the Bevy app, reads `SynthesizedUiViews`, and renders the
+current synthesized root view.
+
+This keeps examples as normal GUI programs while retaining the new Bevy-first
+synthesis architecture.
+
 ## Built-in button behavior
 
 Built-in `UiButton` projector maps to `ecs_button(...)` with action `BuiltinUiAction::Clicked`.
@@ -117,12 +135,11 @@ Built-in `UiButton` projector maps to `ecs_button(...)` with action `BuiltinUiAc
 
 Examples were rewritten to demonstrate this architecture with:
 
-- Bevy-driven updates
-- typed action drains from `UiEventQueue`
-- simulated Bevy input messages feeding Masonry through the PreUpdate bridge
+- GUI windows via the bridge runner
+- Bevy-driven synthesis updates each frame
+- typed action handling via `UiEventQueue` (ECS queue path only)
 - no `xilem::Xilem::new_simple` usage
 
 ## Non-goals in current repository state
 
-- No direct window creation/event-loop management by `bevy_xilem`
 - No custom render-graph integration beyond Masonry retained runtime ownership

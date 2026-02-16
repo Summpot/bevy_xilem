@@ -3,11 +3,11 @@ use std::sync::Arc;
 use bevy_app::{App, PreUpdate};
 use bevy_ecs::prelude::*;
 use bevy_xilem::{
-    BevyXilemPlugin, ProjectionCtx, UiEventReceiver, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    XilemAction, run_app,
+    BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
+    emit_ui_action, run_app_with_window_options,
 };
 use xilem::{
-    Color, WindowOptions,
+    Color,
     masonry::layout::Length,
     masonry::properties::Padding,
     palette,
@@ -28,7 +28,6 @@ struct TemperatureState {
 
 impl Default for TemperatureState {
     fn default() -> Self {
-        // Start with a simple consistent pair.
         Self {
             celsius_text: "0".to_string(),
             fahrenheit_text: "32".to_string(),
@@ -44,14 +43,6 @@ enum TemperatureEvent {
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TemperatureRootView;
-
-fn parse_number(text: &str) -> Option<f64> {
-    let trimmed = text.trim();
-    if trimmed.is_empty() {
-        return None;
-    }
-    trimmed.parse::<f64>().ok()
-}
 
 fn format_number(value: f64) -> String {
     let mut v = value;
@@ -72,6 +63,14 @@ fn format_number(value: f64) -> String {
     } else {
         text
     }
+}
+
+fn parse_number(text: &str) -> Option<f64> {
+    let trimmed = text.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    trimmed.parse::<f64>().ok()
 }
 
 fn c_to_f(c: f64) -> f64 {
@@ -113,8 +112,7 @@ fn apply_temperature_event(state: &mut TemperatureState, event: TemperatureEvent
 
 fn project_temperature_root(_: &TemperatureRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let state = ctx.world.resource::<TemperatureState>().clone();
-    let sender = ctx.event_sender.clone();
-    let sender_for_f = sender.clone();
+    let entity = ctx.entity;
 
     let title = label("Temperature Converter")
         .text_size(24.0)
@@ -123,9 +121,7 @@ fn project_temperature_root(_: &TemperatureRootView, ctx: ProjectionCtx<'_>) -> 
 
     let celsius_row = flex_row((
         text_input(state.celsius_text, move |_, new_value| {
-            let _ = sender.send(XilemAction::action(TemperatureEvent::SetCelsiusText(
-                new_value,
-            )));
+            emit_ui_action(entity, TemperatureEvent::SetCelsiusText(new_value));
         })
         .placeholder("0")
         .text_size(16.0)
@@ -134,11 +130,10 @@ fn project_temperature_root(_: &TemperatureRootView, ctx: ProjectionCtx<'_>) -> 
     ))
     .gap(Length::px(8.0));
 
+    let entity_for_f = ctx.entity;
     let fahrenheit_row = flex_row((
         text_input(state.fahrenheit_text, move |_, new_value| {
-            let _ = sender_for_f.send(XilemAction::action(TemperatureEvent::SetFahrenheitText(
-                new_value,
-            )));
+            emit_ui_action(entity_for_f, TemperatureEvent::SetFahrenheitText(new_value));
         })
         .placeholder("32")
         .text_size(16.0)
@@ -176,7 +171,7 @@ fn setup_temperature_world(world: &mut World) {
 
 fn drain_temperature_events(world: &mut World) {
     let events = world
-        .resource::<UiEventReceiver>()
+        .resource::<UiEventQueue>()
         .drain_actions::<TemperatureEvent>();
     if events.is_empty() {
         return;
@@ -184,7 +179,7 @@ fn drain_temperature_events(world: &mut World) {
 
     let mut state = world.resource_mut::<TemperatureState>();
     for event in events {
-        apply_temperature_event(&mut state, event);
+        apply_temperature_event(&mut state, event.action);
     }
 }
 
@@ -202,9 +197,9 @@ fn build_bevy_temperature_app() -> App {
 }
 
 fn main() -> Result<(), EventLoopError> {
-    run_app(
+    run_app_with_window_options(
         build_bevy_temperature_app(),
-        WindowOptions::new("Temperature Converter")
-            .with_initial_inner_size(LogicalSize::new(520.0, 240.0)),
+        "Temperature Converter",
+        |options| options.with_initial_inner_size(LogicalSize::new(520.0, 240.0)),
     )
 }

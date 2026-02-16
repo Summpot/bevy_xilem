@@ -75,10 +75,7 @@ where
                 ctx.request_paint_only();
             }
             PointerEvent::Up(PointerButtonEvent { button, .. }) => {
-                if matches!(button, Some(PointerButton::Primary))
-                    && ctx.is_active()
-                    && ctx.is_hovered()
-                {
+                if matches!(button, Some(PointerButton::Primary)) && ctx.is_active() {
                     self.push_action();
                 }
                 ctx.request_paint_only();

@@ -6,11 +6,11 @@ use bevy_ecs::{
     prelude::*,
 };
 use bevy_xilem::{
-    BevyXilemPlugin, ProjectionCtx, UiEventReceiver, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    XilemAction, run_app,
+    BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
+    emit_ui_action, run_app,
 };
 use xilem::{
-    InsertNewline, WindowOptions,
+    InsertNewline,
     masonry::{
         layout::Length,
         theme::{DEFAULT_GAP, ZYNC_800},
@@ -108,24 +108,24 @@ fn project_todo_header(_: &TodoHeader, _: ProjectionCtx<'_>) -> UiView {
 
 fn project_todo_input_area(_: &TodoInputArea, ctx: ProjectionCtx<'_>) -> UiView {
     let draft = ctx.world.resource::<DraftTodo>().0.clone();
-    let sender = ctx.event_sender.clone();
-    let sender_for_enter = sender.clone();
-    let sender_for_button = sender.clone();
+    let entity = ctx.entity;
+    let entity_for_enter = entity;
+    let entity_for_button = entity;
 
     Arc::new(
         flex_row((
             text_input(draft, move |_, new_value| {
-                let _ = sender.send(XilemAction::action(TodoEvent::SetDraft(new_value)));
+                emit_ui_action(entity, TodoEvent::SetDraft(new_value));
             })
             .text_size(16.0)
             .placeholder("What needs to be done?")
             .insert_newline(InsertNewline::OnShiftEnter)
             .on_enter(move |_, _| {
-                let _ = sender_for_enter.send(XilemAction::action(TodoEvent::SubmitDraft));
+                emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
             })
             .flex(1.0),
             button(label("Add task").text_size(16.0), move |_| {
-                let _ = sender_for_button.send(XilemAction::action(TodoEvent::SubmitDraft));
+                emit_ui_action(entity_for_button, TodoEvent::SubmitDraft);
             }),
         ))
         .gap(DEFAULT_GAP),
@@ -154,18 +154,17 @@ fn project_todo_item(item: &TodoItem, ctx: ProjectionCtx<'_>) -> UiView {
     }
 
     let entity = ctx.entity;
-    let sender = ctx.event_sender.clone();
-    let sender_for_delete = sender.clone();
+    let entity_for_delete = entity;
 
     Arc::new(
         flex_row((
             checkbox(item.text.clone(), item.completed, move |_, value| {
-                let _ = sender.send(XilemAction::action(TodoEvent::SetCompleted(entity, value)));
+                emit_ui_action(entity, TodoEvent::SetCompleted(entity, value));
             })
             .text_size(16.0),
             FlexSpacer::Flex(1.0),
             text_button("Delete", move |_| {
-                let _ = sender_for_delete.send(XilemAction::action(TodoEvent::Delete(entity)));
+                emit_ui_action(entity_for_delete, TodoEvent::Delete(entity_for_delete));
             })
             .padding(5.0),
         ))
@@ -197,10 +196,10 @@ fn project_filter_bar(_: &TodoFilterBar, ctx: ProjectionCtx<'_>) -> UiView {
 fn project_filter_toggle(filter_toggle: &FilterToggle, ctx: ProjectionCtx<'_>) -> UiView {
     let filter = filter_toggle.0;
     let active = ctx.world.resource::<ActiveFilter>().0;
-    let sender = ctx.event_sender.clone();
+    let entity = ctx.entity;
 
     Arc::new(checkbox(filter.as_str(), active == filter, move |_, _| {
-        let _ = sender.send(XilemAction::action(TodoEvent::SetFilter(filter)));
+        emit_ui_action(entity, TodoEvent::SetFilter(filter));
     }))
 }
 
@@ -273,14 +272,14 @@ fn setup_todo_world(world: &mut World) {
 
 fn drain_todo_events_and_mutate_world(world: &mut World) {
     let events = world
-        .resource::<UiEventReceiver>()
+        .resource::<UiEventQueue>()
         .drain_actions::<TodoEvent>();
     if events.is_empty() {
         return;
     }
 
     for event in events {
-        match event {
+        match event.action {
             TodoEvent::SetDraft(text) => {
                 world.resource_mut::<DraftTodo>().0 = text;
             }
@@ -330,5 +329,5 @@ fn build_bevy_todo_app() -> App {
 }
 
 fn main() -> Result<(), EventLoopError> {
-    run_app(build_bevy_todo_app(), WindowOptions::new("To Do MVC"))
+    run_app(build_bevy_todo_app(), "To Do MVC")
 }

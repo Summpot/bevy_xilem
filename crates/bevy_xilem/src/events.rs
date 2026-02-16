@@ -1,7 +1,7 @@
 use std::{
     any::Any,
     fmt,
-    sync::{Arc, OnceLock},
+    sync::{Arc, OnceLock, PoisonError, RwLock},
 };
 
 use bevy_ecs::{entity::Entity, prelude::Resource};
@@ -107,14 +107,36 @@ impl UiEventQueue {
     }
 }
 
-static GLOBAL_UI_EVENT_QUEUE: OnceLock<Arc<SegQueue<UiEvent>>> = OnceLock::new();
+static GLOBAL_UI_EVENT_QUEUE: OnceLock<RwLock<Option<Arc<SegQueue<UiEvent>>>>> = OnceLock::new();
+
+fn global_ui_event_queue_slot() -> &'static RwLock<Option<Arc<SegQueue<UiEvent>>>> {
+    GLOBAL_UI_EVENT_QUEUE.get_or_init(|| RwLock::new(None))
+}
 
 pub(crate) fn install_global_ui_event_queue(queue: Arc<SegQueue<UiEvent>>) {
-    let _ = GLOBAL_UI_EVENT_QUEUE.set(queue);
+    let mut slot = global_ui_event_queue_slot()
+        .write()
+        .unwrap_or_else(PoisonError::into_inner);
+    *slot = Some(queue);
 }
 
 pub(crate) fn push_global_ui_event(event: UiEvent) {
-    if let Some(queue) = GLOBAL_UI_EVENT_QUEUE.get() {
+    let queue = {
+        let slot = global_ui_event_queue_slot()
+            .read()
+            .unwrap_or_else(PoisonError::into_inner);
+        slot.as_ref().cloned()
+    };
+
+    if let Some(queue) = queue {
         queue.push(event);
     }
+}
+
+/// Emit a typed UI action into the global ECS-backed UI queue.
+///
+/// This is intended for callback-based widget APIs in examples/apps that still
+/// want to route all interactions through [`UiEventQueue`].
+pub fn emit_ui_action<T: Any + Send + Sync>(entity: Entity, action: T) {
+    push_global_ui_event(UiEvent::typed(entity, action));
 }

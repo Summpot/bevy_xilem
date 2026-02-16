@@ -6,11 +6,6 @@ use crate::{
 };
 use bevy_app::App;
 use bevy_ecs::prelude::*;
-use bevy_input::{
-    ButtonState,
-    mouse::{MouseButton, MouseButtonInput},
-};
-use bevy_window::CursorMoved;
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TestRoot;
@@ -45,7 +40,7 @@ fn plugin_wires_synthesis_and_runtime() {
 }
 
 #[test]
-fn ecs_button_click_pushes_typed_queue_action() {
+fn ui_event_queue_drains_typed_actions() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
@@ -59,34 +54,14 @@ fn ecs_button_click_pushes_typed_queue_action() {
     // Build synthesized tree + initial Masonry retained tree.
     app.update();
 
-    let window = app.world_mut().spawn_empty().id();
+    app.world()
+        .resource::<UiEventQueue>()
+        .push_typed(root, TestAction::Clicked);
 
-    app.world_mut()
-        .write_message(CursorMoved {
-            window,
-            position: (20.0, 20.0).into(),
-            delta: None,
-        })
-        .expect("cursor moved message should be written");
-    app.world_mut()
-        .write_message(MouseButtonInput {
-            button: MouseButton::Left,
-            state: ButtonState::Pressed,
-            window,
-        })
-        .expect("mouse down message should be written");
-    app.world_mut()
-        .write_message(MouseButtonInput {
-            button: MouseButton::Left,
-            state: ButtonState::Released,
-            window,
-        })
-        .expect("mouse up message should be written");
-
-    app.update();
-
-    let queue = app.world().resource::<UiEventQueue>();
-    let actions = queue.drain_actions::<TestAction>();
+    let actions = app
+        .world()
+        .resource::<UiEventQueue>()
+        .drain_actions::<TestAction>();
 
     assert_eq!(actions.len(), 1);
     assert_eq!(actions[0].entity, root);

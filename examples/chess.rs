@@ -1,5 +1,5 @@
 use std::{
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, mpsc},
     thread,
     time::{Duration, Instant},
 };
@@ -7,12 +7,11 @@ use std::{
 use bevy_app::{App, PreUpdate};
 use bevy_ecs::prelude::*;
 use bevy_xilem::{
-    BevyXilemPlugin, ProjectionCtx, UiEventReceiver, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    XilemAction, run_app,
+    BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
+    emit_ui_action, run_app_with_window_options,
 };
-use crossbeam_channel::{Receiver, Sender, unbounded};
 use xilem::{
-    Color, WindowOptions,
+    Color,
     masonry::{
         dpi::LogicalSize,
         layout::{AsUnit, Length},
@@ -91,7 +90,7 @@ enum ChessEvent {
 #[derive(Resource)]
 struct ChessGameResource {
     game: Arc<Mutex<engine::Game>>,
-    rx: Option<Receiver<engine::Move>>,
+    rx: Option<Arc<Mutex<mpsc::Receiver<engine::Move>>>>,
     time_per_move: f64,
 }
 
@@ -354,8 +353,8 @@ fn tick_once(
                 game.secs_per_move = game_res.time_per_move as f32;
             }
 
-            let (tx, rx) = unbounded();
-            game_res.rx = Some(rx);
+            let (tx, rx) = mpsc::channel();
+            game_res.rx = Some(Arc::new(Mutex::new(rx)));
             let game_clone = Arc::clone(&game_res.game);
 
             thread::spawn(move || {
@@ -364,9 +363,12 @@ fn tick_once(
             });
         }
         Phase::EnginePlaying => {
-            if let Some(rx) = &game_res.rx
-                && let Ok(mv) = rx.try_recv()
-            {
+            let maybe_move = game_res
+                .rx
+                .as_ref()
+                .and_then(|rx| rx.lock().ok().and_then(|locked| locked.try_recv().ok()));
+
+            if let Some(mv) = maybe_move {
                 let mut game = game_res.game.lock().unwrap();
 
                 ui.square_tags = [0; 64];
@@ -401,7 +403,7 @@ fn tick_once(
 #[derive(Component, Debug, Clone, Copy)]
 struct ChessRootView;
 
-fn build_chess_board_view(ui: &ChessUiResource, sender: &Sender<XilemAction>) -> UiView {
+fn build_chess_board_view(ui: &ChessUiResource, action_entity: Entity) -> UiView {
     let mut cells = Vec::with_capacity(BOARD_SIZE * BOARD_SIZE);
 
     for row in 0..BOARD_SIZE {
@@ -433,10 +435,9 @@ fn build_chess_board_view(ui: &ChessUiResource, sender: &Sender<XilemAction>) ->
                 .font(chess_piece_font_family())
                 .color(Color::BLACK);
 
-            let sender_for_square = sender.clone();
+            let cell_entity = action_entity;
             let cell = button(label_piece, move |_| {
-                let _ = sender_for_square
-                    .send(XilemAction::action(ChessEvent::ClickSquare { row, col }));
+                emit_ui_action(cell_entity, ChessEvent::ClickSquare { row, col });
             })
             .padding(0.0)
             .background_color(color)
@@ -460,16 +461,15 @@ fn build_chess_controls_view(
     game_res: &ChessGameResource,
     ui: &ChessUiResource,
     flow: &ChessFlowResource,
-    sender: &Sender<XilemAction>,
+    action_entity: Entity,
 ) -> UiView {
     let movelist_text = ui.movelist_text();
-
-    let sender_set_time = sender.clone();
-    let sender_toggle_white = sender.clone();
-    let sender_toggle_black = sender.clone();
-    let sender_rotate = sender.clone();
-    let sender_new_game = sender.clone();
-    let sender_print_movelist = sender.clone();
+    let entity_set_time = action_entity;
+    let entity_toggle_white = action_entity;
+    let entity_toggle_black = action_entity;
+    let entity_rotate = action_entity;
+    let entity_new_game = action_entity;
+    let entity_print_movelist = action_entity;
 
     Arc::new(
         flex_col((
@@ -481,24 +481,22 @@ fn build_chess_controls_view(
             FlexSpacer::Fixed(TINY_GAP),
             label(format!("{:.2} sec/move", game_res.time_per_move)),
             slider(0.1, 5.0, game_res.time_per_move, move |_, val| {
-                let _ = sender_set_time.send(XilemAction::action(ChessEvent::SetTimePerMove(val)));
+                emit_ui_action(entity_set_time, ChessEvent::SetTimePerMove(val));
             }),
             checkbox("Engine plays white", ui.engine_plays_white, move |_, _| {
-                let _ =
-                    sender_toggle_white.send(XilemAction::action(ChessEvent::ToggleEngineWhite));
+                emit_ui_action(entity_toggle_white, ChessEvent::ToggleEngineWhite);
             }),
             checkbox("Engine plays black", ui.engine_plays_black, move |_, _| {
-                let _ =
-                    sender_toggle_black.send(XilemAction::action(ChessEvent::ToggleEngineBlack));
+                emit_ui_action(entity_toggle_black, ChessEvent::ToggleEngineBlack);
             }),
             text_button("Rotate", move |_| {
-                let _ = sender_rotate.send(XilemAction::action(ChessEvent::Rotate));
+                emit_ui_action(entity_rotate, ChessEvent::Rotate);
             }),
             text_button("New game", move |_| {
-                let _ = sender_new_game.send(XilemAction::action(ChessEvent::NewGame));
+                emit_ui_action(entity_new_game, ChessEvent::NewGame);
             }),
             text_button("Print movelist", move |_| {
-                let _ = sender_print_movelist.send(XilemAction::action(ChessEvent::PrintMovelist));
+                emit_ui_action(entity_print_movelist, ChessEvent::PrintMovelist);
             }),
             sized_box(prose(movelist_text)).width(200_i32.px()),
             FlexSpacer::Fixed(GAP),
@@ -512,9 +510,8 @@ fn project_chess_root(_: &ChessRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let game_res = ctx.world.resource::<ChessGameResource>();
     let ui = ctx.world.resource::<ChessUiResource>();
     let flow = ctx.world.resource::<ChessFlowResource>();
-    let sender = ctx.event_sender.clone();
-    let controls = build_chess_controls_view(&game_res, &ui, &flow, &sender);
-    let board = build_chess_board_view(&ui, &sender);
+    let controls = build_chess_controls_view(&game_res, &ui, &flow, ctx.entity);
+    let board = build_chess_board_view(&ui, ctx.entity);
 
     let children = vec![
         FlexSpacer::Fixed(GAP).into_any_flex(),
@@ -541,12 +538,12 @@ fn setup_chess_world(world: &mut World) {
 
 fn drain_events_and_tick(world: &mut World) {
     let events = world
-        .resource::<UiEventReceiver>()
+        .resource::<UiEventQueue>()
         .drain_actions::<ChessEvent>();
 
     with_chess_resources(world, |game_res, ui, flow| {
         for event in events {
-            apply_event(event, game_res, ui, flow);
+            apply_event(event.action, game_res, ui, flow);
         }
         tick_game(game_res, ui, flow);
     });
@@ -639,10 +636,9 @@ fn chess_piece_font_family() -> &'static str {
 }
 
 fn main() -> Result<(), EventLoopError> {
-    run_app(
-        build_bevy_chess_app(),
-        WindowOptions::new("Xilem Chess GUI")
+    run_app_with_window_options(build_bevy_chess_app(), "Xilem Chess GUI", |options| {
+        options
             .with_min_inner_size(LogicalSize::new(800.0, 800.0))
-            .with_initial_inner_size(LogicalSize::new(1200.0, 1000.0)),
-    )
+            .with_initial_inner_size(LogicalSize::new(1200.0, 1000.0))
+    })
 }

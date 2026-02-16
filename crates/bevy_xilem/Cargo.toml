@@ -12,6 +12,7 @@ bevy_window.workspace = true
 crossbeam-queue.workspace = true
 masonry.workspace = true
 tokio.workspace = true
+xilem.workspace = true
 xilem_core.workspace = true
 xilem_masonry.workspace = true
 vello.workspace = true

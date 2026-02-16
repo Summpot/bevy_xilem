@@ -4,6 +4,7 @@ pub mod ecs;
 pub mod events;
 pub mod plugin;
 pub mod projection;
+pub mod runner;
 pub mod runtime;
 pub mod synthesize;
 pub mod views;
@@ -13,6 +14,7 @@ pub use ecs::*;
 pub use events::*;
 pub use plugin::*;
 pub use projection::*;
+pub use runner::*;
 pub use runtime::*;
 pub use synthesize::*;
 pub use views::*;
@@ -21,12 +23,13 @@ pub mod prelude {
     pub use bevy_ecs::hierarchy::{ChildOf, Children};
 
     pub use crate::{
-        BevyXilemPlugin, BuiltinUiAction, EcsButtonView, MasonryRuntime, ProjectionCtx,
-        SynthesizedUiViews, TypedUiEvent, UiAnyView, UiButton, UiEvent, UiEventQueue, UiFlexColumn,
-        UiFlexRow, UiLabel, UiNodeId, UiProjector, UiProjectorRegistry, UiRoot, UiSynthesisStats,
-        UiView, ecs_button, gather_ui_roots, inject_bevy_input_into_masonry,
-        rebuild_masonry_runtime, register_builtin_projectors, synthesize_roots,
-        synthesize_roots_with_stats, synthesize_ui, synthesize_world,
+        BevyXilemPlugin, BevyXilemRuntime, BuiltinUiAction, EcsButtonView, MasonryRuntime,
+        ProjectionCtx, SynthesizedUiViews, TypedUiEvent, UiAnyView, UiButton, UiEvent,
+        UiEventQueue, UiFlexColumn, UiFlexRow, UiLabel, UiNodeId, UiProjector, UiProjectorRegistry,
+        UiRoot, UiSynthesisStats, UiView, ecs_button, gather_ui_roots,
+        inject_bevy_input_into_masonry, rebuild_masonry_runtime, register_builtin_projectors,
+        run_app, run_app_with_window_options, synthesize_roots, synthesize_roots_with_stats,
+        synthesize_ui, synthesize_world,
     };
 }
 

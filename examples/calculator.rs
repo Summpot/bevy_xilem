@@ -3,12 +3,11 @@ use std::sync::Arc;
 use bevy_app::{App, PreUpdate};
 use bevy_ecs::prelude::*;
 use bevy_xilem::{
-    BevyXilemPlugin, ProjectionCtx, UiEventReceiver, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    XilemAction, run_app,
+    BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
+    emit_ui_action, run_app_with_window_options,
 };
-use crossbeam_channel::Sender;
 use xilem::{
-    Color, WindowOptions,
+    Color,
     masonry::layout::Length,
     palette,
     style::Style as _,
@@ -387,8 +386,8 @@ fn calc_button_rows() -> Vec<Vec<CalcButtonSpec>> {
 }
 
 fn project_calc_button(
+    entity: Entity,
     button_data: &CalcButtonSpec,
-    sender: Sender<XilemAction>,
     highlight_clear_entry: bool,
 ) -> UiView {
     let event = button_data.event.clone();
@@ -396,7 +395,7 @@ fn project_calc_button(
     match button_data.kind {
         CalcButtonKind::Digit => Arc::new(
             text_button(button_data.label, move |_| {
-                let _ = sender.send(XilemAction::action(event.clone()));
+                emit_ui_action(entity, event.clone());
             })
             .background_color(Color::from_rgb8(0x3a, 0x3a, 0x3a))
             .corner_radius(10.0)
@@ -412,7 +411,7 @@ fn project_calc_button(
 
             Arc::new(
                 button(label(button_data.label).color(label_color), move |_| {
-                    let _ = sender.send(XilemAction::action(event.clone()));
+                    emit_ui_action(entity, event.clone());
                 })
                 .background_color(Color::from_rgb8(0x00, 0x8d, 0xdd))
                 .corner_radius(10.0)
@@ -425,7 +424,6 @@ fn project_calc_button(
 
 fn project_calc_root(_: &CalcRoot, ctx: ProjectionCtx<'_>) -> UiView {
     let engine = ctx.world.resource::<CalculatorEngine>();
-    let sender = ctx.event_sender.clone();
     let highlight_clear_entry = engine.current_number().is_empty();
 
     let mut children = vec![
@@ -439,8 +437,7 @@ fn project_calc_root(_: &CalcRoot, ctx: ProjectionCtx<'_>) -> UiView {
         let row_children = row
             .iter()
             .map(|button_data| {
-                project_calc_button(button_data, sender.clone(), highlight_clear_entry)
-                    .into_any_flex()
+                project_calc_button(ctx.entity, button_data, highlight_clear_entry).into_any_flex()
             })
             .collect::<Vec<_>>();
 
@@ -461,7 +458,7 @@ fn setup_calculator_world(world: &mut World) {
 
 fn drain_calc_events(world: &mut World) {
     let events = world
-        .resource::<UiEventReceiver>()
+        .resource::<UiEventQueue>()
         .drain_actions::<CalcEvent>();
     if events.is_empty() {
         return;
@@ -469,7 +466,7 @@ fn drain_calc_events(world: &mut World) {
 
     let mut engine = world.resource_mut::<CalculatorEngine>();
     for event in events {
-        engine.apply_event(event);
+        engine.apply_event(event.action);
     }
 }
 
@@ -487,8 +484,7 @@ fn build_bevy_calculator_app() -> App {
 }
 
 fn main() -> Result<(), EventLoopError> {
-    run_app(
-        build_bevy_calculator_app(),
-        WindowOptions::new("Calculator").with_initial_inner_size(LogicalSize::new(400.0, 500.0)),
-    )
+    run_app_with_window_options(build_bevy_calculator_app(), "Calculator", |options| {
+        options.with_initial_inner_size(LogicalSize::new(400.0, 500.0))
+    })
 }

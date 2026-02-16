@@ -16,6 +16,7 @@ crossbeam-queue = "0.3.12"
 tokio = { version = "1.49.0", features = ["rt-multi-thread"] }
 num-traits = "0.2.19"
 masonry = { path = "../xilem/masonry" }
+xilem = { path = "../xilem/xilem" }
 xilem_core = { path = "../xilem/xilem_core" }
 xilem_masonry = { path = "../xilem/xilem_masonry" }
 vello = "0.7.0"

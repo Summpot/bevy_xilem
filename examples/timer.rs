@@ -3,11 +3,11 @@ use std::{sync::Arc, time::Instant};
 use bevy_app::{App, PreUpdate};
 use bevy_ecs::prelude::*;
 use bevy_xilem::{
-    BevyXilemPlugin, ProjectionCtx, UiEventReceiver, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    XilemAction, run_app,
+    BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
+    emit_ui_action, run_app_with_window_options,
 };
 use xilem::{
-    Color, WindowOptions,
+    Color,
     masonry::layout::Length,
     masonry::properties::Padding,
     palette,
@@ -63,7 +63,6 @@ fn format_secs(secs: f64) -> String {
 fn apply_timer_event(state: &mut TimerState, event: TimerEvent) {
     match event {
         TimerEvent::SetDurationSecs(new_duration) => {
-            // Keep duration sane and non-zero.
             state.duration_secs = new_duration.max(0.1);
             state.elapsed_secs = state.elapsed_secs.min(state.duration_secs);
         }
@@ -86,8 +85,7 @@ fn tick_timer(state: &mut TimerState) {
 
 fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let state = ctx.world.resource::<TimerState>().clone();
-    let sender = ctx.event_sender.clone();
-    let sender_for_reset = sender.clone();
+    let entity = ctx.entity;
 
     let progress = if state.duration_secs > 0.0 {
         Some(clamp01(state.elapsed_secs / state.duration_secs))
@@ -114,15 +112,16 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
             .text_size(16.0)
             .padding(Padding::top(6.0)),
         slider(1.0, 60.0, duration_value, move |_, val| {
-            let _ = sender.send(XilemAction::action(TimerEvent::SetDurationSecs(val)));
+            emit_ui_action(entity, TimerEvent::SetDurationSecs(val));
         })
         .step(1.0)
         .flex(1.0),
     ))
     .gap(Length::px(8.0));
 
+    let reset_entity = ctx.entity;
     let reset = text_button("Reset", move |_| {
-        let _ = sender_for_reset.send(XilemAction::action(TimerEvent::Reset));
+        emit_ui_action(reset_entity, TimerEvent::Reset);
     })
     .padding(Padding::top(8.0));
 
@@ -154,13 +153,13 @@ fn setup_timer_world(world: &mut World) {
 
 fn drain_timer_events_and_tick(world: &mut World) {
     let events = world
-        .resource::<UiEventReceiver>()
+        .resource::<UiEventQueue>()
         .drain_actions::<TimerEvent>();
 
     {
         let mut state = world.resource_mut::<TimerState>();
         for event in events {
-            apply_timer_event(&mut state, event);
+            apply_timer_event(&mut state, event.action);
         }
         tick_timer(&mut state);
     }
@@ -180,8 +179,7 @@ fn build_bevy_timer_app() -> App {
 }
 
 fn main() -> Result<(), EventLoopError> {
-    run_app(
-        build_bevy_timer_app(),
-        WindowOptions::new("Timer").with_initial_inner_size(LogicalSize::new(520.0, 260.0)),
-    )
+    run_app_with_window_options(build_bevy_timer_app(), "Timer", |options| {
+        options.with_initial_inner_size(LogicalSize::new(520.0, 260.0))
+    })
 }
