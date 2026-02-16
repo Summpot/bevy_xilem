@@ -7,178 +7,241 @@ use bevy_xilem::{
     UiProjectorRegistry, UiRoot, UiView, XilemAction, run_app,
 };
 use xilem::{
-    WindowOptions,
+    Color, WindowOptions,
+    masonry::layout::Length,
+    palette,
+    style::Style as _,
+    view::{FlexExt as _, button, flex_col, flex_row, label, text_button},
     winit::{dpi::LogicalSize, error::EventLoopError},
 };
-use xilem_masonry::view::{label, text_button};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MathOperator {
+    Add,
+    Subtract,
+    Multiply,
+    Divide,
+}
+
+impl MathOperator {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Add => "+",
+            Self::Subtract => "−",
+            Self::Multiply => "×",
+            Self::Divide => "÷",
+        }
+    }
+
+    fn perform_op(self, num1: f64, num2: f64) -> f64 {
+        match self {
+            Self::Add => num1 + num2,
+            Self::Subtract => num1 - num2,
+            Self::Multiply => num1 * num2,
+            Self::Divide => num1 / num2,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 enum CalcEvent {
-    Input(String),
-    Evaluate,
-    Clear,
+    Digit(String),
+    Operator(MathOperator),
+    Equals,
+    ClearEntry,
+    ClearAll,
+    Delete,
+    Negate,
 }
 
 #[derive(Resource, Debug, Default)]
 struct CalculatorEngine {
-    stored_value: Option<f64>,
-    pending_op: Option<char>,
-    current_input: String,
-    just_evaluated: bool,
-    error: bool,
+    current_num_index: usize,
+    clear_current_entry_on_input: bool,
+    numbers: [String; 2],
+    result: Option<String>,
+    operation: Option<MathOperator>,
 }
 
 impl CalculatorEngine {
-    fn clear(&mut self) {
-        self.stored_value = None;
-        self.pending_op = None;
-        self.current_input.clear();
-        self.just_evaluated = false;
-        self.error = false;
+    fn current_number(&self) -> &str {
+        &self.numbers[self.current_num_index]
+    }
+
+    fn current_number_owned(&self) -> String {
+        self.current_number().to_string()
+    }
+
+    fn set_current_number(&mut self, new_num: String) {
+        self.numbers[self.current_num_index] = new_num;
+    }
+
+    fn clear_all(&mut self) {
+        self.current_num_index = 0;
+        self.result = None;
+        self.operation = None;
+        self.clear_current_entry_on_input = false;
+        for number in &mut self.numbers {
+            *number = String::new();
+        }
+    }
+
+    fn clear_entry(&mut self) {
+        self.clear_current_entry_on_input = false;
+        if self.result.is_some() {
+            self.clear_all();
+            return;
+        }
+        self.set_current_number(String::new());
+    }
+
+    fn on_entered_digit(&mut self, digit: &str) {
+        if self.result.is_some() {
+            self.clear_all();
+        } else if self.clear_current_entry_on_input {
+            self.clear_entry();
+        }
+
+        let mut number = self.current_number_owned();
+        if digit == "." {
+            if number.contains('.') {
+                return;
+            }
+            if number.is_empty() {
+                number = "0".into();
+            }
+            number.push('.');
+        } else if number == "0" || number.is_empty() {
+            number = digit.to_string();
+        } else {
+            number.push_str(digit);
+        }
+
+        self.set_current_number(number);
+    }
+
+    fn on_entered_operator(&mut self, operator: MathOperator) {
+        self.clear_current_entry_on_input = false;
+
+        if self.operation.is_some() && !self.numbers[1].is_empty() {
+            if self.result.is_none() {
+                self.on_equals();
+            }
+            self.move_result_to_left();
+            self.current_num_index = 1;
+        } else if self.current_num_index == 0 {
+            if self.numbers[0].is_empty() {
+                return;
+            }
+            self.current_num_index = 1;
+        }
+
+        self.operation = Some(operator);
+    }
+
+    fn move_result_to_left(&mut self) {
+        self.clear_current_entry_on_input = true;
+        self.numbers[0] = self.result.clone().unwrap_or_default();
+        self.numbers[1].clear();
+        self.operation = None;
+        self.current_num_index = 0;
+        self.result = None;
+    }
+
+    fn on_equals(&mut self) {
+        if self.numbers[0].is_empty() || self.numbers[1].is_empty() {
+            return;
+        }
+
+        if self.result.is_some() {
+            self.numbers[0] = self.result.clone().unwrap_or_default();
+        }
+
+        self.current_num_index = 0;
+
+        let num1 = self.numbers[0].parse::<f64>();
+        let num2 = self.numbers[1].parse::<f64>();
+
+        self.result = Some(match (num1, num2, self.operation) {
+            (Ok(lhs), Ok(rhs), Some(op)) => format_number(op.perform_op(lhs, rhs)),
+            (Err(err), _, _) => err.to_string(),
+            (_, Err(err), _) => err.to_string(),
+            (_, _, None) => self.numbers[0].clone(),
+        });
+    }
+
+    fn on_delete(&mut self) {
+        if self.result.is_some() {
+            return;
+        }
+
+        let mut number = self.current_number_owned();
+        if !number.is_empty() {
+            number.pop();
+            self.set_current_number(number);
+        }
+    }
+
+    fn negate(&mut self) {
+        if self.result.is_some() {
+            self.move_result_to_left();
+        }
+
+        let mut number = self.current_number_owned();
+        if number.is_empty() {
+            return;
+        }
+
+        if number.starts_with('-') {
+            number.remove(0);
+        } else {
+            number = format!("-{number}");
+        }
+
+        self.set_current_number(number);
     }
 
     fn apply_event(&mut self, event: CalcEvent) {
         match event {
-            CalcEvent::Input(token) => self.input_token(&token),
-            CalcEvent::Evaluate => self.evaluate(),
-            CalcEvent::Clear => self.clear(),
-        }
-    }
-
-    fn input_token(&mut self, token: &str) {
-        if self.error {
-            self.clear();
-        }
-
-        match token {
-            "+" | "-" | "*" | "/" => self.push_operator(token.chars().next().unwrap_or('+')),
-            "." => {
-                if self.just_evaluated && self.pending_op.is_none() {
-                    self.stored_value = None;
-                    self.just_evaluated = false;
-                }
-                if self.current_input.is_empty() {
-                    self.current_input.push_str("0.");
-                } else if !self.current_input.contains('.') {
-                    self.current_input.push('.');
-                }
-            }
-            digit if digit.chars().all(|c| c.is_ascii_digit()) => {
-                if self.just_evaluated && self.pending_op.is_none() {
-                    self.stored_value = None;
-                    self.current_input.clear();
-                }
-                self.just_evaluated = false;
-
-                if self.current_input == "0" {
-                    self.current_input = digit.to_string();
-                } else {
-                    self.current_input.push_str(digit);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    fn push_operator(&mut self, op: char) {
-        self.just_evaluated = false;
-
-        if self.current_input.is_empty() {
-            if self.stored_value.is_none() {
-                self.stored_value = Some(0.0);
-            }
-            self.pending_op = Some(op);
-            return;
-        }
-
-        let rhs = match self.current_input.parse::<f64>() {
-            Ok(value) => value,
-            Err(_) => {
-                self.error = true;
-                return;
-            }
-        };
-
-        let next_value = match (self.stored_value, self.pending_op) {
-            (Some(lhs), Some(pending)) => Self::apply_binary(lhs, pending, rhs),
-            _ => Some(rhs),
-        };
-
-        match next_value {
-            Some(value) => {
-                self.stored_value = Some(value);
-                self.pending_op = Some(op);
-                self.current_input.clear();
-            }
-            None => {
-                self.error = true;
-            }
-        }
-    }
-
-    fn evaluate(&mut self) {
-        if self.error {
-            return;
-        }
-
-        if self.current_input.is_empty() {
-            return;
-        }
-
-        let rhs = match self.current_input.parse::<f64>() {
-            Ok(value) => value,
-            Err(_) => {
-                self.error = true;
-                return;
-            }
-        };
-
-        let result = match (self.stored_value, self.pending_op) {
-            (Some(lhs), Some(op)) => Self::apply_binary(lhs, op, rhs),
-            _ => Some(rhs),
-        };
-
-        match result {
-            Some(value) => {
-                self.stored_value = Some(value);
-                self.pending_op = None;
-                self.current_input.clear();
-                self.just_evaluated = true;
-            }
-            None => {
-                self.error = true;
-            }
-        }
-    }
-
-    fn apply_binary(lhs: f64, op: char, rhs: f64) -> Option<f64> {
-        match op {
-            '+' => Some(lhs + rhs),
-            '-' => Some(lhs - rhs),
-            '*' => Some(lhs * rhs),
-            '/' => {
-                if rhs.abs() < f64::EPSILON {
-                    None
-                } else {
-                    Some(lhs / rhs)
-                }
-            }
-            _ => None,
+            CalcEvent::Digit(digit) => self.on_entered_digit(&digit),
+            CalcEvent::Operator(operator) => self.on_entered_operator(operator),
+            CalcEvent::Equals => self.on_equals(),
+            CalcEvent::ClearEntry => self.clear_entry(),
+            CalcEvent::ClearAll => self.clear_all(),
+            CalcEvent::Delete => self.on_delete(),
+            CalcEvent::Negate => self.negate(),
         }
     }
 
     fn display_text(&self) -> String {
-        if self.error {
-            return "Error".to_string();
+        let mut fragments = Vec::new();
+
+        if !self.numbers[0].is_empty() {
+            fragments.push(self.numbers[0].clone());
+        }
+        if let Some(operation) = self.operation {
+            fragments.push(operation.as_str().to_string());
+        }
+        if !self.numbers[1].is_empty() {
+            fragments.push(self.numbers[1].clone());
+        }
+        if let Some(result) = &self.result {
+            fragments.push("=".to_string());
+            fragments.push(result.clone());
         }
 
-        if !self.current_input.is_empty() {
-            return self.current_input.clone();
+        if fragments.is_empty() {
+            "0".to_string()
+        } else {
+            fragments.join(" ")
         }
+    }
 
-        match self.stored_value {
-            Some(value) => format_number(value),
-            None => "0".to_string(),
+    fn clear_entry_hint_color(&self) -> Color {
+        if self.current_number().is_empty() {
+            palette::css::MEDIUM_VIOLET_RED
+        } else {
+            palette::css::WHITE
         }
     }
 }
@@ -198,39 +261,130 @@ fn format_number(value: f64) -> String {
     }
 }
 
-#[derive(Component, Debug, Clone, Copy, Default)]
-struct CalcDisplay;
+#[derive(Component, Debug, Clone, Copy)]
+struct CalcRoot;
 
-#[derive(Component, Debug, Clone, PartialEq, Eq)]
-struct CalcButton(String);
+#[derive(Component, Debug, Clone, Copy)]
+struct CalcDisplayRow;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct CalcButtonRow;
+
+#[derive(Component, Debug, Clone)]
+struct CalcButton {
+    label: String,
+    event: CalcEvent,
+    kind: CalcButtonKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CalcButtonKind {
+    Digit,
+    Action,
+    Operator,
+}
 
 #[derive(Resource, Debug, Clone, Copy)]
 struct CalcDisplayEntity(Entity);
 
-fn project_calc_display(_: &CalcDisplay, ctx: ProjectionCtx<'_>) -> UiView {
+fn project_calc_root(_: &CalcRoot, ctx: ProjectionCtx<'_>) -> UiView {
+    let children = ctx
+        .children
+        .into_iter()
+        .map(|child| child.into_any_flex())
+        .collect::<Vec<_>>();
+
+    Arc::new(flex_col(children).gap(Length::px(2.)).padding(12.0))
+}
+
+fn project_calc_display_row(_: &CalcDisplayRow, ctx: ProjectionCtx<'_>) -> UiView {
     let text = ctx
         .world
         .get::<UiLabel>(ctx.entity)
         .map_or_else(|| "0".to_string(), |label| label.text.clone());
 
-    Arc::new(label(text))
+    Arc::new(
+        flex_row((label(text).text_size(30.0),))
+            .padding(8.0)
+            .border(palette::css::DARK_SLATE_GRAY, 1.0),
+    )
 }
 
-fn calc_event_for_label(label: &str) -> CalcEvent {
-    match label {
-        "=" => CalcEvent::Evaluate,
-        "C" => CalcEvent::Clear,
-        other => CalcEvent::Input(other.to_string()),
+fn project_calc_button_row(_: &CalcButtonRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let children = ctx
+        .children
+        .into_iter()
+        .map(|child| child.into_any_flex())
+        .collect::<Vec<_>>();
+
+    Arc::new(flex_row(children).gap(Length::px(2.)))
+}
+
+fn project_calc_button(button_data: &CalcButton, ctx: ProjectionCtx<'_>) -> UiView {
+    let sender = ctx.world.resource::<UiEventSender>().0.clone();
+    let event = button_data.event.clone();
+
+    match button_data.kind {
+        CalcButtonKind::Digit => Arc::new(
+            text_button(button_data.label.clone(), move |_| {
+                let _ = sender.send(XilemAction::action(event.clone()));
+            })
+            .background_color(Color::from_rgb8(0x3a, 0x3a, 0x3a))
+            .corner_radius(10.0)
+            .border_color(Color::TRANSPARENT),
+        ),
+        CalcButtonKind::Action | CalcButtonKind::Operator => {
+            let ce_color = if button_data.event == CalcEvent::ClearEntry {
+                ctx.world.get_resource::<CalculatorEngine>().map_or(
+                    palette::css::WHITE,
+                    CalculatorEngine::clear_entry_hint_color,
+                )
+            } else {
+                palette::css::WHITE
+            };
+
+            Arc::new(
+                button(
+                    label(button_data.label.clone()).color(ce_color),
+                    move |_| {
+                        let _ = sender.send(XilemAction::action(event.clone()));
+                    },
+                )
+                .background_color(Color::from_rgb8(0x00, 0x8d, 0xdd))
+                .corner_radius(10.0)
+                .border_color(Color::TRANSPARENT)
+                .hovered_border_color(Color::WHITE),
+            )
+        }
     }
 }
 
-fn project_calc_button(button: &CalcButton, ctx: ProjectionCtx<'_>) -> UiView {
-    let sender = ctx.world.resource::<UiEventSender>().0.clone();
-    let event = calc_event_for_label(&button.0);
+fn install_projectors(world: &mut World) {
+    let mut registry = world.resource_mut::<UiProjectorRegistry>();
+    registry
+        .register_component::<CalcRoot>(project_calc_root)
+        .register_component::<CalcDisplayRow>(project_calc_display_row)
+        .register_component::<CalcButtonRow>(project_calc_button_row)
+        .register_component::<CalcButton>(project_calc_button);
+}
 
-    Arc::new(text_button(button.0.clone(), move |_| {
-        let _ = sender.send(XilemAction::action(event.clone()));
-    }))
+fn spawn_calc_button(
+    world: &mut World,
+    parent: Entity,
+    alloc_node_id: &mut impl FnMut() -> UiNodeId,
+    label: &str,
+    event: CalcEvent,
+    kind: CalcButtonKind,
+) {
+    world.spawn((
+        alloc_node_id(),
+        CalcButton {
+            label: label.to_string(),
+            event,
+            kind,
+        },
+        ChildOf(parent),
+    ));
 }
 
 fn setup_calculator_world(world: &mut World) {
@@ -241,43 +395,102 @@ fn setup_calculator_world(world: &mut World) {
         id
     };
 
-    let root = world
-        .spawn((UiRoot, alloc_node_id(), bevy_xilem::UiFlexColumn))
-        .id();
+    let root = world.spawn((UiRoot, alloc_node_id(), CalcRoot)).id();
 
     let display = world
         .spawn((
             alloc_node_id(),
-            CalcDisplay,
+            CalcDisplayRow,
             UiLabel::new("0"),
             ChildOf(root),
         ))
         .id();
-
     world.insert_resource(CalcDisplayEntity(display));
 
-    let grid = world
-        .spawn((alloc_node_id(), bevy_xilem::UiFlexColumn, ChildOf(root)))
+    let top = world
+        .spawn((alloc_node_id(), CalcButtonRow, ChildOf(root)))
         .id();
+    spawn_calc_button(
+        world,
+        top,
+        &mut alloc_node_id,
+        "CE",
+        CalcEvent::ClearEntry,
+        CalcButtonKind::Action,
+    );
+    spawn_calc_button(
+        world,
+        top,
+        &mut alloc_node_id,
+        "C",
+        CalcEvent::ClearAll,
+        CalcButtonKind::Action,
+    );
+    spawn_calc_button(
+        world,
+        top,
+        &mut alloc_node_id,
+        "DEL",
+        CalcEvent::Delete,
+        CalcButtonKind::Action,
+    );
+    spawn_calc_button(
+        world,
+        top,
+        &mut alloc_node_id,
+        "÷",
+        CalcEvent::Operator(MathOperator::Divide),
+        CalcButtonKind::Operator,
+    );
 
-    let layout = [
-        ["7", "8", "9", "/"],
-        ["4", "5", "6", "*"],
-        ["1", "2", "3", "-"],
-        ["0", ".", "=", "+"],
+    let rows = [
+        [
+            ("7", CalcEvent::Digit("7".into()), CalcButtonKind::Digit),
+            ("8", CalcEvent::Digit("8".into()), CalcButtonKind::Digit),
+            ("9", CalcEvent::Digit("9".into()), CalcButtonKind::Digit),
+            (
+                "×",
+                CalcEvent::Operator(MathOperator::Multiply),
+                CalcButtonKind::Operator,
+            ),
+        ],
+        [
+            ("4", CalcEvent::Digit("4".into()), CalcButtonKind::Digit),
+            ("5", CalcEvent::Digit("5".into()), CalcButtonKind::Digit),
+            ("6", CalcEvent::Digit("6".into()), CalcButtonKind::Digit),
+            (
+                "−",
+                CalcEvent::Operator(MathOperator::Subtract),
+                CalcButtonKind::Operator,
+            ),
+        ],
+        [
+            ("1", CalcEvent::Digit("1".into()), CalcButtonKind::Digit),
+            ("2", CalcEvent::Digit("2".into()), CalcButtonKind::Digit),
+            ("3", CalcEvent::Digit("3".into()), CalcButtonKind::Digit),
+            (
+                "+",
+                CalcEvent::Operator(MathOperator::Add),
+                CalcButtonKind::Operator,
+            ),
+        ],
+        [
+            ("±", CalcEvent::Negate, CalcButtonKind::Action),
+            ("0", CalcEvent::Digit("0".into()), CalcButtonKind::Digit),
+            (".", CalcEvent::Digit(".".into()), CalcButtonKind::Action),
+            ("=", CalcEvent::Equals, CalcButtonKind::Action),
+        ],
     ];
 
-    for row_tokens in layout {
+    for row_spec in rows {
         let row = world
-            .spawn((alloc_node_id(), bevy_xilem::UiFlexRow, ChildOf(grid)))
+            .spawn((alloc_node_id(), CalcButtonRow, ChildOf(root)))
             .id();
 
-        for token in row_tokens {
-            world.spawn((alloc_node_id(), CalcButton(token.to_string()), ChildOf(row)));
+        for (label, event, kind) in row_spec {
+            spawn_calc_button(world, row, &mut alloc_node_id, label, event, kind);
         }
     }
-
-    world.spawn((alloc_node_id(), CalcButton("C".to_string()), ChildOf(grid)));
 }
 
 fn drain_calc_events_and_update_display(world: &mut World) {
@@ -303,13 +516,6 @@ fn drain_calc_events_and_update_display(world: &mut World) {
     }
 }
 
-fn install_projectors(world: &mut World) {
-    let mut registry = world.resource_mut::<UiProjectorRegistry>();
-    registry
-        .register_component::<CalcDisplay>(project_calc_display)
-        .register_component::<CalcButton>(project_calc_button);
-}
-
 fn build_bevy_calculator_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
@@ -326,7 +532,6 @@ fn build_bevy_calculator_app() -> App {
 fn main() -> Result<(), EventLoopError> {
     run_app(
         build_bevy_calculator_app(),
-        WindowOptions::new("Bevy Xilem Calculator")
-            .with_initial_inner_size(LogicalSize::new(420.0, 640.0)),
+        WindowOptions::new("Calculator").with_initial_inner_size(LogicalSize::new(400.0, 500.0)),
     )
 }
