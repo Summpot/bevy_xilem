@@ -230,6 +230,7 @@ This keeps interaction handling explicit and ECS-friendly.
 - `todo_list`
 - `chess`
 - `theme_gallery`
+- `game_2048`
 
 Run an example from repository root:
 

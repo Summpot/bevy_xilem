@@ -53,3 +53,7 @@ path = "../../examples/download_with_progress.rs"
 [[example]]
 name = "theme_gallery"
 path = "../../examples/theme_gallery.rs"
+
+[[example]]
+name = "game_2048"
+path = "../../examples/game_2048.rs"
