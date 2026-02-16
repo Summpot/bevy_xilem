@@ -1,0 +1,9 @@
+[package]
+name = "bevy_xilem"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+bevy_app.workspace = true
+bevy_ecs.workspace = true
