@@ -10,7 +10,12 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 bevy_app = { path = "../bevy/crates/bevy_app", version = "0.19.0-dev", default-features = false, features = ["std"] }
 bevy_ecs = { path = "../bevy/crates/bevy_ecs", version = "0.19.0-dev", default-features = false, features = ["std"] }
-crossbeam-channel = "0.5.15"
+bevy_input = { path = "../bevy/crates/bevy_input", version = "0.19.0-dev", default-features = false, features = ["std", "mouse", "keyboard"] }
+bevy_window = { path = "../bevy/crates/bevy_window", version = "0.19.0-dev", default-features = false, features = ["std"] }
+crossbeam-queue = "0.3.12"
+tokio = { version = "1.49.0", features = ["rt-multi-thread"] }
 num-traits = "0.2.19"
-xilem = { path = "../xilem/xilem" }
+masonry = { path = "../xilem/masonry" }
+xilem_core = { path = "../xilem/xilem_core" }
 xilem_masonry = { path = "../xilem/xilem_masonry" }
+vello = "0.7.0"

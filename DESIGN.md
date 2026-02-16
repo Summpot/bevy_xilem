@@ -2,157 +2,127 @@
 
 Date: 2026-02-16
 
-This document describes the **actual repository status** and implementation details.
+This document describes the **current implementation** after the architecture pivot to
+**headless Masonry + Bevy-driven scheduling/input**.
 
 ## Purpose
 
-`bevy_xilem` integrates Bevy ECS state management with a UI projection layer designed for Xilem-oriented rendering pipelines.
+`bevy_xilem` integrates Bevy ECS state management with a retained Masonry UI tree, while using
+Xilem Core diff/rebuild semantics for view reconciliation.
 
-The repository currently implements:
+The framework now avoids the high-level `xilem::Xilem::new_simple` runner completely.
 
-- ECS-based UI state components
-- A projector registry for component-to-view mapping
-- Recursive synthesis from ECS entities directly to type-erased Xilem views
-- Bevy plugin wiring for event collection and synthesis execution
-- Synthesis runtime metrics
+## Core Architectural Decisions
 
-## Workspace and Dependency Policy
+### 1) Event loop ownership is Bevy-first
 
-The project uses a **virtual workspace**.
+- Bevy owns scheduling and window/input message flow.
+- Masonry is driven as a retained UI runtime resource from Bevy systems.
+- No Winit event loop is started by `bevy_xilem` itself.
 
-- Root `Cargo.toml` contains `[workspace]`, `[workspace.package]`, and `[workspace.dependencies]`.
-- Code lives in workspace members (currently `crates/bevy_xilem`).
-- Member crates use workspace dependencies (`workspace = true`).
+### 2) Headless retained runtime resource
 
-## Implemented Data Model (ECS)
+`MasonryRuntime` is a Bevy `Resource` that owns:
 
-UI entities are modeled with explicit components:
+- Masonry `RenderRoot` (retained widget tree)
+- current synthesized root view
+- Xilem `ViewCtx` and `ViewState`
+- pointer state required for manual event injection
 
-- `UiRoot`: marks a root UI entity.
-- `UiNodeId(u64)`: stable node identifier.
-- Native Bevy hierarchy components from `bevy_ecs::hierarchy`:
-  - `Children`: parent-owned child list used during synthesis traversal.
-  - `ChildOf` (the parent-link relationship component; equivalent role to a `Parent` link).
-- Built-in view components:
-  - `UiFlexColumn`
-  - `UiFlexRow`
-  - `UiLabel { text: String }`
-  - `UiButton { label: String }`
+`PostUpdate` applies synthesized root diffs directly with Xilem Core `View::rebuild`.
 
-## Implemented View Projection (Real Xilem)
+### 3) Input injection bridge (PreUpdate)
 
-Synthesis produces real Xilem views directly:
+`PreUpdate` system consumes Bevy messages:
 
-- `UiProjector` returns `UiView` (`Arc<AnyWidgetView<(), ()>>`)
-- `SynthesizedUiViews` stores `Vec<UiView>` each update cycle
-- Built-in component projectors map to Xilem view constructors:
-  - `UiFlexColumn` -> `xilem_masonry::view::flex_col`
-  - `UiFlexRow` -> `xilem_masonry::view::flex_row`
-  - `UiLabel` -> `xilem_masonry::view::label`
-  - `UiButton` -> `xilem_masonry::view::text_button`
+- `CursorMoved`
+- `CursorLeft`
+- `MouseButtonInput`
+- `MouseWheel`
+- `WindowResized`
 
-Fallback handling for unhandled / missing / cycle cases is also represented as concrete Xilem views (labels/flex containers), not enum IR nodes.
+and translates them to Masonry events:
 
-## Projector Registry
+- `PointerEvent::{Move,Leave,Down,Up,Scroll}`
+- `WindowEvent::Resize`
 
-`UiProjectorRegistry` stores `UiProjector` implementations.
+which are injected into `MasonryRuntime.render_root`.
 
-- Dynamic registration is supported.
-- Component-specific registration uses `register_component::<C>(...)`.
-- Precedence rule: **last registered projector wins**.
+### 4) Zero-closure ECS button path
 
-Built-in projectors are registered for `UiFlexColumn`, `UiFlexRow`, `UiLabel`, and `UiButton`.
+To remove user-facing closure boilerplate:
 
-## Synthesis Execution
+- `EcsButtonWidget` implements `masonry::core::Widget`.
+- `EcsButtonView` implements `xilem_core::View`.
+- `ecs_button(entity, action, label)` builds this view directly.
+- On click, widget pushes `UiEvent { entity, action }` into global queue-backed resource.
 
-Synthesis runs in `PostUpdate` through `synthesize_ui`.
+This enables projector code like:
 
-Behavior:
+`Arc::new(ecs_button(ctx.entity, TodoAction::Submit, "Add"))`
 
-1. Gather all `UiRoot` entities.
-2. Recursively synthesize child nodes first.
-3. Apply projector dispatch for the current entity.
-4. Emit fallback Xilem views for unhandled/missing/cycle cases.
-5. Write resulting root views to `SynthesizedUiViews`.
+with no per-button channel sender/closure wiring by end users.
 
-## Event Collection
+### 5) Typed action queue
 
-UI/action intake uses a framework-managed unbounded MPSC channel.
+`UiEventQueue` is a Bevy `Resource` backed by `crossbeam_queue::SegQueue<UiEvent>`.
 
-- `UiEventSender(Sender<XilemAction>)` is stored as a resource and is cloneable.
-- `UiEventReceiver(Receiver<XilemAction>)` is stored as a resource and can drain:
-  - framework UI events (`UiEvent`)
-  - app-defined typed actions (`XilemAction::Action(Box<dyn Any + Send + Sync>)`)
-- Projector contexts receive a sender clone so projector-owned closures can emit
-  either built-in UI events or typed app actions without direct `World` mutation.
+- Widgets push type-erased actions (`Box<dyn Any + Send + Sync>`).
+- Bevy systems drain typed actions via `drain_actions::<T>()`.
 
-## Runtime Metrics
+## ECS data model
 
-`UiSynthesisStats` is updated during synthesis traversal and includes:
+Built-in components:
 
-- `root_count`
-- `node_count`
-- `cycle_count`
-- `missing_entity_count`
-- `unhandled_count`
+- `UiRoot`
+- `UiNodeId(u64)`
+- `UiFlexColumn`
+- `UiFlexRow`
+- `UiLabel { text }`
+- `UiButton { label }`
 
-This makes synthesis behavior observable without external instrumentation.
+## Projection and synthesis
 
-## Plugin Wiring
+- `UiProjectorRegistry` holds ordered projector implementations.
+- Projector precedence: **last registered wins**.
+- `PostUpdate` synthesis pipeline:
+  1. gather `UiRoot`
+  2. recursive child-first projection
+  3. fallback views for cycle/missing/unhandled nodes
+  4. store `SynthesizedUiViews`
+  5. rebuild retained Masonry root in `MasonryRuntime`
 
-`BevyXilemPlugin` currently performs the following:
+## Plugin wiring
 
-- Initializes resources:
-  - `UiProjectorRegistry`
-  - `SynthesizedUiViews`
-  - `UiSynthesisStats`
-  - `UiEventSender`
-  - `UiEventReceiver`
-- Registers systems:
-  - `PostUpdate`: `synthesize_ui`
-- Registers built-in projectors.
+`BevyXilemPlugin` initializes:
 
-The plugin also owns channel creation (`crossbeam_channel::unbounded::<XilemAction>()`),
-so examples/apps do not need to set up sender/receiver plumbing manually.
+- `UiProjectorRegistry`
+- `SynthesizedUiViews`
+- `UiSynthesisStats`
+- `UiEventQueue`
+- `MasonryRuntime`
 
-## Bevy↔Xilem Runtime Bridge
+and registers systems:
 
-The core crate now provides a reusable runtime bridge:
+- `PreUpdate`: `inject_bevy_input_into_masonry`
+- `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime` (chained)
 
-- `BevyXilemRuntime` wraps a Bevy `App`
-- `update()` ticks Bevy schedules
-- `first_root()` / `first_root_or_label(...)` expose synthesized root views
-- `update_and_first_root_or_label(...)` provides a one-call update+read path
+It also registers built-in projectors.
 
-Examples use this bridge to run **real Xilem windows** without implementing
-runtime plumbing inside each example.
+## Built-in button behavior
 
-Additionally, a high-level helper is provided:
+Built-in `UiButton` projector maps to `ecs_button(...)` with action `BuiltinUiAction::Clicked`.
 
-- `run_app(app, window_options)`
+## Examples
 
-This encapsulates the common runtime + runner boilerplate:
+Examples were rewritten to demonstrate this architecture with:
 
-- wraps Bevy `App` in `BevyXilemRuntime`
-- ticks Bevy each frame
-- maps synthesized root view to Xilem app state
-- runs the Xilem event loop
+- Bevy-driven updates
+- typed action drains from `UiEventQueue`
+- simulated Bevy input messages feeding Masonry through the PreUpdate bridge
+- no `xilem::Xilem::new_simple` usage
 
-## Verified Behavior
+## Non-goals in current repository state
 
-The crate contains tests that verify:
-
-- Successful synthesis for built-in components
-- Projector override behavior (last registration takes precedence)
-- Cycle detection behavior
-- Plugin integration (events + synthesis + metrics)
-- Missing-entity handling and corresponding metrics
-
-## Current Gaps (Not Implemented in This Repository)
-
-The following are not implemented in the current codebase:
-
-- Render backend integration (e.g., Vello/RenderGraph path)
-- Input routing from window/input backends into UI actions
-
-This document intentionally separates implemented behavior from unimplemented behavior.
+- No direct window creation/event-loop management by `bevy_xilem`
+- No custom render-graph integration beyond Masonry retained runtime ownership
