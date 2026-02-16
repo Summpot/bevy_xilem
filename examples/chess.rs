@@ -10,7 +10,7 @@ use bevy_xilem::{
     BevyXilemPlugin, ProjectionCtx, UiEventReceiver, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
     XilemAction, run_app,
 };
-use crossbeam_channel::{Receiver, unbounded};
+use crossbeam_channel::{Receiver, Sender, unbounded};
 use xilem::{
     Color, WindowOptions,
     masonry::{
@@ -401,12 +401,7 @@ fn tick_once(
 #[derive(Component, Debug, Clone, Copy)]
 struct ChessRootView;
 
-fn project_chess_root(_: &ChessRootView, ctx: ProjectionCtx<'_>) -> UiView {
-    let game_res = ctx.world.resource::<ChessGameResource>();
-    let ui = ctx.world.resource::<ChessUiResource>();
-    let flow = ctx.world.resource::<ChessFlowResource>();
-    let sender = ctx.event_sender;
-
+fn build_chess_board_view(ui: &ChessUiResource, sender: &Sender<XilemAction>) -> UiView {
     let mut cells = Vec::with_capacity(BOARD_SIZE * BOARD_SIZE);
 
     for row in 0..BOARD_SIZE {
@@ -453,6 +448,20 @@ fn project_chess_root(_: &ChessRootView, ctx: ProjectionCtx<'_>) -> UiView {
     }
 
     let board = grid(cells, BOARD_SIZE as i32, BOARD_SIZE as i32);
+
+    Arc::new(flex_col((
+        FlexSpacer::Fixed(GAP),
+        board.flex(1.0),
+        FlexSpacer::Fixed(GAP),
+    )))
+}
+
+fn build_chess_controls_view(
+    game_res: &ChessGameResource,
+    ui: &ChessUiResource,
+    flow: &ChessFlowResource,
+    sender: &Sender<XilemAction>,
+) -> UiView {
     let movelist_text = ui.movelist_text();
 
     let sender_set_time = sender.clone();
@@ -463,53 +472,61 @@ fn project_chess_root(_: &ChessRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let sender_print_movelist = sender.clone();
 
     Arc::new(
-        flex_row((
+        flex_col((
             FlexSpacer::Fixed(GAP),
-            flex_col((
-                FlexSpacer::Fixed(GAP),
-                label(ui.status.clone()),
-                FlexSpacer::Fixed(TINY_GAP),
-                label(format!("White: {}", formatted_clock(flow.time_elapsed[0]))),
-                label(format!("Black: {}", formatted_clock(flow.time_elapsed[1]))),
-                FlexSpacer::Fixed(TINY_GAP),
-                label(format!("{:.2} sec/move", game_res.time_per_move)),
-                slider(0.1, 5.0, game_res.time_per_move, move |_, val| {
-                    let _ =
-                        sender_set_time.send(XilemAction::action(ChessEvent::SetTimePerMove(val)));
-                }),
-                checkbox("Engine plays white", ui.engine_plays_white, move |_, _| {
-                    let _ = sender_toggle_white
-                        .send(XilemAction::action(ChessEvent::ToggleEngineWhite));
-                }),
-                checkbox("Engine plays black", ui.engine_plays_black, move |_, _| {
-                    let _ = sender_toggle_black
-                        .send(XilemAction::action(ChessEvent::ToggleEngineBlack));
-                }),
-                text_button("Rotate", move |_| {
-                    let _ = sender_rotate.send(XilemAction::action(ChessEvent::Rotate));
-                }),
-                text_button("New game", move |_| {
-                    let _ = sender_new_game.send(XilemAction::action(ChessEvent::NewGame));
-                }),
-                text_button("Print movelist", move |_| {
-                    let _ =
-                        sender_print_movelist.send(XilemAction::action(ChessEvent::PrintMovelist));
-                }),
-                sized_box(prose(movelist_text)).width(200_i32.px()),
-                FlexSpacer::Fixed(GAP),
-            ))
-            .cross_axis_alignment(CrossAxisAlignment::Start)
-            .gap(GAP),
-            flex_col((
-                FlexSpacer::Fixed(GAP),
-                board.flex(1.0),
-                FlexSpacer::Fixed(GAP),
-            ))
-            .flex(1.0),
+            label(ui.status.clone()),
+            FlexSpacer::Fixed(TINY_GAP),
+            label(format!("White: {}", formatted_clock(flow.time_elapsed[0]))),
+            label(format!("Black: {}", formatted_clock(flow.time_elapsed[1]))),
+            FlexSpacer::Fixed(TINY_GAP),
+            label(format!("{:.2} sec/move", game_res.time_per_move)),
+            slider(0.1, 5.0, game_res.time_per_move, move |_, val| {
+                let _ = sender_set_time.send(XilemAction::action(ChessEvent::SetTimePerMove(val)));
+            }),
+            checkbox("Engine plays white", ui.engine_plays_white, move |_, _| {
+                let _ =
+                    sender_toggle_white.send(XilemAction::action(ChessEvent::ToggleEngineWhite));
+            }),
+            checkbox("Engine plays black", ui.engine_plays_black, move |_, _| {
+                let _ =
+                    sender_toggle_black.send(XilemAction::action(ChessEvent::ToggleEngineBlack));
+            }),
+            text_button("Rotate", move |_| {
+                let _ = sender_rotate.send(XilemAction::action(ChessEvent::Rotate));
+            }),
+            text_button("New game", move |_| {
+                let _ = sender_new_game.send(XilemAction::action(ChessEvent::NewGame));
+            }),
+            text_button("Print movelist", move |_| {
+                let _ = sender_print_movelist.send(XilemAction::action(ChessEvent::PrintMovelist));
+            }),
+            sized_box(prose(movelist_text)).width(200_i32.px()),
             FlexSpacer::Fixed(GAP),
         ))
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .gap(GAP),
+    )
+}
+
+fn project_chess_root(_: &ChessRootView, ctx: ProjectionCtx<'_>) -> UiView {
+    let game_res = ctx.world.resource::<ChessGameResource>();
+    let ui = ctx.world.resource::<ChessUiResource>();
+    let flow = ctx.world.resource::<ChessFlowResource>();
+    let sender = ctx.event_sender.clone();
+    let controls = build_chess_controls_view(&game_res, &ui, &flow, &sender);
+    let board = build_chess_board_view(&ui, &sender);
+
+    let children = vec![
+        FlexSpacer::Fixed(GAP).into_any_flex(),
+        controls.into_any_flex(),
+        board.flex(1.0).into_any_flex(),
+        FlexSpacer::Fixed(GAP).into_any_flex(),
+    ];
+
+    Arc::new(
+        flex_row(children)
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .gap(GAP),
     )
 }
 

@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use bevy_app::{App, PreUpdate};
-use bevy_ecs::{hierarchy::ChildOf, prelude::*};
+use bevy_ecs::prelude::*;
 use bevy_xilem::{
-    BevyXilemPlugin, ProjectionCtx, UiEventReceiver, UiEventSender, UiLabel, UiNodeId,
-    UiProjectorRegistry, UiRoot, UiView, XilemAction, run_app,
+    BevyXilemPlugin, ProjectionCtx, UiEventReceiver, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
+    XilemAction, run_app,
 };
+use crossbeam_channel::Sender;
 use xilem::{
     Color, WindowOptions,
     masonry::layout::Length,
@@ -236,14 +237,6 @@ impl CalculatorEngine {
             fragments.join(" ")
         }
     }
-
-    fn clear_entry_hint_color(&self) -> Color {
-        if self.current_number().is_empty() {
-            palette::css::MEDIUM_VIOLET_RED
-        } else {
-            palette::css::WHITE
-        }
-    }
 }
 
 fn format_number(value: f64) -> String {
@@ -264,19 +257,6 @@ fn format_number(value: f64) -> String {
 #[derive(Component, Debug, Clone, Copy)]
 struct CalcRoot;
 
-#[derive(Component, Debug, Clone, Copy)]
-struct CalcDisplayRow;
-
-#[derive(Component, Debug, Clone, Copy)]
-struct CalcButtonRow;
-
-#[derive(Component, Debug, Clone)]
-struct CalcButton {
-    label: String,
-    event: CalcEvent,
-    kind: CalcButtonKind,
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CalcButtonKind {
     Digit,
@@ -284,49 +264,138 @@ enum CalcButtonKind {
     Operator,
 }
 
-#[derive(Resource, Debug, Clone, Copy)]
-struct CalcDisplayEntity(Entity);
-
-fn project_calc_root(_: &CalcRoot, ctx: ProjectionCtx<'_>) -> UiView {
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
-
-    Arc::new(flex_col(children).gap(Length::px(2.)).padding(12.0))
+#[derive(Debug, Clone)]
+struct CalcButtonSpec {
+    label: &'static str,
+    event: CalcEvent,
+    kind: CalcButtonKind,
 }
 
-fn project_calc_display_row(_: &CalcDisplayRow, ctx: ProjectionCtx<'_>) -> UiView {
-    let text = ctx
-        .world
-        .get::<UiLabel>(ctx.entity)
-        .map_or_else(|| "0".to_string(), |label| label.text.clone());
-
-    Arc::new(
-        flex_row((label(text).text_size(30.0),))
-            .padding(8.0)
-            .border(palette::css::DARK_SLATE_GRAY, 1.0),
-    )
+fn calc_button_rows() -> Vec<Vec<CalcButtonSpec>> {
+    vec![
+        vec![
+            CalcButtonSpec {
+                label: "CE",
+                event: CalcEvent::ClearEntry,
+                kind: CalcButtonKind::Action,
+            },
+            CalcButtonSpec {
+                label: "C",
+                event: CalcEvent::ClearAll,
+                kind: CalcButtonKind::Action,
+            },
+            CalcButtonSpec {
+                label: "DEL",
+                event: CalcEvent::Delete,
+                kind: CalcButtonKind::Action,
+            },
+            CalcButtonSpec {
+                label: "÷",
+                event: CalcEvent::Operator(MathOperator::Divide),
+                kind: CalcButtonKind::Operator,
+            },
+        ],
+        vec![
+            CalcButtonSpec {
+                label: "7",
+                event: CalcEvent::Digit("7".into()),
+                kind: CalcButtonKind::Digit,
+            },
+            CalcButtonSpec {
+                label: "8",
+                event: CalcEvent::Digit("8".into()),
+                kind: CalcButtonKind::Digit,
+            },
+            CalcButtonSpec {
+                label: "9",
+                event: CalcEvent::Digit("9".into()),
+                kind: CalcButtonKind::Digit,
+            },
+            CalcButtonSpec {
+                label: "×",
+                event: CalcEvent::Operator(MathOperator::Multiply),
+                kind: CalcButtonKind::Operator,
+            },
+        ],
+        vec![
+            CalcButtonSpec {
+                label: "4",
+                event: CalcEvent::Digit("4".into()),
+                kind: CalcButtonKind::Digit,
+            },
+            CalcButtonSpec {
+                label: "5",
+                event: CalcEvent::Digit("5".into()),
+                kind: CalcButtonKind::Digit,
+            },
+            CalcButtonSpec {
+                label: "6",
+                event: CalcEvent::Digit("6".into()),
+                kind: CalcButtonKind::Digit,
+            },
+            CalcButtonSpec {
+                label: "−",
+                event: CalcEvent::Operator(MathOperator::Subtract),
+                kind: CalcButtonKind::Operator,
+            },
+        ],
+        vec![
+            CalcButtonSpec {
+                label: "1",
+                event: CalcEvent::Digit("1".into()),
+                kind: CalcButtonKind::Digit,
+            },
+            CalcButtonSpec {
+                label: "2",
+                event: CalcEvent::Digit("2".into()),
+                kind: CalcButtonKind::Digit,
+            },
+            CalcButtonSpec {
+                label: "3",
+                event: CalcEvent::Digit("3".into()),
+                kind: CalcButtonKind::Digit,
+            },
+            CalcButtonSpec {
+                label: "+",
+                event: CalcEvent::Operator(MathOperator::Add),
+                kind: CalcButtonKind::Operator,
+            },
+        ],
+        vec![
+            CalcButtonSpec {
+                label: "±",
+                event: CalcEvent::Negate,
+                kind: CalcButtonKind::Action,
+            },
+            CalcButtonSpec {
+                label: "0",
+                event: CalcEvent::Digit("0".into()),
+                kind: CalcButtonKind::Digit,
+            },
+            CalcButtonSpec {
+                label: ".",
+                event: CalcEvent::Digit(".".into()),
+                kind: CalcButtonKind::Action,
+            },
+            CalcButtonSpec {
+                label: "=",
+                event: CalcEvent::Equals,
+                kind: CalcButtonKind::Action,
+            },
+        ],
+    ]
 }
 
-fn project_calc_button_row(_: &CalcButtonRow, ctx: ProjectionCtx<'_>) -> UiView {
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
-
-    Arc::new(flex_row(children).gap(Length::px(2.)))
-}
-
-fn project_calc_button(button_data: &CalcButton, ctx: ProjectionCtx<'_>) -> UiView {
-    let sender = ctx.world.resource::<UiEventSender>().0.clone();
+fn project_calc_button(
+    button_data: &CalcButtonSpec,
+    sender: Sender<XilemAction>,
+    highlight_clear_entry: bool,
+) -> UiView {
     let event = button_data.event.clone();
 
     match button_data.kind {
         CalcButtonKind::Digit => Arc::new(
-            text_button(button_data.label.clone(), move |_| {
+            text_button(button_data.label, move |_| {
                 let _ = sender.send(XilemAction::action(event.clone()));
             })
             .background_color(Color::from_rgb8(0x3a, 0x3a, 0x3a))
@@ -334,22 +403,17 @@ fn project_calc_button(button_data: &CalcButton, ctx: ProjectionCtx<'_>) -> UiVi
             .border_color(Color::TRANSPARENT),
         ),
         CalcButtonKind::Action | CalcButtonKind::Operator => {
-            let ce_color = if button_data.event == CalcEvent::ClearEntry {
-                ctx.world.get_resource::<CalculatorEngine>().map_or(
-                    palette::css::WHITE,
-                    CalculatorEngine::clear_entry_hint_color,
-                )
+            let label_color = if button_data.event == CalcEvent::ClearEntry && highlight_clear_entry
+            {
+                palette::css::MEDIUM_VIOLET_RED
             } else {
                 palette::css::WHITE
             };
 
             Arc::new(
-                button(
-                    label(button_data.label.clone()).color(ce_color),
-                    move |_| {
-                        let _ = sender.send(XilemAction::action(event.clone()));
-                    },
-                )
+                button(label(button_data.label).color(label_color), move |_| {
+                    let _ = sender.send(XilemAction::action(event.clone()));
+                })
                 .background_color(Color::from_rgb8(0x00, 0x8d, 0xdd))
                 .corner_radius(10.0)
                 .border_color(Color::TRANSPARENT)
@@ -359,141 +423,43 @@ fn project_calc_button(button_data: &CalcButton, ctx: ProjectionCtx<'_>) -> UiVi
     }
 }
 
-fn install_projectors(world: &mut World) {
-    let mut registry = world.resource_mut::<UiProjectorRegistry>();
-    registry
-        .register_component::<CalcRoot>(project_calc_root)
-        .register_component::<CalcDisplayRow>(project_calc_display_row)
-        .register_component::<CalcButtonRow>(project_calc_button_row)
-        .register_component::<CalcButton>(project_calc_button);
+fn project_calc_root(_: &CalcRoot, ctx: ProjectionCtx<'_>) -> UiView {
+    let engine = ctx.world.resource::<CalculatorEngine>();
+    let sender = ctx.event_sender.clone();
+    let highlight_clear_entry = engine.current_number().is_empty();
+
+    let mut children = vec![
+        flex_row((label(engine.display_text()).text_size(30.0),))
+            .padding(8.0)
+            .border(palette::css::DARK_SLATE_GRAY, 1.0)
+            .into_any_flex(),
+    ];
+
+    for row in calc_button_rows() {
+        let row_children = row
+            .iter()
+            .map(|button_data| {
+                project_calc_button(button_data, sender.clone(), highlight_clear_entry)
+                    .into_any_flex()
+            })
+            .collect::<Vec<_>>();
+
+        children.push(flex_row(row_children).gap(Length::px(2.)).into_any_flex());
+    }
+
+    Arc::new(flex_col(children).gap(Length::px(2.)).padding(12.0))
 }
 
-fn spawn_calc_button(
-    world: &mut World,
-    parent: Entity,
-    alloc_node_id: &mut impl FnMut() -> UiNodeId,
-    label: &str,
-    event: CalcEvent,
-    kind: CalcButtonKind,
-) {
-    world.spawn((
-        alloc_node_id(),
-        CalcButton {
-            label: label.to_string(),
-            event,
-            kind,
-        },
-        ChildOf(parent),
-    ));
+fn install_projectors(world: &mut World) {
+    let mut registry = world.resource_mut::<UiProjectorRegistry>();
+    registry.register_component::<CalcRoot>(project_calc_root);
 }
 
 fn setup_calculator_world(world: &mut World) {
-    let mut next_node_id = 1_u64;
-    let mut alloc_node_id = || {
-        let id = UiNodeId(next_node_id);
-        next_node_id += 1;
-        id
-    };
-
-    let root = world.spawn((UiRoot, alloc_node_id(), CalcRoot)).id();
-
-    let display = world
-        .spawn((
-            alloc_node_id(),
-            CalcDisplayRow,
-            UiLabel::new("0"),
-            ChildOf(root),
-        ))
-        .id();
-    world.insert_resource(CalcDisplayEntity(display));
-
-    let top = world
-        .spawn((alloc_node_id(), CalcButtonRow, ChildOf(root)))
-        .id();
-    spawn_calc_button(
-        world,
-        top,
-        &mut alloc_node_id,
-        "CE",
-        CalcEvent::ClearEntry,
-        CalcButtonKind::Action,
-    );
-    spawn_calc_button(
-        world,
-        top,
-        &mut alloc_node_id,
-        "C",
-        CalcEvent::ClearAll,
-        CalcButtonKind::Action,
-    );
-    spawn_calc_button(
-        world,
-        top,
-        &mut alloc_node_id,
-        "DEL",
-        CalcEvent::Delete,
-        CalcButtonKind::Action,
-    );
-    spawn_calc_button(
-        world,
-        top,
-        &mut alloc_node_id,
-        "÷",
-        CalcEvent::Operator(MathOperator::Divide),
-        CalcButtonKind::Operator,
-    );
-
-    let rows = [
-        [
-            ("7", CalcEvent::Digit("7".into()), CalcButtonKind::Digit),
-            ("8", CalcEvent::Digit("8".into()), CalcButtonKind::Digit),
-            ("9", CalcEvent::Digit("9".into()), CalcButtonKind::Digit),
-            (
-                "×",
-                CalcEvent::Operator(MathOperator::Multiply),
-                CalcButtonKind::Operator,
-            ),
-        ],
-        [
-            ("4", CalcEvent::Digit("4".into()), CalcButtonKind::Digit),
-            ("5", CalcEvent::Digit("5".into()), CalcButtonKind::Digit),
-            ("6", CalcEvent::Digit("6".into()), CalcButtonKind::Digit),
-            (
-                "−",
-                CalcEvent::Operator(MathOperator::Subtract),
-                CalcButtonKind::Operator,
-            ),
-        ],
-        [
-            ("1", CalcEvent::Digit("1".into()), CalcButtonKind::Digit),
-            ("2", CalcEvent::Digit("2".into()), CalcButtonKind::Digit),
-            ("3", CalcEvent::Digit("3".into()), CalcButtonKind::Digit),
-            (
-                "+",
-                CalcEvent::Operator(MathOperator::Add),
-                CalcButtonKind::Operator,
-            ),
-        ],
-        [
-            ("±", CalcEvent::Negate, CalcButtonKind::Action),
-            ("0", CalcEvent::Digit("0".into()), CalcButtonKind::Digit),
-            (".", CalcEvent::Digit(".".into()), CalcButtonKind::Action),
-            ("=", CalcEvent::Equals, CalcButtonKind::Action),
-        ],
-    ];
-
-    for row_spec in rows {
-        let row = world
-            .spawn((alloc_node_id(), CalcButtonRow, ChildOf(root)))
-            .id();
-
-        for (label, event, kind) in row_spec {
-            spawn_calc_button(world, row, &mut alloc_node_id, label, event, kind);
-        }
-    }
+    world.spawn((UiRoot, UiNodeId(1), CalcRoot));
 }
 
-fn drain_calc_events_and_update_display(world: &mut World) {
+fn drain_calc_events(world: &mut World) {
     let events = world
         .resource::<UiEventReceiver>()
         .drain_actions::<CalcEvent>();
@@ -501,18 +467,9 @@ fn drain_calc_events_and_update_display(world: &mut World) {
         return;
     }
 
-    {
-        let mut engine = world.resource_mut::<CalculatorEngine>();
-        for event in events {
-            engine.apply_event(event);
-        }
-    }
-
-    let display_text = world.resource::<CalculatorEngine>().display_text();
-    let display_entity = world.resource::<CalcDisplayEntity>().0;
-
-    if let Some(mut label) = world.get_mut::<UiLabel>(display_entity) {
-        label.text = display_text;
+    let mut engine = world.resource_mut::<CalculatorEngine>();
+    for event in events {
+        engine.apply_event(event);
     }
 }
 
@@ -524,7 +481,7 @@ fn build_bevy_calculator_app() -> App {
     install_projectors(app.world_mut());
     setup_calculator_world(app.world_mut());
 
-    app.add_systems(PreUpdate, drain_calc_events_and_update_display);
+    app.add_systems(PreUpdate, drain_calc_events);
 
     app
 }

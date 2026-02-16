@@ -25,3 +25,11 @@ path = "../../examples/todo_list.rs"
 [[example]]
 name = "chess"
 path = "../../examples/chess.rs"
+
+[[example]]
+name = "temperature_converter"
+path = "../../examples/temperature_converter.rs"
+
+[[example]]
+name = "timer"
+path = "../../examples/timer.rs"
