@@ -1,6 +1,12 @@
 use std::{any::TypeId, collections::HashSet, time::Duration};
 
-use bevy_ecs::{change_detection::Mut, component::ComponentId, entity::Entity, prelude::*};
+use bevy_ecs::{
+    change_detection::Mut,
+    component::ComponentId,
+    entity::Entity,
+    hierarchy::{ChildOf, Children},
+    prelude::*,
+};
 use bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim};
 use masonry::theme;
 use xilem::{Color, style::Style as _};
@@ -102,6 +108,10 @@ pub enum Selector {
     Class(String),
     PseudoClass(PseudoClass),
     And(Vec<Selector>),
+    Descendant {
+        ancestor: Box<Selector>,
+        descendant: Box<Selector>,
+    },
 }
 
 impl Selector {
@@ -126,11 +136,32 @@ impl Selector {
     }
 
     #[must_use]
+    pub fn descendant(ancestor: Selector, descendant: Selector) -> Self {
+        Self::Descendant {
+            ancestor: Box::new(ancestor),
+            descendant: Box::new(descendant),
+        }
+    }
+
+    #[must_use]
     fn contains_type(&self) -> bool {
         match self {
             Selector::Type(_) => true,
             Selector::Class(_) | Selector::PseudoClass(_) => false,
             Selector::And(selectors) => selectors.iter().any(Self::contains_type),
+            Selector::Descendant {
+                ancestor,
+                descendant,
+            } => ancestor.contains_type() || descendant.contains_type(),
+        }
+    }
+
+    #[must_use]
+    fn contains_descendant(&self) -> bool {
+        match self {
+            Selector::Descendant { .. } => true,
+            Selector::And(selectors) => selectors.iter().any(Self::contains_descendant),
+            Selector::Type(_) | Selector::Class(_) | Selector::PseudoClass(_) => false,
         }
     }
 }
@@ -212,6 +243,13 @@ impl StyleSheet {
     #[must_use]
     fn has_type_selectors(&self) -> bool {
         self.rules.iter().any(|rule| rule.selector.contains_type())
+    }
+
+    #[must_use]
+    fn has_descendant_selectors(&self) -> bool {
+        self.rules
+            .iter()
+            .any(|rule| rule.selector.contains_descendant())
     }
 }
 
@@ -326,6 +364,24 @@ fn component_matches_type(world: &World, entity: Entity, component_id: Component
         .is_ok_and(|entity_ref| entity_ref.contains_id(component_id))
 }
 
+fn entity_has_matching_ancestor(
+    world: &World,
+    entity: Entity,
+    ancestor_selector: &Selector,
+) -> bool {
+    let mut current = entity;
+
+    while let Some(child_of) = world.get::<ChildOf>(current) {
+        let parent = child_of.parent();
+        if selector_matches_entity(world, parent, ancestor_selector) {
+            return true;
+        }
+        current = parent;
+    }
+
+    false
+}
+
 fn selector_matches_entity(world: &World, entity: Entity, selector: &Selector) -> bool {
     match selector {
         Selector::Type(type_id) => world
@@ -340,6 +396,13 @@ fn selector_matches_entity(world: &World, entity: Entity, selector: &Selector) -
         Selector::And(selectors) => selectors
             .iter()
             .all(|selector| selector_matches_entity(world, entity, selector)),
+        Selector::Descendant {
+            ancestor,
+            descendant,
+        } => {
+            selector_matches_entity(world, entity, descendant)
+                && entity_has_matching_ancestor(world, entity, ancestor)
+        }
     }
 }
 
@@ -361,6 +424,17 @@ fn selector_matches_class_context(
         Selector::And(selectors) => selectors
             .iter()
             .all(|selector| selector_matches_class_context(world, entity, selector, has_class)),
+        Selector::Descendant {
+            ancestor,
+            descendant,
+        } => {
+            let Some(entity) = entity else {
+                return false;
+            };
+
+            selector_matches_class_context(world, Some(entity), descendant, has_class)
+                && entity_has_matching_ancestor(world, entity, ancestor)
+        }
     }
 }
 
@@ -665,16 +739,8 @@ pub fn sync_ui_interaction_markers(world: &mut World) {
                 }
             }
             UiInteractionEvent::PointerLeft => {
-                let mut changed = false;
                 if world.get::<Hovered>(event.entity).is_some() {
                     world.entity_mut(event.entity).remove::<Hovered>();
-                    changed = true;
-                }
-                if world.get::<Pressed>(event.entity).is_some() {
-                    world.entity_mut(event.entity).remove::<Pressed>();
-                    changed = true;
-                }
-                if changed {
                     world.entity_mut(event.entity).insert(StyleDirty);
                 }
             }
@@ -715,9 +781,12 @@ pub fn mark_style_dirty(world: &mut World) {
     let has_type_selectors = world
         .get_resource::<StyleSheet>()
         .is_some_and(StyleSheet::has_type_selectors);
+    let has_descendant_selectors = world
+        .get_resource::<StyleSheet>()
+        .is_some_and(StyleSheet::has_descendant_selectors);
 
     if stylesheet_changed {
-        if has_type_selectors {
+        if has_type_selectors || has_descendant_selectors {
             let mut all_entities = world.query::<Entity>();
             dirty.extend(all_entities.iter(world));
         } else {
@@ -733,7 +802,23 @@ pub fn mark_style_dirty(world: &mut World) {
         }
     }
 
-    if !has_type_selectors {
+    if has_descendant_selectors {
+        let mut descendants = Vec::new();
+        for entity in &dirty {
+            let mut stack = vec![*entity];
+            while let Some(current) = stack.pop() {
+                if let Some(children) = world.get::<Children>(current) {
+                    for child in children.iter() {
+                        descendants.push(child);
+                        stack.push(child);
+                    }
+                }
+            }
+        }
+        dirty.extend(descendants);
+    }
+
+    if !has_type_selectors && !has_descendant_selectors {
         let stale = {
             let mut stale_query =
                 world.query_filtered::<Entity, (With<ComputedStyle>, Without<StyleDirty>)>();
@@ -798,7 +883,6 @@ pub fn sync_style_targets(world: &mut World) {
                 let target = to_target_component(resolved.colors);
                 match resolved.transition {
                     Some(transition) => {
-                        let previous_target = world.get::<TargetColorStyle>(entity).copied();
                         if let Some(mut target_component) =
                             world.get_mut::<TargetColorStyle>(entity)
                         {
@@ -813,17 +897,18 @@ pub fn sync_style_targets(world: &mut World) {
                                 .insert(to_current_component(target));
                         }
 
+                        let end = to_current_component(target);
+
                         if transition.duration <= f32::EPSILON {
-                            ensure_current(world, entity, to_current_component(target));
+                            ensure_current(world, entity, end);
                             world.entity_mut(entity).remove::<TweenAnim>();
                         } else {
-                            let target_changed = previous_target.is_some_and(|prev| prev != target);
-                            if target_changed {
-                                let start = world
-                                    .get::<CurrentColorStyle>(entity)
-                                    .copied()
-                                    .unwrap_or_else(|| to_current_component(target));
-                                let end = to_current_component(target);
+                            let start = world
+                                .get::<CurrentColorStyle>(entity)
+                                .copied()
+                                .unwrap_or(end);
+
+                            if start != end {
                                 spawn_color_style_tween(
                                     world,
                                     entity,
@@ -831,6 +916,8 @@ pub fn sync_style_targets(world: &mut World) {
                                     end,
                                     transition.duration,
                                 );
+                            } else {
+                                world.entity_mut(entity).remove::<TweenAnim>();
                             }
                         }
                     }

@@ -5,12 +5,13 @@ use masonry::{
     accesskit::{Node, Role},
     core::keyboard::{Key, NamedKey},
     core::{
-        AccessCtx, AccessEvent, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, PaintCtx,
-        PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut, PropertiesRef, RegisterCtx,
-        TextEvent, Update, UpdateCtx, Widget, WidgetMut, WidgetPod,
+        AccessCtx, AccessEvent, ChildrenIds, EventCtx, HasProperty, LayoutCtx, MeasureCtx,
+        PaintCtx, PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut, PropertiesRef,
+        Property, RegisterCtx, TextEvent, Update, UpdateCtx, Widget, WidgetMut, WidgetPod,
     },
     kurbo::Size,
     layout::{LayoutSize, LenReq, SizeDef},
+    properties::{Background, BorderColor, BorderWidth, ContentColor, CornerRadius, Padding},
     widgets::Label,
 };
 use vello::Scene;
@@ -34,6 +35,8 @@ pub struct EcsButtonWidget<A> {
     hovered: bool,
     pressed: bool,
 }
+
+impl<A> HasProperty<ContentColor> for EcsButtonWidget<A> {}
 
 impl<A> EcsButtonWidget<A> {
     #[must_use]
@@ -117,11 +120,7 @@ where
             PointerEvent::Down(..) => {
                 ctx.request_focus();
                 ctx.capture_pointer();
-                let hover_changed = self.set_hovered(ctx.is_hovered());
-                let pressed_changed = self.set_pressed(true);
-                if hover_changed || pressed_changed {
-                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
-                }
+                ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
                 ctx.request_render();
             }
             PointerEvent::Up(PointerButtonEvent { button, .. }) => {
@@ -132,27 +131,9 @@ where
                     self.push_action();
                     ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
                 }
-                let pressed_changed = self.set_pressed(false);
-                let hover_changed = self.set_hovered(ctx.is_hovered());
-                if hover_changed || pressed_changed {
-                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
-                }
                 ctx.request_render();
             }
-            PointerEvent::Move(..) => {
-                if self.set_hovered(ctx.is_hovered()) {
-                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
-                    ctx.request_render();
-                }
-            }
-            PointerEvent::Leave(..) => {
-                let hover_changed = self.set_hovered(false);
-                let pressed_changed = self.set_pressed(false);
-                if hover_changed || pressed_changed {
-                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
-                    ctx.request_render();
-                }
-            }
+            PointerEvent::Move(..) | PointerEvent::Leave(..) => {}
             _ => {}
         }
     }
@@ -191,15 +172,47 @@ where
         ctx.register_child(&mut self.label);
     }
 
-    fn update(
-        &mut self,
-        _ctx: &mut UpdateCtx<'_>,
-        _props: &mut PropertiesMut<'_>,
-        _event: &Update,
-    ) {
+    fn update(&mut self, ctx: &mut UpdateCtx<'_>, _props: &mut PropertiesMut<'_>, event: &Update) {
+        match event {
+            Update::HoveredChanged(hovered) => {
+                if self.set_hovered(*hovered) {
+                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
+                    ctx.request_render();
+                }
+            }
+            Update::ActiveChanged(active) => {
+                if self.set_pressed(*active) {
+                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
+                    ctx.request_render();
+                }
+            }
+            Update::DisabledChanged(true) => {
+                let hover_changed = self.set_hovered(false);
+                let pressed_changed = self.set_pressed(false);
+                if hover_changed || pressed_changed {
+                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
+                    ctx.request_render();
+                }
+            }
+            _ => {}
+        }
     }
 
-    fn property_changed(&mut self, _ctx: &mut UpdateCtx<'_>, _property_type: TypeId) {}
+    fn property_changed(&mut self, ctx: &mut UpdateCtx<'_>, property_type: TypeId) {
+        if Padding::matches(property_type) || BorderWidth::matches(property_type) {
+            ctx.request_layout();
+            ctx.request_render();
+            return;
+        }
+
+        if ContentColor::matches(property_type)
+            || CornerRadius::matches(property_type)
+            || BorderColor::matches(property_type)
+            || Background::matches(property_type)
+        {
+            ctx.request_render();
+        }
+    }
 
     fn measure(
         &mut self,

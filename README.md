@@ -229,6 +229,7 @@ This keeps interaction handling explicit and ECS-friendly.
 - `timer`
 - `todo_list`
 - `chess`
+- `theme_gallery`
 
 Run an example from repository root:
 

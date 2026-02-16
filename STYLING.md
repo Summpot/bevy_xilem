@@ -48,7 +48,7 @@ All style primitives live in `crates/bevy_xilem/src/styling.rs`.
 ### 2.2 Class stylesheet model
 
 - `StyleClass(pub Vec<String>)` (component on entities)
-- `Selector::{Type, Class, PseudoClass, And}`
+- `Selector::{Type, Class, PseudoClass, And, Descendant}`
 - `StyleSetter { layout, colors, text, transition }`
 - `StyleRule { selector, setter }`
 - `StyleSheet { rules: Vec<StyleRule> }` (resource)
@@ -68,6 +68,9 @@ Convenience APIs still exist for class-only rules:
 - `StyleDirty` (marks entities requiring recomputation)
 - `ComputedStyle` (cached resolved style read by projectors)
 
+When descendant selectors are present, invalidation propagates from changed ancestors to
+their descendants so `A B`-style rules stay correct after ancestor class/pseudo changes.
+
 ### 2.5 Transition runtime state
 
 - `TargetColorStyle` (resolved target colors for the current pseudo state)
@@ -81,6 +84,7 @@ Convenience APIs still exist for class-only rules:
 `resolve_style(world, entity)` follows this precedence (low → high):
 
 1. selector-matched rules from `StyleSheet` (`Type`/`Class`/`PseudoClass`/`And`)
+  including descendant relations (`Descendant(ancestor, descendant)`)
 2. inline component overrides (`LayoutStyle`, `ColorStyle`, `TextStyle`, `StyleTransition`)
 3. compatibility pseudo color overrides (`hover_*`, `pressed_*`) from `ColorStyle`
 4. animated override from `CurrentColorStyle` if present

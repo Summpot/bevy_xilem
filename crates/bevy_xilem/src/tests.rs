@@ -7,7 +7,7 @@ use crate::{
     synthesize_roots_with_stats,
 };
 use bevy_app::App;
-use bevy_ecs::prelude::*;
+use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TestRoot;
@@ -210,4 +210,135 @@ fn selector_type_rule_matches_component_type() {
 
     let resolved = resolve_style(&world, entity);
     assert_eq!(resolved.colors.bg, Some(type_color));
+}
+
+#[test]
+fn selector_descendant_rule_matches_nested_entity_and_updates_on_ancestor_change() {
+    let mut world = World::new();
+    let mut sheet = StyleSheet::default();
+
+    let dark_bg = crate::xilem::Color::from_rgb8(0x20, 0x2A, 0x44);
+    let light_bg = crate::xilem::Color::from_rgb8(0xE8, 0xEE, 0xFF);
+
+    sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("theme.dark"),
+            Selector::class("gallery.target"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(dark_bg),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("theme.light"),
+            Selector::class("gallery.target"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(light_bg),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    world.insert_resource(sheet);
+
+    let root = world
+        .spawn((crate::StyleClass(vec!["theme.dark".to_string()]),))
+        .id();
+    let child = world
+        .spawn((
+            crate::StyleClass(vec!["gallery.target".to_string()]),
+            ChildOf(root),
+        ))
+        .id();
+
+    crate::mark_style_dirty(&mut world);
+    crate::sync_style_targets(&mut world);
+    assert_eq!(resolve_style(&world, child).colors.bg, Some(dark_bg));
+
+    world.clear_trackers();
+    world
+        .entity_mut(root)
+        .insert(crate::StyleClass(vec!["theme.light".to_string()]));
+
+    crate::mark_style_dirty(&mut world);
+    crate::sync_style_targets(&mut world);
+    assert_eq!(resolve_style(&world, child).colors.bg, Some(light_bg));
+}
+
+#[test]
+fn sync_style_targets_restarts_tween_when_current_differs_but_target_unchanged() {
+    let mut world = World::new();
+    let mut sheet = StyleSheet::default();
+
+    let base = crate::xilem::Color::from_rgb8(0x20, 0x2A, 0x44);
+    let mid = crate::xilem::Color::from_rgb8(0x90, 0x99, 0xB3);
+
+    sheet.set_class(
+        "test.animated",
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(base),
+                ..ColorStyle::default()
+            },
+            transition: Some(crate::StyleTransition { duration: 0.2 }),
+            ..StyleSetter::default()
+        },
+    );
+
+    world.insert_resource(sheet);
+
+    let entity = world
+        .spawn((crate::StyleClass(vec!["test.animated".to_string()]),))
+        .id();
+
+    crate::mark_style_dirty(&mut world);
+    crate::sync_style_targets(&mut world);
+
+    world.entity_mut(entity).insert(crate::CurrentColorStyle {
+        bg: Some(mid),
+        text: None,
+        border: None,
+    });
+    world.entity_mut(entity).insert(crate::TargetColorStyle {
+        bg: Some(base),
+        text: None,
+        border: None,
+    });
+    world.entity_mut(entity).insert(crate::StyleDirty);
+
+    crate::sync_style_targets(&mut world);
+
+    assert_eq!(
+        world
+            .get::<crate::TargetColorStyle>(entity)
+            .and_then(|target| target.bg),
+        Some(base)
+    );
+    assert!(world.get::<bevy_tweening::TweenAnim>(entity).is_some());
+}
+
+#[test]
+fn pointer_left_does_not_clear_pressed_marker() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let entity = world.spawn((crate::Hovered, crate::Pressed)).id();
+
+    world
+        .resource::<UiEventQueue>()
+        .push_typed(entity, crate::UiInteractionEvent::PointerLeft);
+
+    crate::sync_ui_interaction_markers(&mut world);
+
+    assert!(world.get::<crate::Hovered>(entity).is_none());
+    assert!(world.get::<crate::Pressed>(entity).is_some());
 }

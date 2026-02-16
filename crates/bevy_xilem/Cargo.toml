@@ -49,3 +49,7 @@ path = "../../examples/timer.rs"
 [[example]]
 name = "download_with_progress"
 path = "../../examples/download_with_progress.rs"
+
+[[example]]
+name = "theme_gallery"
+path = "../../examples/theme_gallery.rs"

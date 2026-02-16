@@ -97,7 +97,7 @@ The runtime now supports a data-driven style pipeline with four phases:
   `LayoutStyle`, `ColorStyle`, `TextStyle`, `StyleTransition`
 - **Selector-based stylesheet + cascading:**
   `StyleSheet { rules: Vec<StyleRule> }` with selector AST:
-  `Selector::{Type, Class, PseudoClass, And}` and payload `StyleSetter`
+  `Selector::{Type, Class, PseudoClass, And, Descendant}` and payload `StyleSetter`
 - **Pseudo classes from structural interaction events:**
   `Hovered` / `Pressed` marker components synchronized from interaction events
 - **Computed-style cache + incremental invalidation:**
@@ -176,7 +176,9 @@ and registers systems:
 Transition execution details:
 
 - `mark_style_dirty` incrementally marks entities whose style dependencies changed
-  (class/inline/pseudo/style resource changes).
+  (class/inline/pseudo/style resource changes), and when descendant selectors are present,
+  it propagates dirtiness through descendant hierarchies so ancestor-driven style rules
+  recompute correctly.
 - `sync_style_targets` recomputes style only for dirty entities, updates `ComputedStyle`,
   computes target interaction colors, and on target changes inserts/replaces
   a `TweenAnim` with a fresh tween targeting `CurrentColorStyle`.
