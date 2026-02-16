@@ -8,7 +8,8 @@ use std::{
 use bevy_app::{App, Plugin, PostUpdate, PreUpdate};
 use bevy_ecs::{hierarchy::Children, prelude::*};
 use xilem_masonry::{
-    AnyWidgetView, view::FlexExt as _, view::flex_col, view::label, view::text_button,
+    AnyWidgetView, view::FlexExt as _, view::flex_col, view::flex_row, view::label,
+    view::text_button,
 };
 
 /// Xilem state used by synthesized UI views.
@@ -32,6 +33,10 @@ pub struct UiNodeId(pub u64);
 /// Example container component.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct UiFlexColumn;
+
+/// Example horizontal container component.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct UiFlexRow;
 
 /// Example text component.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
@@ -152,6 +157,54 @@ pub struct UiSynthesisStats {
     pub cycle_count: usize,
     pub missing_entity_count: usize,
     pub unhandled_count: usize,
+}
+
+/// Reusable Bevy-to-Xilem runtime bridge.
+///
+/// This keeps Bevy app ticking and provides access to synthesized root views,
+/// allowing examples (or apps) to use real Xilem with minimal boilerplate.
+pub struct BevyXilemRuntime {
+    bevy_app: App,
+}
+
+impl BevyXilemRuntime {
+    #[must_use]
+    pub fn new(bevy_app: App) -> Self {
+        Self { bevy_app }
+    }
+
+    #[must_use]
+    pub fn app(&self) -> &App {
+        &self.bevy_app
+    }
+
+    pub fn app_mut(&mut self) -> &mut App {
+        &mut self.bevy_app
+    }
+
+    pub fn update(&mut self) {
+        self.bevy_app.update();
+    }
+
+    #[must_use]
+    pub fn first_root(&self) -> Option<UiView> {
+        self.bevy_app
+            .world()
+            .get_resource::<SynthesizedUiViews>()
+            .and_then(|views| views.roots.first().cloned())
+    }
+
+    #[must_use]
+    pub fn first_root_or_label(&self, fallback_text: impl Into<String>) -> UiView {
+        self.first_root()
+            .unwrap_or_else(|| Arc::new(label(fallback_text.into())))
+    }
+
+    #[must_use]
+    pub fn update_and_first_root_or_label(&mut self, fallback_text: impl Into<String>) -> UiView {
+        self.update();
+        self.first_root_or_label(fallback_text)
+    }
 }
 
 /// Semantic UI messages that business systems can consume.
@@ -342,6 +395,16 @@ fn project_flex_column(_: &UiFlexColumn, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(flex_col(children))
 }
 
+fn project_flex_row(_: &UiFlexRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let children = ctx
+        .children
+        .into_iter()
+        .map(|child| child.into_any_flex())
+        .collect::<Vec<_>>();
+
+    Arc::new(flex_row(children))
+}
+
 fn project_label(label_component: &UiLabel, _ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(label(label_component.text.clone()))
 }
@@ -360,6 +423,7 @@ fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>) -> UiView
 pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
     registry
         .register_component::<UiFlexColumn>(project_flex_column)
+        .register_component::<UiFlexRow>(project_flex_row)
         .register_component::<UiLabel>(project_label)
         .register_component::<UiButton>(project_button);
 }
@@ -389,9 +453,9 @@ pub mod prelude {
     pub use bevy_ecs::hierarchy::{ChildOf, Children};
 
     pub use crate::{
-        BevyXilemPlugin, ProjectionCtx, SynthesizedUiViews, UiAnyView, UiButton, UiEvent,
-        UiEventInbox, UiEventSender, UiFlexColumn, UiLabel, UiNodeId, UiProjector,
-        UiProjectorRegistry, UiRoot, UiSynthesisStats, UiView, gather_ui_roots,
+        BevyXilemPlugin, BevyXilemRuntime, ProjectionCtx, SynthesizedUiViews, UiAnyView, UiButton,
+        UiEvent, UiEventInbox, UiEventSender, UiFlexColumn, UiFlexRow, UiLabel, UiNodeId,
+        UiProjector, UiProjectorRegistry, UiRoot, UiSynthesisStats, UiView, gather_ui_roots,
         register_builtin_projectors, synthesize_roots, synthesize_roots_with_stats,
         synthesize_world,
     };
@@ -527,5 +591,49 @@ mod tests {
                 unhandled_count: 0,
             }
         );
+    }
+
+    #[test]
+    fn synthesize_builtin_row_tree_stats() {
+        let mut world = World::new();
+        let mut registry = UiProjectorRegistry::default();
+        register_builtin_projectors(&mut registry);
+
+        let root = world.spawn((UiRoot, UiNodeId(1), UiFlexRow)).id();
+        world.spawn((UiNodeId(2), UiLabel::new("left"), ChildOf(root)));
+        world.spawn((UiNodeId(3), UiLabel::new("right"), ChildOf(root)));
+
+        let (roots, stats) = synthesize_roots_with_stats(&world, &registry, [root]);
+
+        assert_eq!(roots.len(), 1);
+        assert_eq!(
+            stats,
+            UiSynthesisStats {
+                root_count: 1,
+                node_count: 3,
+                cycle_count: 0,
+                missing_entity_count: 0,
+                unhandled_count: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn runtime_bridge_updates_and_exposes_root() {
+        let mut app = App::new();
+        app.add_plugins(BevyXilemPlugin);
+
+        let root = app
+            .world_mut()
+            .spawn((UiRoot, UiNodeId(1), UiFlexColumn))
+            .id();
+        app.world_mut()
+            .spawn((UiNodeId(2), UiLabel::new("runtime"), ChildOf(root)));
+
+        let mut runtime = BevyXilemRuntime::new(app);
+        let root_view = runtime.update_and_first_root_or_label("fallback");
+
+        assert!(!root_view.as_any().is::<xilem_masonry::view::Label>());
+        assert!(runtime.first_root().is_some());
     }
 }

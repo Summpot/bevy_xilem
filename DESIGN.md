@@ -35,6 +35,7 @@ UI entities are modeled with explicit components:
   - `ChildOf` (the parent-link relationship component; equivalent role to a `Parent` link).
 - Built-in view components:
   - `UiFlexColumn`
+  - `UiFlexRow`
   - `UiLabel { text: String }`
   - `UiButton { label: String }`
 
@@ -46,6 +47,7 @@ Synthesis produces real Xilem views directly:
 - `SynthesizedUiViews` stores `Vec<UiView>` each update cycle
 - Built-in component projectors map to Xilem view constructors:
   - `UiFlexColumn` -> `xilem_masonry::view::flex_col`
+  - `UiFlexRow` -> `xilem_masonry::view::flex_row`
   - `UiLabel` -> `xilem_masonry::view::label`
   - `UiButton` -> `xilem_masonry::view::text_button`
 
@@ -59,7 +61,7 @@ Fallback handling for unhandled / missing / cycle cases is also represented as c
 - Component-specific registration uses `register_component::<C>(...)`.
 - Precedence rule: **last registered projector wins**.
 
-Built-in projectors are registered for `UiFlexColumn`, `UiLabel`, and `UiButton`.
+Built-in projectors are registered for `UiFlexColumn`, `UiFlexRow`, `UiLabel`, and `UiButton`.
 
 ## Synthesis Execution
 
@@ -108,6 +110,18 @@ This makes synthesis behavior observable without external instrumentation.
   - `PostUpdate`: `synthesize_ui_system`
 - Registers built-in projectors.
 
+## Bevy↔Xilem Runtime Bridge
+
+The core crate now provides a reusable runtime bridge:
+
+- `BevyXilemRuntime` wraps a Bevy `App`
+- `update()` ticks Bevy schedules
+- `first_root()` / `first_root_or_label(...)` expose synthesized root views
+- `update_and_first_root_or_label(...)` provides a one-call update+read path
+
+Examples use this bridge to run **real Xilem windows** without implementing
+runtime plumbing inside each example.
+
 ## Verified Behavior
 
 The crate contains tests that verify:
@@ -122,7 +136,6 @@ The crate contains tests that verify:
 
 The following are not implemented in the current codebase:
 
-- Plugin-level Masonry runtime driving and widget diff application (windowed runtime wiring currently lives in examples)
 - Render backend integration (e.g., Vello/RenderGraph path)
 - Input routing from window/input backends into UI actions
 

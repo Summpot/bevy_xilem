@@ -1,16 +1,19 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-};
+use std::sync::Arc;
 
 use bevy_app::{App, PostUpdate, PreUpdate};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use bevy_xilem::{
-    ProjectionCtx, SynthesizedUiViews, UiNodeId, UiProjectorRegistry, UiRoot, UiSynthesisStats,
-    UiView, gather_ui_roots, register_builtin_projectors, synthesize_roots_with_stats,
+    BevyXilemRuntime, ProjectionCtx, SynthesizedUiViews, UiNodeId, UiProjectorRegistry, UiRoot,
+    UiSynthesisStats, UiView, gather_ui_roots, register_builtin_projectors,
+    synthesize_roots_with_stats,
 };
 use crossbeam_channel::{Receiver, Sender, unbounded};
-use xilem_masonry::view::{FlexExt as _, flex_col, label, text_button};
+use xilem::{
+    EventLoop, WidgetView, WindowOptions, Xilem,
+    core::{Edit, map_state},
+    winit::{dpi::LogicalSize, error::EventLoopError},
+};
+use xilem_masonry::view::{label, text_button};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum FilterType {
@@ -87,17 +90,6 @@ struct TodoRuntime {
     next_node_id: u64,
 }
 
-#[derive(Resource, Debug, Default)]
-struct AddButtonIndex(HashMap<String, Entity>);
-
-#[derive(Resource, Debug, Default)]
-struct FilterButtonIndex(HashMap<FilterType, Entity>);
-
-type ClickHandler = Arc<dyn Fn() + Send + Sync + 'static>;
-
-#[derive(Resource, Default)]
-struct TodoCallbacks(Mutex<HashMap<Entity, ClickHandler>>);
-
 fn alloc_node_id(world: &mut World) -> UiNodeId {
     let mut runtime = world.resource_mut::<TodoRuntime>();
     let id = UiNodeId(runtime.next_node_id);
@@ -105,43 +97,7 @@ fn alloc_node_id(world: &mut World) -> UiNodeId {
     id
 }
 
-fn store_callback(ctx: &ProjectionCtx<'_>, callback: ClickHandler) {
-    if let Some(callbacks) = ctx.world.get_resource::<TodoCallbacks>()
-        && let Ok(mut callback_map) = callbacks.0.lock()
-    {
-        callback_map.insert(ctx.entity, callback);
-    }
-}
-
-fn project_todo_list_container(_: &TodoListContainer, ctx: ProjectionCtx<'_>) -> UiView {
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
-
-    Arc::new(flex_col(children))
-}
-
-fn project_todo_item_row(_: &TodoItemRow, ctx: ProjectionCtx<'_>) -> UiView {
-    // This represents a single horizontal row conceptually (toggle + label + delete).
-    let children = ctx
-        .children
-        .into_iter()
-        .map(|child| child.into_any_flex())
-        .collect::<Vec<_>>();
-
-    Arc::new(flex_col(children))
-}
-
 fn project_add_button(button: &AddTodoButton, ctx: ProjectionCtx<'_>) -> UiView {
-    let sender = ctx.world.resource::<TodoEventSender>().0.clone();
-    let template = button.template.clone();
-    let callback: ClickHandler = Arc::new(move || {
-        let _ = sender.send(TodoEvent::Add(template.clone()));
-    });
-    store_callback(&ctx, callback);
-
     let sender = ctx.world.resource::<TodoEventSender>().0.clone();
     let template = button.template.clone();
 
@@ -154,14 +110,8 @@ fn project_add_button(button: &AddTodoButton, ctx: ProjectionCtx<'_>) -> UiView 
 }
 
 fn project_filter_tab(tab: &FilterTab, ctx: ProjectionCtx<'_>) -> UiView {
-    let sender = ctx.world.resource::<TodoEventSender>().0.clone();
-    let filter = tab.0;
-    let callback: ClickHandler = Arc::new(move || {
-        let _ = sender.send(TodoEvent::SetFilter(filter));
-    });
-    store_callback(&ctx, callback);
-
     let active = ctx.world.resource::<ActiveFilter>().0;
+    let filter = tab.0;
     let marker = if active == filter { "●" } else { "○" };
 
     let sender = ctx.world.resource::<TodoEventSender>().0.clone();
@@ -174,13 +124,7 @@ fn project_filter_tab(tab: &FilterTab, ctx: ProjectionCtx<'_>) -> UiView {
 }
 
 fn project_toggle_button(toggle: &ToggleTodoButton, ctx: ProjectionCtx<'_>) -> UiView {
-    let sender = ctx.world.resource::<TodoEventSender>().0.clone();
     let target = toggle.target;
-    let callback: ClickHandler = Arc::new(move || {
-        let _ = sender.send(TodoEvent::Toggle(target));
-    });
-    store_callback(&ctx, callback);
-
     let is_completed = ctx
         .world
         .get::<Completed>(target)
@@ -200,14 +144,9 @@ fn project_toggle_button(toggle: &ToggleTodoButton, ctx: ProjectionCtx<'_>) -> U
 }
 
 fn project_delete_button(delete: &DeleteTodoButton, ctx: ProjectionCtx<'_>) -> UiView {
-    let sender = ctx.world.resource::<TodoEventSender>().0.clone();
     let target = delete.target;
-    let callback: ClickHandler = Arc::new(move || {
-        let _ = sender.send(TodoEvent::Delete(target));
-    });
-    store_callback(&ctx, callback);
-
     let sender = ctx.world.resource::<TodoEventSender>().0.clone();
+
     Arc::new(text_button("Delete", move |_| {
         let _ = sender.send(TodoEvent::Delete(target));
     }))
@@ -238,8 +177,6 @@ fn install_projectors(world: &mut World) {
     let mut registry = world.resource_mut::<UiProjectorRegistry>();
     register_builtin_projectors(&mut registry);
     registry
-        .register_component::<TodoListContainer>(project_todo_list_container)
-        .register_component::<TodoItemRow>(project_todo_item_row)
         .register_component::<AddTodoButton>(project_add_button)
         .register_component::<FilterTab>(project_filter_tab)
         .register_component::<ToggleTodoButton>(project_toggle_button)
@@ -257,6 +194,7 @@ fn spawn_todo_item(world: &mut World, text: String) -> Entity {
     let row = world
         .spawn((
             row_node_id,
+            bevy_xilem::UiFlexRow,
             TodoItemRow,
             TodoText(text),
             Completed(false),
@@ -293,15 +231,20 @@ fn setup_todo_world(world: &mut World) {
         .id();
 
     let controls = world
-        .spawn((alloc(), bevy_xilem::UiFlexColumn, ChildOf(root)))
+        .spawn((alloc(), bevy_xilem::UiFlexRow, ChildOf(root)))
         .id();
 
     let filter_bar = world
-        .spawn((alloc(), bevy_xilem::UiFlexColumn, ChildOf(root)))
+        .spawn((alloc(), bevy_xilem::UiFlexRow, ChildOf(root)))
         .id();
 
     let list_container = world
-        .spawn((alloc(), TodoListContainer, ChildOf(root)))
+        .spawn((
+            alloc(),
+            bevy_xilem::UiFlexColumn,
+            TodoListContainer,
+            ChildOf(root),
+        ))
         .id();
 
     world.insert_resource(TodoRuntime {
@@ -310,32 +253,22 @@ fn setup_todo_world(world: &mut World) {
     });
 
     let add_templates = ["Buy milk", "Write integration tests"];
-    let mut add_index = HashMap::new();
     for template in add_templates {
         let node_id = alloc_node_id(world);
-        let button = world
-            .spawn((
-                node_id,
-                AddTodoButton {
-                    template: template.to_string(),
-                },
-                ChildOf(controls),
-            ))
-            .id();
-        add_index.insert(template.to_string(), button);
+        world.spawn((
+            node_id,
+            AddTodoButton {
+                template: template.to_string(),
+            },
+            ChildOf(controls),
+        ));
     }
-    world.insert_resource(AddButtonIndex(add_index));
 
     let filter_tabs = [FilterType::All, FilterType::Active, FilterType::Completed];
-    let mut filter_index = HashMap::new();
     for filter in filter_tabs {
         let node_id = alloc_node_id(world);
-        let entity = world
-            .spawn((node_id, FilterTab(filter), ChildOf(filter_bar)))
-            .id();
-        filter_index.insert(filter, entity);
+        world.spawn((node_id, FilterTab(filter), ChildOf(filter_bar)));
     }
-    world.insert_resource(FilterButtonIndex(filter_index));
 
     spawn_todo_item(world, "Read DESIGN.md".to_string());
     spawn_todo_item(world, "Review projector output".to_string());
@@ -406,13 +339,7 @@ fn drain_todo_events_and_mutate_world(world: &mut World) {
     apply_filter_visibility(world);
 }
 
-fn synthesize_ui_and_build_callbacks(world: &mut World) {
-    if let Some(callbacks) = world.get_resource::<TodoCallbacks>()
-        && let Ok(mut callback_map) = callbacks.0.lock()
-    {
-        callback_map.clear();
-    }
-
+fn synthesize_ui(world: &mut World) {
     let roots = gather_ui_roots(world);
     let (synthesized, stats) = world.resource_scope(|world, registry: Mut<UiProjectorRegistry>| {
         synthesize_roots_with_stats(world, &registry, roots)
@@ -422,154 +349,13 @@ fn synthesize_ui_and_build_callbacks(world: &mut World) {
     *world.resource_mut::<UiSynthesisStats>() = stats;
 }
 
-fn click_entity(app: &mut App, entity: Entity) {
-    let callback = app
-        .world()
-        .resource::<TodoCallbacks>()
-        .0
-        .lock()
-        .ok()
-        .and_then(|map| map.get(&entity).cloned());
-
-    if let Some(click) = callback {
-        click();
-        app.update();
-    } else {
-        eprintln!("No callback registered for entity {entity:?}");
-    }
-}
-
-fn click_add_button(app: &mut App, template: &str) {
-    let entity = app
-        .world()
-        .resource::<AddButtonIndex>()
-        .0
-        .get(template)
-        .copied();
-
-    if let Some(button) = entity {
-        click_entity(app, button);
-    } else {
-        eprintln!("No Add button configured for '{template}'");
-    }
-}
-
-fn click_filter_tab(app: &mut App, filter: FilterType) {
-    let entity = app
-        .world()
-        .resource::<FilterButtonIndex>()
-        .0
-        .get(&filter)
-        .copied();
-
-    if let Some(button) = entity {
-        click_entity(app, button);
-    } else {
-        eprintln!("No filter button for {}", filter.as_str());
-    }
-}
-
-fn find_todo_by_text(app: &mut App, text: &str) -> Option<Entity> {
-    let world = app.world_mut();
-    let mut query = world.query::<(Entity, &TodoText)>();
-    query.iter(world).find_map(
-        |(entity, todo)| {
-            if todo.0 == text { Some(entity) } else { None }
-        },
-    )
-}
-
-fn find_toggle_button_for(app: &mut App, target: Entity) -> Option<Entity> {
-    let world = app.world_mut();
-    let mut query = world.query::<(Entity, &ToggleTodoButton)>();
-    query.iter(world).find_map(|(entity, toggle)| {
-        if toggle.target == target {
-            Some(entity)
-        } else {
-            None
-        }
-    })
-}
-
-fn find_delete_button_for(app: &mut App, target: Entity) -> Option<Entity> {
-    let world = app.world_mut();
-    let mut query = world.query::<(Entity, &DeleteTodoButton)>();
-    query.iter(world).find_map(|(entity, delete)| {
-        if delete.target == target {
-            Some(entity)
-        } else {
-            None
-        }
-    })
-}
-
-fn toggle_todo_by_text(app: &mut App, text: &str) {
-    if let Some(todo) = find_todo_by_text(app, text)
-        && let Some(toggle_button) = find_toggle_button_for(app, todo)
-    {
-        click_entity(app, toggle_button);
-    }
-}
-
-fn delete_todo_by_text(app: &mut App, text: &str) {
-    if let Some(todo) = find_todo_by_text(app, text)
-        && let Some(delete_button) = find_delete_button_for(app, todo)
-    {
-        click_entity(app, delete_button);
-    }
-}
-
-fn print_todo_snapshot(app: &mut App) {
-    let (active_filter, list_container) = {
-        let world = app.world();
-        (
-            world.resource::<ActiveFilter>().0,
-            world.resource::<TodoRuntime>().list_container,
-        )
-    };
-
-    let mut rows = {
-        let world = app.world_mut();
-        let mut query = world.query::<(Entity, &TodoText, &Completed, Option<&ChildOf>)>();
-
-        let mut collected = Vec::new();
-        for (entity, text, completed, parent) in query.iter(world) {
-            let visible = parent.is_some_and(|p| p.parent() == list_container);
-            collected.push((entity, text.0.clone(), completed.0, visible));
-        }
-
-        collected
-    };
-
-    rows.sort_by(|a, b| a.1.cmp(&b.1));
-
-    let stats = app.world().resource::<UiSynthesisStats>();
-
-    println!(
-        "\nfilter = {} | roots={} nodes={} unhandled={}",
-        active_filter.as_str(),
-        stats.root_count,
-        stats.node_count,
-        stats.unhandled_count
-    );
-
-    for (entity, text, completed, visible) in rows {
-        let done = if completed { "x" } else { " " };
-        let shown = if visible { "visible" } else { "hidden" };
-        println!("[{done}] {text:<26} ({shown}, {entity:?})");
-    }
-}
-
-fn main() {
+fn build_bevy_todo_app() -> App {
     let mut app = App::new();
     let (sender, receiver) = unbounded::<TodoEvent>();
 
     app.init_resource::<UiProjectorRegistry>()
         .init_resource::<SynthesizedUiViews>()
         .init_resource::<UiSynthesisStats>()
-        .init_resource::<TodoCallbacks>()
-        .init_resource::<AddButtonIndex>()
-        .init_resource::<FilterButtonIndex>()
         .insert_resource(ActiveFilter(FilterType::All))
         .insert_resource(TodoEventSender(sender))
         .insert_resource(TodoEventReceiver(receiver));
@@ -578,31 +364,33 @@ fn main() {
     setup_todo_world(app.world_mut());
 
     app.add_systems(PreUpdate, drain_todo_events_and_mutate_world)
-        .add_systems(PostUpdate, synthesize_ui_and_build_callbacks);
+        .add_systems(PostUpdate, synthesize_ui);
 
     app.update();
 
-    println!("\n== Todo List demo (ECS entities + MPSC + synthesized UI) ==");
-    print_todo_snapshot(&mut app);
+    app
+}
 
-    click_add_button(&mut app, "Buy milk");
-    print_todo_snapshot(&mut app);
+fn todo_app_logic(
+    runtime: &mut BevyXilemRuntime,
+) -> impl WidgetView<Edit<BevyXilemRuntime>> + use<> {
+    runtime.update();
 
-    click_add_button(&mut app, "Write integration tests");
-    print_todo_snapshot(&mut app);
+    let root_view = runtime.first_root_or_label("No synthesized todo root");
 
-    toggle_todo_by_text(&mut app, "Buy milk");
-    print_todo_snapshot(&mut app);
+    map_state(root_view, |_runtime: &mut BevyXilemRuntime, _| ())
+}
 
-    click_filter_tab(&mut app, FilterType::Active);
-    print_todo_snapshot(&mut app);
+fn main() -> Result<(), EventLoopError> {
+    let runtime = BevyXilemRuntime::new(build_bevy_todo_app());
 
-    click_filter_tab(&mut app, FilterType::Completed);
-    print_todo_snapshot(&mut app);
+    let app = Xilem::new_simple(
+        runtime,
+        todo_app_logic,
+        WindowOptions::new("Bevy Xilem Todo List")
+            .with_initial_inner_size(LogicalSize::new(680.0, 720.0)),
+    );
 
-    delete_todo_by_text(&mut app, "Buy milk");
-    print_todo_snapshot(&mut app);
-
-    click_filter_tab(&mut app, FilterType::All);
-    print_todo_snapshot(&mut app);
+    app.run_in(EventLoop::with_user_event())?;
+    Ok(())
 }
