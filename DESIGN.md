@@ -66,6 +66,15 @@ This enables projector code like:
 
 with no per-button channel sender/closure wiring by end users.
 
+### 4.5) Fluent projector registration on `App`
+
+`bevy_xilem` exposes `AppBevyXilemExt` so users can register projectors directly on Bevy apps:
+
+- `.register_projector::<MyComponent>(project_my_component)`
+- `.register_raw_projector(my_projector_impl)`
+
+This removes direct `UiProjectorRegistry` mutation from most app setup code.
+
 ### 5) Typed action queue
 
 `UiEventQueue` is a Bevy `Resource` backed by `crossbeam_queue::SegQueue<UiEvent>`.
@@ -94,11 +103,13 @@ Non-interactive display/layout controls (`label`, `flex`, `grid`, `prose`, `prog
 Built-in components:
 
 - `UiRoot`
-- `UiNodeId(u64)`
 - `UiFlexColumn`
 - `UiFlexRow`
 - `UiLabel { text }`
 - `UiButton { label }`
+
+Node identity for projection context is derived from ECS entities (`entity.to_bits()`),
+so user code no longer needs to allocate/store a dedicated node-id component.
 
 ## Projection and synthesis
 
@@ -145,6 +156,17 @@ synthesis architecture.
 ## Built-in button behavior
 
 Built-in `UiButton` projector maps to `ecs_button(...)` with action `BuiltinUiAction::Clicked`.
+
+## Public API export strategy
+
+To minimize dependency friction, `bevy_xilem` re-exports commonly needed Bevy/Xilem crates and
+provides a dual control-view naming scheme:
+
+- ECS event-adapted controls are exported with ergonomic names (`button`, `checkbox`, `slider`,
+  `switch`, `text_button`, `text_input`, ...).
+- Original `xilem_masonry::view` controls are re-exported with `xilem_` prefixes
+  (`xilem_button`, `xilem_checkbox`, ...).
+- Legacy `ecs_*` exports remain available for compatibility.
 
 ## Examples
 

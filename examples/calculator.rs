@@ -1,18 +1,18 @@
 use std::sync::Arc;
 
-use bevy_app::{App, PreUpdate};
-use bevy_ecs::prelude::*;
 use bevy_xilem::{
-    BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    ecs_button_with_child, ecs_text_button, run_app_with_window_options,
-};
-use xilem::{
-    Color,
-    masonry::layout::Length,
-    palette,
-    style::Style as _,
-    view::{FlexExt as _, flex_col, flex_row, label},
-    winit::{dpi::LogicalSize, error::EventLoopError},
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiRoot, UiView,
+    bevy_app::{App, PreUpdate, Startup},
+    bevy_ecs::prelude::*,
+    button_with_child, run_app_with_window_options, text_button,
+    xilem::{
+        Color,
+        masonry::layout::Length,
+        palette,
+        style::Style as _,
+        view::{FlexExt as _, flex_col, flex_row, label},
+        winit::{dpi::LogicalSize, error::EventLoopError},
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -394,7 +394,7 @@ fn project_calc_button(
 
     match button_data.kind {
         CalcButtonKind::Digit => Arc::new(
-            ecs_text_button(entity, event, button_data.label)
+            text_button(entity, event, button_data.label)
                 .background_color(Color::from_rgb8(0x3a, 0x3a, 0x3a))
                 .corner_radius(10.0)
                 .border_color(Color::TRANSPARENT),
@@ -408,7 +408,7 @@ fn project_calc_button(
             };
 
             Arc::new(
-                ecs_button_with_child(entity, event, label(button_data.label).color(label_color))
+                button_with_child(entity, event, label(button_data.label).color(label_color))
                     .background_color(Color::from_rgb8(0x00, 0x8d, 0xdd))
                     .corner_radius(10.0)
                     .border_color(Color::TRANSPARENT)
@@ -443,13 +443,8 @@ fn project_calc_root(_: &CalcRoot, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(flex_col(children).gap(Length::px(2.)).padding(12.0))
 }
 
-fn install_projectors(world: &mut World) {
-    let mut registry = world.resource_mut::<UiProjectorRegistry>();
-    registry.register_component::<CalcRoot>(project_calc_root);
-}
-
-fn setup_calculator_world(world: &mut World) {
-    world.spawn((UiRoot, UiNodeId(1), CalcRoot));
+fn setup_calculator_world(mut commands: Commands) {
+    commands.spawn((UiRoot, CalcRoot));
 }
 
 fn drain_calc_events(world: &mut World) {
@@ -469,10 +464,9 @@ fn drain_calc_events(world: &mut World) {
 fn build_bevy_calculator_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .insert_resource(CalculatorEngine::default());
-
-    install_projectors(app.world_mut());
-    setup_calculator_world(app.world_mut());
+        .insert_resource(CalculatorEngine::default())
+        .register_projector::<CalcRoot>(project_calc_root)
+        .add_systems(Startup, setup_calculator_world);
 
     app.add_systems(PreUpdate, drain_calc_events);
 

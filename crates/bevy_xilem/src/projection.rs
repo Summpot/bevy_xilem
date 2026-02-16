@@ -7,7 +7,7 @@ use xilem_masonry::{
 };
 
 use crate::{
-    ecs::{UiButton, UiFlexColumn, UiFlexRow, UiLabel, UiNodeId},
+    ecs::{UiButton, UiFlexColumn, UiFlexRow, UiLabel},
     views::ecs_button,
 };
 
@@ -31,7 +31,7 @@ pub enum BuiltinUiAction {
 pub struct ProjectionCtx<'a> {
     pub world: &'a World,
     pub entity: Entity,
-    pub node_id: Option<UiNodeId>,
+    pub node_id: u64,
     pub children: Vec<UiView>,
 }
 
@@ -90,7 +90,7 @@ impl UiProjectorRegistry {
         &self,
         world: &World,
         entity: Entity,
-        node_id: Option<UiNodeId>,
+        node_id: u64,
         children: Vec<UiView>,
     ) -> Option<UiView> {
         // Last registered projector wins.

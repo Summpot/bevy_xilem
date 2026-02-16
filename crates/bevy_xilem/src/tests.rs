@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::{
-    BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    ecs_button, register_builtin_projectors, synthesize_roots_with_stats,
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiProjectorRegistry, UiRoot,
+    UiView, ecs_button, register_builtin_projectors, synthesize_roots_with_stats,
 };
 use bevy_app::App;
 use bevy_ecs::prelude::*;
@@ -22,14 +22,10 @@ fn project_test_root(_: &TestRoot, ctx: ProjectionCtx<'_>) -> UiView {
 #[test]
 fn plugin_wires_synthesis_and_runtime() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(BevyXilemPlugin)
+        .register_projector::<TestRoot>(project_test_root);
 
-    {
-        let mut registry = app.world_mut().resource_mut::<UiProjectorRegistry>();
-        registry.register_component::<TestRoot>(project_test_root);
-    }
-
-    app.world_mut().spawn((UiRoot, UiNodeId(1), TestRoot));
+    app.world_mut().spawn((UiRoot, TestRoot));
 
     app.update();
 
@@ -42,14 +38,10 @@ fn plugin_wires_synthesis_and_runtime() {
 #[test]
 fn ui_event_queue_drains_typed_actions() {
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin);
+    app.add_plugins(BevyXilemPlugin)
+        .register_projector::<TestRoot>(project_test_root);
 
-    {
-        let mut registry = app.world_mut().resource_mut::<UiProjectorRegistry>();
-        registry.register_component::<TestRoot>(project_test_root);
-    }
-
-    let root = app.world_mut().spawn((UiRoot, UiNodeId(1), TestRoot)).id();
+    let root = app.world_mut().spawn((UiRoot, TestRoot)).id();
 
     // Build synthesized tree + initial Masonry retained tree.
     app.update();
@@ -91,9 +83,7 @@ fn builtin_registry_projects_label() {
     let mut registry = UiProjectorRegistry::default();
     register_builtin_projectors(&mut registry);
 
-    let root = world
-        .spawn((UiRoot, UiNodeId(1), crate::UiLabel::new("ok")))
-        .id();
+    let root = world.spawn((UiRoot, crate::UiLabel::new("ok"))).id();
 
     let (roots, stats) = synthesize_roots_with_stats(&world, &registry, [root]);
 

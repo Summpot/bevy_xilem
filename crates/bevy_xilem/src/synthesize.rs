@@ -4,7 +4,7 @@ use bevy_ecs::{hierarchy::Children, prelude::*};
 use xilem_masonry::view::{FlexExt as _, flex_col, label};
 
 use crate::{
-    ecs::{UiNodeId, UiRoot},
+    ecs::UiRoot,
     projection::{UiProjectorRegistry, UiView},
 };
 
@@ -103,7 +103,7 @@ fn synthesize_entity(
         .map(|child| synthesize_entity(world, registry, child, visiting, stats))
         .collect::<Vec<_>>();
 
-    let node_id = world.get::<UiNodeId>(entity).copied();
+    let node_id = entity.to_bits();
 
     let projected = registry.project_node(world, entity, node_id, children.clone());
 

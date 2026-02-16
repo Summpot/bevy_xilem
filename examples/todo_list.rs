@@ -1,23 +1,23 @@
 use std::sync::Arc;
 
-use bevy_app::{App, PreUpdate};
-use bevy_ecs::{
-    hierarchy::{ChildOf, Children},
-    prelude::*,
-};
 use bevy_xilem::{
-    BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    ecs_button_with_child, ecs_checkbox, ecs_text_button, ecs_text_input, run_app,
-};
-use xilem::{
-    InsertNewline,
-    masonry::{
-        layout::Length,
-        theme::{DEFAULT_GAP, ZYNC_800},
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiRoot, UiView,
+    bevy_app::{App, PreUpdate, Startup},
+    bevy_ecs::{
+        hierarchy::{ChildOf, Children},
+        prelude::*,
     },
-    style::Style as _,
-    view::{FlexExt as _, FlexSpacer, MainAxisAlignment, flex_col, flex_row, label},
-    winit::error::EventLoopError,
+    button_with_child, checkbox, emit_ui_action, run_app, text_button, text_input,
+    xilem::{
+        InsertNewline,
+        masonry::{
+            layout::Length,
+            theme::{DEFAULT_GAP, ZYNC_800},
+        },
+        style::Style as _,
+        view::{FlexExt as _, FlexSpacer, MainAxisAlignment, flex_col, flex_row, label},
+        winit::error::EventLoopError,
+    },
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -55,7 +55,6 @@ struct ActiveFilter(FilterType);
 #[derive(Resource, Debug, Clone, Copy)]
 struct TodoRuntime {
     list_container: Entity,
-    next_node_id: u64,
 }
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -82,13 +81,6 @@ struct TodoFilterBar;
 #[derive(Component, Debug, Clone, Copy)]
 struct FilterToggle(FilterType);
 
-fn alloc_node_id(world: &mut World) -> UiNodeId {
-    let mut runtime = world.resource_mut::<TodoRuntime>();
-    let id = UiNodeId(runtime.next_node_id);
-    runtime.next_node_id += 1;
-    id
-}
-
 fn project_todo_root(_: &TodoRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let children = ctx
         .children
@@ -109,15 +101,15 @@ fn project_todo_input_area(_: &TodoInputArea, ctx: ProjectionCtx<'_>) -> UiView 
 
     Arc::new(
         flex_row((
-            ecs_text_input(ctx.entity, draft, TodoEvent::SetDraft)
+            text_input(ctx.entity, draft, TodoEvent::SetDraft)
                 .text_size(16.0)
                 .placeholder("What needs to be done?")
                 .insert_newline(InsertNewline::OnShiftEnter)
                 .on_enter(move |_, _| {
-                    bevy_xilem::emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
+                    emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
                 })
                 .flex(1.0),
-            ecs_button_with_child(
+            button_with_child(
                 ctx.entity,
                 TodoEvent::SubmitDraft,
                 label("Add task").text_size(16.0),
@@ -145,19 +137,19 @@ fn project_todo_item(item: &TodoItem, ctx: ProjectionCtx<'_>) -> UiView {
     };
 
     if !should_show {
-        return Arc::new(flex_row(()));
+        return Arc::new(label(""));
     }
 
     let entity = ctx.entity;
 
     Arc::new(
         flex_row((
-            ecs_checkbox(entity, item.text.clone(), item.completed, move |value| {
+            checkbox(entity, item.text.clone(), item.completed, move |value| {
                 TodoEvent::SetCompleted(entity, value)
             })
             .text_size(16.0),
             FlexSpacer::Flex(1.0),
-            ecs_text_button(entity, TodoEvent::Delete(entity), "Delete").padding(5.0),
+            text_button(entity, TodoEvent::Delete(entity), "Delete").padding(5.0),
         ))
         .padding(DEFAULT_GAP.get())
         .border(ZYNC_800, 1.0),
@@ -172,7 +164,7 @@ fn project_filter_bar(_: &TodoFilterBar, ctx: ProjectionCtx<'_>) -> UiView {
         .is_some_and(|children| !children.is_empty());
 
     if !has_tasks {
-        return Arc::new(flex_row(()));
+        return Arc::new(label(""));
     }
 
     let children = ctx
@@ -188,7 +180,7 @@ fn project_filter_toggle(filter_toggle: &FilterToggle, ctx: ProjectionCtx<'_>) -
     let filter = filter_toggle.0;
     let active = ctx.world.resource::<ActiveFilter>().0;
 
-    Arc::new(ecs_checkbox(
+    Arc::new(checkbox(
         ctx.entity,
         filter.as_str(),
         active == filter,
@@ -196,24 +188,10 @@ fn project_filter_toggle(filter_toggle: &FilterToggle, ctx: ProjectionCtx<'_>) -
     ))
 }
 
-fn install_projectors(world: &mut World) {
-    let mut registry = world.resource_mut::<UiProjectorRegistry>();
-    registry
-        .register_component::<TodoRootView>(project_todo_root)
-        .register_component::<TodoHeader>(project_todo_header)
-        .register_component::<TodoInputArea>(project_todo_input_area)
-        .register_component::<TodoListContainer>(project_todo_list_container)
-        .register_component::<TodoItem>(project_todo_item)
-        .register_component::<TodoFilterBar>(project_filter_bar)
-        .register_component::<FilterToggle>(project_filter_toggle);
-}
-
 fn spawn_todo_item(world: &mut World, text: String, done: bool) -> Entity {
     let list_container = world.resource::<TodoRuntime>().list_container;
-    let node_id = alloc_node_id(world);
     world
         .spawn((
-            node_id,
             TodoItem {
                 text,
                 completed: done,
@@ -223,44 +201,42 @@ fn spawn_todo_item(world: &mut World, text: String, done: bool) -> Entity {
         .id()
 }
 
-fn setup_todo_world(world: &mut World) {
-    let mut next_node_id = 1_u64;
-    let mut alloc = || {
-        let id = UiNodeId(next_node_id);
-        next_node_id += 1;
-        id
-    };
+fn setup_todo_world(mut commands: Commands) {
+    let root = commands.spawn((UiRoot, TodoRootView)).id();
 
-    let root = world.spawn((UiRoot, alloc(), TodoRootView)).id();
+    commands.spawn((TodoHeader, ChildOf(root)));
+    commands.spawn((TodoInputArea, ChildOf(root)));
 
-    world.spawn((alloc(), TodoHeader, ChildOf(root)));
-    world.spawn((alloc(), TodoInputArea, ChildOf(root)));
+    let list_container = commands.spawn((TodoListContainer, ChildOf(root))).id();
 
-    let list_container = world
-        .spawn((alloc(), TodoListContainer, ChildOf(root)))
-        .id();
+    let footer_bar = commands.spawn((TodoFilterBar, ChildOf(root))).id();
+    commands.spawn((FilterToggle(FilterType::All), ChildOf(footer_bar)));
+    commands.spawn((FilterToggle(FilterType::Active), ChildOf(footer_bar)));
+    commands.spawn((FilterToggle(FilterType::Completed), ChildOf(footer_bar)));
 
-    let footer_bar = world.spawn((alloc(), TodoFilterBar, ChildOf(root))).id();
-    world.spawn((alloc(), FilterToggle(FilterType::All), ChildOf(footer_bar)));
-    world.spawn((
-        alloc(),
-        FilterToggle(FilterType::Active),
-        ChildOf(footer_bar),
+    commands.insert_resource(TodoRuntime { list_container });
+
+    commands.spawn((
+        TodoItem {
+            text: "Buy milk".to_string(),
+            completed: false,
+        },
+        ChildOf(list_container),
     ));
-    world.spawn((
-        alloc(),
-        FilterToggle(FilterType::Completed),
-        ChildOf(footer_bar),
+    commands.spawn((
+        TodoItem {
+            text: "Buy eggs".to_string(),
+            completed: true,
+        },
+        ChildOf(list_container),
     ));
-
-    world.insert_resource(TodoRuntime {
-        list_container,
-        next_node_id,
-    });
-
-    spawn_todo_item(world, "Buy milk".to_string(), false);
-    spawn_todo_item(world, "Buy eggs".to_string(), true);
-    spawn_todo_item(world, "Buy bread".to_string(), false);
+    commands.spawn((
+        TodoItem {
+            text: "Buy bread".to_string(),
+            completed: false,
+        },
+        ChildOf(list_container),
+    ));
 }
 
 fn drain_todo_events_and_mutate_world(world: &mut World) {
@@ -311,10 +287,15 @@ fn build_bevy_todo_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(ActiveFilter(FilterType::All))
-        .insert_resource(DraftTodo("My Next Task".to_string()));
-
-    install_projectors(app.world_mut());
-    setup_todo_world(app.world_mut());
+        .insert_resource(DraftTodo("My Next Task".to_string()))
+        .register_projector::<TodoRootView>(project_todo_root)
+        .register_projector::<TodoHeader>(project_todo_header)
+        .register_projector::<TodoInputArea>(project_todo_input_area)
+        .register_projector::<TodoListContainer>(project_todo_list_container)
+        .register_projector::<TodoItem>(project_todo_item)
+        .register_projector::<TodoFilterBar>(project_filter_bar)
+        .register_projector::<FilterToggle>(project_filter_toggle)
+        .add_systems(Startup, setup_todo_world);
 
     app.add_systems(PreUpdate, drain_todo_events_and_mutate_world);
 

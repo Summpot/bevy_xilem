@@ -1,19 +1,19 @@
 use std::sync::Arc;
 
-use bevy_app::{App, PreUpdate};
-use bevy_ecs::prelude::*;
 use bevy_xilem::{
-    BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    ecs_text_input, run_app_with_window_options,
-};
-use xilem::{
-    Color,
-    masonry::layout::Length,
-    masonry::properties::Padding,
-    palette,
-    style::Style as _,
-    view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label},
-    winit::{dpi::LogicalSize, error::EventLoopError},
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiRoot, UiView,
+    bevy_app::{App, PreUpdate, Startup},
+    bevy_ecs::prelude::*,
+    run_app_with_window_options, text_input,
+    xilem::{
+        Color,
+        masonry::layout::Length,
+        masonry::properties::Padding,
+        palette,
+        style::Style as _,
+        view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label},
+        winit::{dpi::LogicalSize, error::EventLoopError},
+    },
 };
 
 /// 7GUIs-like Temperature Converter.
@@ -119,7 +119,7 @@ fn project_temperature_root(_: &TemperatureRootView, ctx: ProjectionCtx<'_>) -> 
         .padding(Padding::bottom(8.0));
 
     let celsius_row = flex_row((
-        ecs_text_input(
+        text_input(
             ctx.entity,
             state.celsius_text,
             TemperatureEvent::SetCelsiusText,
@@ -132,7 +132,7 @@ fn project_temperature_root(_: &TemperatureRootView, ctx: ProjectionCtx<'_>) -> 
     .gap(Length::px(8.0));
 
     let fahrenheit_row = flex_row((
-        ecs_text_input(
+        text_input(
             ctx.entity,
             state.fahrenheit_text,
             TemperatureEvent::SetFahrenheitText,
@@ -162,13 +162,8 @@ fn project_temperature_root(_: &TemperatureRootView, ctx: ProjectionCtx<'_>) -> 
     )
 }
 
-fn install_projectors(world: &mut World) {
-    let mut registry = world.resource_mut::<UiProjectorRegistry>();
-    registry.register_component::<TemperatureRootView>(project_temperature_root);
-}
-
-fn setup_temperature_world(world: &mut World) {
-    world.spawn((UiRoot, UiNodeId(1), TemperatureRootView));
+fn setup_temperature_world(mut commands: Commands) {
+    commands.spawn((UiRoot, TemperatureRootView));
 }
 
 fn drain_temperature_events(world: &mut World) {
@@ -188,10 +183,9 @@ fn drain_temperature_events(world: &mut World) {
 fn build_bevy_temperature_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .insert_resource(TemperatureState::default());
-
-    install_projectors(app.world_mut());
-    setup_temperature_world(app.world_mut());
+        .insert_resource(TemperatureState::default())
+        .register_projector::<TemperatureRootView>(project_temperature_root)
+        .add_systems(Startup, setup_temperature_world);
 
     app.add_systems(PreUpdate, drain_temperature_events);
 

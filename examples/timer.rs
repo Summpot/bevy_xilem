@@ -1,19 +1,19 @@
 use std::{sync::Arc, time::Instant};
 
-use bevy_app::{App, PreUpdate};
-use bevy_ecs::prelude::*;
 use bevy_xilem::{
-    BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    ecs_slider, ecs_text_button, run_app_with_window_options,
-};
-use xilem::{
-    Color,
-    masonry::layout::Length,
-    masonry::properties::Padding,
-    palette,
-    style::Style as _,
-    view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, progress_bar},
-    winit::{dpi::LogicalSize, error::EventLoopError},
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiRoot, UiView,
+    bevy_app::{App, PreUpdate, Startup},
+    bevy_ecs::prelude::*,
+    run_app_with_window_options, slider, text_button,
+    xilem::{
+        Color,
+        masonry::layout::Length,
+        masonry::properties::Padding,
+        palette,
+        style::Style as _,
+        view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, progress_bar},
+        winit::{dpi::LogicalSize, error::EventLoopError},
+    },
 };
 
 /// 7GUIs-like Timer.
@@ -107,7 +107,7 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
         label(format!("Duration: {duration_value:.0} s"))
             .text_size(16.0)
             .padding(Padding::top(6.0)),
-        ecs_slider(
+        slider(
             ctx.entity,
             1.0,
             60.0,
@@ -119,7 +119,7 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
     ))
     .gap(Length::px(8.0));
 
-    let reset = ecs_text_button(ctx.entity, TimerEvent::Reset, "Reset").padding(Padding::top(8.0));
+    let reset = text_button(ctx.entity, TimerEvent::Reset, "Reset").padding(Padding::top(8.0));
 
     Arc::new(
         flex_col((
@@ -138,13 +138,8 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
     )
 }
 
-fn install_projectors(world: &mut World) {
-    let mut registry = world.resource_mut::<UiProjectorRegistry>();
-    registry.register_component::<TimerRootView>(project_timer_root);
-}
-
-fn setup_timer_world(world: &mut World) {
-    world.spawn((UiRoot, UiNodeId(1), TimerRootView));
+fn setup_timer_world(mut commands: Commands) {
+    commands.spawn((UiRoot, TimerRootView));
 }
 
 fn drain_timer_events_and_tick(world: &mut World) {
@@ -164,10 +159,9 @@ fn drain_timer_events_and_tick(world: &mut World) {
 fn build_bevy_timer_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .insert_resource(TimerState::default());
-
-    install_projectors(app.world_mut());
-    setup_timer_world(app.world_mut());
+        .insert_resource(TimerState::default())
+        .register_projector::<TimerRootView>(project_timer_root)
+        .add_systems(Startup, setup_timer_world);
 
     app.add_systems(PreUpdate, drain_timer_events_and_tick);
 

@@ -4,10 +4,6 @@ use bevy_ecs::prelude::*;
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct UiRoot;
 
-/// Stable node identity used by diff/caching strategies.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct UiNodeId(pub u64);
-
 /// Built-in vertical container marker.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct UiFlexColumn;

@@ -4,24 +4,24 @@ use std::{
     time::{Duration, Instant},
 };
 
-use bevy_app::{App, PreUpdate};
-use bevy_ecs::prelude::*;
 use bevy_xilem::{
-    BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    ecs_button_with_child, ecs_checkbox, ecs_slider, ecs_text_button, run_app_with_window_options,
-};
-use xilem::{
-    Color,
-    masonry::{
-        dpi::LogicalSize,
-        layout::{AsUnit, Length},
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiRoot, UiView,
+    bevy_app::{App, PreUpdate, Startup},
+    bevy_ecs::prelude::*,
+    button_with_child, checkbox, run_app_with_window_options, slider, text_button,
+    xilem::{
+        Color,
+        masonry::{
+            dpi::LogicalSize,
+            layout::{AsUnit, Length},
+        },
+        style::Style as _,
+        view::{
+            CrossAxisAlignment, FlexExt as _, FlexSpacer, GridExt as _, flex_col, flex_row, grid,
+            label, prose, sized_box,
+        },
+        winit::error::EventLoopError,
     },
-    style::Style as _,
-    view::{
-        CrossAxisAlignment, FlexExt as _, FlexSpacer, GridExt as _, flex_col, flex_row, grid,
-        label, prose, sized_box,
-    },
-    winit::error::EventLoopError,
 };
 
 #[allow(unexpected_cfgs)]
@@ -435,7 +435,7 @@ fn build_chess_board_view(ui: &ChessUiResource, action_entity: Entity) -> UiView
                 .font(chess_piece_font_family())
                 .color(Color::BLACK);
 
-            let cell = ecs_button_with_child(
+            let cell = button_with_child(
                 action_entity,
                 ChessEvent::ClickSquare { row, col },
                 label_piece,
@@ -475,28 +475,28 @@ fn build_chess_controls_view(
             label(format!("Black: {}", formatted_clock(flow.time_elapsed[1]))),
             FlexSpacer::Fixed(TINY_GAP),
             label(format!("{:.2} sec/move", game_res.time_per_move)),
-            ecs_slider(
+            slider(
                 action_entity,
                 0.1,
                 5.0,
                 game_res.time_per_move,
                 ChessEvent::SetTimePerMove,
             ),
-            ecs_checkbox(
+            checkbox(
                 action_entity,
                 "Engine plays white",
                 ui.engine_plays_white,
                 |_| ChessEvent::ToggleEngineWhite,
             ),
-            ecs_checkbox(
+            checkbox(
                 action_entity,
                 "Engine plays black",
                 ui.engine_plays_black,
                 |_| ChessEvent::ToggleEngineBlack,
             ),
-            ecs_text_button(action_entity, ChessEvent::Rotate, "Rotate"),
-            ecs_text_button(action_entity, ChessEvent::NewGame, "New game"),
-            ecs_text_button(action_entity, ChessEvent::PrintMovelist, "Print movelist"),
+            text_button(action_entity, ChessEvent::Rotate, "Rotate"),
+            text_button(action_entity, ChessEvent::NewGame, "New game"),
+            text_button(action_entity, ChessEvent::PrintMovelist, "Print movelist"),
             sized_box(prose(movelist_text)).width(200_i32.px()),
             FlexSpacer::Fixed(GAP),
         ))
@@ -526,13 +526,8 @@ fn project_chess_root(_: &ChessRootView, ctx: ProjectionCtx<'_>) -> UiView {
     )
 }
 
-fn install_projectors(world: &mut World) {
-    let mut registry = world.resource_mut::<UiProjectorRegistry>();
-    registry.register_component::<ChessRootView>(project_chess_root);
-}
-
-fn setup_chess_world(world: &mut World) {
-    world.spawn((UiRoot, UiNodeId(1), ChessRootView));
+fn setup_chess_world(mut commands: Commands) {
+    commands.spawn((UiRoot, ChessRootView));
 }
 
 fn drain_events_and_tick(world: &mut World) {
@@ -556,10 +551,9 @@ fn build_bevy_chess_app() -> App {
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(ChessGameResource::new(game))
         .insert_resource(ui)
-        .insert_resource(ChessFlowResource::default());
-
-    install_projectors(app.world_mut());
-    setup_chess_world(app.world_mut());
+        .insert_resource(ChessFlowResource::default())
+        .register_projector::<ChessRootView>(project_chess_root)
+        .add_systems(Startup, setup_chess_world);
 
     app.add_systems(PreUpdate, drain_events_and_tick);
 
