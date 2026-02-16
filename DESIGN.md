@@ -65,7 +65,7 @@ Built-in projectors are registered for `UiFlexColumn`, `UiFlexRow`, `UiLabel`, a
 
 ## Synthesis Execution
 
-Synthesis runs in `PostUpdate` through `synthesize_ui_system`.
+Synthesis runs in `PostUpdate` through `synthesize_ui`.
 
 Behavior:
 
@@ -77,11 +77,14 @@ Behavior:
 
 ## Event Collection
 
-`UiEvent` intake uses an MPSC channel.
+UI/action intake uses a framework-managed unbounded MPSC channel.
 
-- `UiEventSender(Sender<UiEvent>)` is stored as a resource and is cloneable.
-- Projector contexts receive a sender clone so projector-owned closures can emit `UiEvent` values without `World` access.
-- `UiEventInbox` owns the receiver end and drains it each `PreUpdate`.
+- `UiEventSender(Sender<XilemAction>)` is stored as a resource and is cloneable.
+- `UiEventReceiver(Receiver<XilemAction>)` is stored as a resource and can drain:
+  - framework UI events (`UiEvent`)
+  - app-defined typed actions (`XilemAction::Action(Box<dyn Any + Send + Sync>)`)
+- Projector contexts receive a sender clone so projector-owned closures can emit
+  either built-in UI events or typed app actions without direct `World` mutation.
 
 ## Runtime Metrics
 
@@ -104,11 +107,13 @@ This makes synthesis behavior observable without external instrumentation.
   - `SynthesizedUiViews`
   - `UiSynthesisStats`
   - `UiEventSender`
-  - `UiEventInbox`
+  - `UiEventReceiver`
 - Registers systems:
-  - `PreUpdate`: `collect_ui_events`
-  - `PostUpdate`: `synthesize_ui_system`
+  - `PostUpdate`: `synthesize_ui`
 - Registers built-in projectors.
+
+The plugin also owns channel creation (`crossbeam_channel::unbounded::<XilemAction>()`),
+so examples/apps do not need to set up sender/receiver plumbing manually.
 
 ## Bevy↔Xilem Runtime Bridge
 
@@ -121,6 +126,17 @@ The core crate now provides a reusable runtime bridge:
 
 Examples use this bridge to run **real Xilem windows** without implementing
 runtime plumbing inside each example.
+
+Additionally, a high-level helper is provided:
+
+- `run_app(app, window_options)`
+
+This encapsulates the common runtime + runner boilerplate:
+
+- wraps Bevy `App` in `BevyXilemRuntime`
+- ticks Bevy each frame
+- maps synthesized root view to Xilem app state
+- runs the Xilem event loop
 
 ## Verified Behavior
 

@@ -10,5 +10,6 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 bevy_app = { path = "../bevy/crates/bevy_app", version = "0.19.0-dev", default-features = false, features = ["std"] }
 bevy_ecs = { path = "../bevy/crates/bevy_ecs", version = "0.19.0-dev", default-features = false, features = ["std"] }
+crossbeam-channel = "0.5.15"
 xilem = { path = "../xilem/xilem" }
 xilem_masonry = { path = "../xilem/xilem_masonry" }

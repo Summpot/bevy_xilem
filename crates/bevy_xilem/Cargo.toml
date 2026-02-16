@@ -7,11 +7,9 @@ license.workspace = true
 [dependencies]
 bevy_app.workspace = true
 bevy_ecs.workspace = true
-xilem_masonry.workspace = true
-
-[dev-dependencies]
-crossbeam-channel = "0.5.15"
+crossbeam-channel.workspace = true
 xilem.workspace = true
+xilem_masonry.workspace = true
 
 [[example]]
 name = "calculator"

@@ -1,16 +1,13 @@
 use std::sync::Arc;
 
-use bevy_app::{App, PostUpdate, PreUpdate};
+use bevy_app::{App, PreUpdate};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
 use bevy_xilem::{
-    BevyXilemRuntime, ProjectionCtx, SynthesizedUiViews, UiLabel, UiNodeId, UiProjectorRegistry,
-    UiRoot, UiSynthesisStats, UiView, gather_ui_roots, register_builtin_projectors,
-    synthesize_roots_with_stats,
+    BevyXilemPlugin, ProjectionCtx, UiEventReceiver, UiEventSender, UiLabel, UiNodeId,
+    UiProjectorRegistry, UiRoot, UiView, XilemAction, run_app,
 };
-use crossbeam_channel::{Receiver, Sender, unbounded};
 use xilem::{
-    EventLoop, WidgetView, WindowOptions, Xilem,
-    core::{Edit, map_state},
+    WindowOptions,
     winit::{dpi::LogicalSize, error::EventLoopError},
 };
 use xilem_masonry::view::{label, text_button};
@@ -21,12 +18,6 @@ enum CalcEvent {
     Evaluate,
     Clear,
 }
-
-#[derive(Resource, Debug, Clone)]
-struct CalcEventSender(Sender<CalcEvent>);
-
-#[derive(Resource, Debug)]
-struct CalcEventReceiver(Receiver<CalcEvent>);
 
 #[derive(Resource, Debug, Default)]
 struct CalculatorEngine {
@@ -234,11 +225,11 @@ fn calc_event_for_label(label: &str) -> CalcEvent {
 }
 
 fn project_calc_button(button: &CalcButton, ctx: ProjectionCtx<'_>) -> UiView {
-    let sender = ctx.world.resource::<CalcEventSender>().0.clone();
+    let sender = ctx.world.resource::<UiEventSender>().0.clone();
     let event = calc_event_for_label(&button.0);
 
     Arc::new(text_button(button.0.clone(), move |_| {
-        let _ = sender.send(event.clone());
+        let _ = sender.send(XilemAction::action(event.clone()));
     }))
 }
 
@@ -290,7 +281,9 @@ fn setup_calculator_world(world: &mut World) {
 }
 
 fn drain_calc_events_and_update_display(world: &mut World) {
-    let events: Vec<CalcEvent> = world.resource::<CalcEventReceiver>().0.try_iter().collect();
+    let events = world
+        .resource::<UiEventReceiver>()
+        .drain_actions::<CalcEvent>();
     if events.is_empty() {
         return;
     }
@@ -310,19 +303,8 @@ fn drain_calc_events_and_update_display(world: &mut World) {
     }
 }
 
-fn synthesize_ui(world: &mut World) {
-    let roots = gather_ui_roots(world);
-    let (synthesized, stats) = world.resource_scope(|world, registry: Mut<UiProjectorRegistry>| {
-        synthesize_roots_with_stats(world, &registry, roots)
-    });
-
-    world.resource_mut::<SynthesizedUiViews>().roots = synthesized;
-    *world.resource_mut::<UiSynthesisStats>() = stats;
-}
-
 fn install_projectors(world: &mut World) {
     let mut registry = world.resource_mut::<UiProjectorRegistry>();
-    register_builtin_projectors(&mut registry);
     registry
         .register_component::<CalcDisplay>(project_calc_display)
         .register_component::<CalcButton>(project_calc_button);
@@ -330,47 +312,21 @@ fn install_projectors(world: &mut World) {
 
 fn build_bevy_calculator_app() -> App {
     let mut app = App::new();
-
-    let (sender, receiver) = unbounded::<CalcEvent>();
-
-    app.init_resource::<UiProjectorRegistry>()
-        .init_resource::<SynthesizedUiViews>()
-        .init_resource::<UiSynthesisStats>()
-        .insert_resource(CalculatorEngine::default())
-        .insert_resource(CalcEventSender(sender))
-        .insert_resource(CalcEventReceiver(receiver));
+    app.add_plugins(BevyXilemPlugin)
+        .insert_resource(CalculatorEngine::default());
 
     install_projectors(app.world_mut());
     setup_calculator_world(app.world_mut());
 
-    app.add_systems(PreUpdate, drain_calc_events_and_update_display)
-        .add_systems(PostUpdate, synthesize_ui);
-
-    app.update();
+    app.add_systems(PreUpdate, drain_calc_events_and_update_display);
 
     app
 }
 
-fn calculator_app_logic(
-    runtime: &mut BevyXilemRuntime,
-) -> impl WidgetView<Edit<BevyXilemRuntime>> + use<> {
-    runtime.update();
-
-    let root_view = runtime.first_root_or_label("No synthesized calculator root");
-
-    map_state(root_view, |_runtime: &mut BevyXilemRuntime, _| ())
-}
-
 fn main() -> Result<(), EventLoopError> {
-    let runtime = BevyXilemRuntime::new(build_bevy_calculator_app());
-
-    let app = Xilem::new_simple(
-        runtime,
-        calculator_app_logic,
+    run_app(
+        build_bevy_calculator_app(),
         WindowOptions::new("Bevy Xilem Calculator")
             .with_initial_inner_size(LogicalSize::new(420.0, 640.0)),
-    );
-
-    app.run_in(EventLoop::with_user_event())?;
-    Ok(())
+    )
 }
