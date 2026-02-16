@@ -30,7 +30,9 @@ UI entities are modeled with explicit components:
 
 - `UiRoot`: marks a root UI entity.
 - `UiNodeId(u64)`: stable node identifier.
-- `UiChildren(Vec<Entity>)`: explicit child relationships.
+- Native Bevy hierarchy components from `bevy_ecs::hierarchy`:
+  - `Children`: parent-owned child list used during synthesis traversal.
+  - `ChildOf` (the parent-link relationship component; equivalent role to a `Parent` link).
 - Built-in view components:
   - `UiFlexColumn`
   - `UiLabel { text: String }`
@@ -48,6 +50,11 @@ Synthesis produces `UiViewNode` values:
 - `Cycle` (recursion guard for cyclic references)
 
 This IR is stored in the `SynthesizedUiTrees` resource each update cycle.
+
+`UiViewNode` is currently a temporary compatibility layer.
+
+- **Planned direction**: `UiProjector` will eventually return `Box<dyn AnyView>` directly.
+- **Target architecture**: bypass the IR step entirely once Xilem is linked, so closures and widget payloads are not forced through an enum representation.
 
 ## Projector Registry
 
@@ -73,10 +80,11 @@ Behavior:
 
 ## Event Collection
 
-`UiEvent` is defined as a Bevy `Message` and collected in `PreUpdate`.
+`UiEvent` intake uses an MPSC channel.
 
-- Messages are copied into `UiEventInbox` each frame.
-- This keeps event intake explicit and ECS-native.
+- `UiEventSender(Sender<UiEvent>)` is stored as a resource and is cloneable.
+- Projector contexts receive a sender clone so projector-owned closures can emit `UiEvent` values without `World` access.
+- `UiEventInbox` owns the receiver end and drains it each `PreUpdate`.
 
 ## Runtime Metrics
 
@@ -98,9 +106,8 @@ This makes synthesis behavior observable without external instrumentation.
   - `UiProjectorRegistry`
   - `SynthesizedUiTrees`
   - `UiSynthesisStats`
+  - `UiEventSender`
   - `UiEventInbox`
-- Registers message type:
-  - `UiEvent`
 - Registers systems:
   - `PreUpdate`: `collect_ui_events`
   - `PostUpdate`: `synthesize_ui_system`

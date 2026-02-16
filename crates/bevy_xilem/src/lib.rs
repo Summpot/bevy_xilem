@@ -1,9 +1,12 @@
 #![forbid(unsafe_code)]
 
-use std::marker::PhantomData;
+use std::{
+    marker::PhantomData,
+    sync::{Mutex, mpsc},
+};
 
 use bevy_app::{App, Plugin, PostUpdate, PreUpdate};
-use bevy_ecs::{message::Message, prelude::*};
+use bevy_ecs::{hierarchy::Children, prelude::*};
 
 /// Marker component for UI tree roots.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -12,17 +15,6 @@ pub struct UiRoot;
 /// Stable node identity used by higher-level diff/caching strategies.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct UiNodeId(pub u64);
-
-/// Explicit children relationship for UI synthesis.
-#[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
-pub struct UiChildren(pub Vec<Entity>);
-
-impl UiChildren {
-    #[must_use]
-    pub fn new(children: Vec<Entity>) -> Self {
-        Self(children)
-    }
-}
 
 /// Example container component.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -57,6 +49,10 @@ impl UiButton {
 }
 
 /// Synthesized view IR that can be adapted to a concrete UI backend.
+///
+/// TODO(xilem-integration): Remove this IR once Xilem is linked end-to-end.
+/// At that point, `UiProjector::project` should return `Box<dyn AnyView>`
+/// directly and synthesis should bypass `UiViewNode` entirely.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UiViewNode {
     FlexColumn {
@@ -93,9 +89,14 @@ pub struct ProjectionCtx<'a> {
     pub entity: Entity,
     pub node_id: Option<UiNodeId>,
     pub children: Vec<UiViewNode>,
+    /// Sender clone intended for projector-owned callbacks/closures.
+    pub event_sender: mpsc::Sender<UiEvent>,
 }
 
 /// Maps ECS entity data into a synthesized IR node.
+///
+/// TODO(xilem-integration): Change return type to `Box<dyn AnyView>` and
+/// remove `UiViewNode` as an intermediate representation.
 pub trait UiProjector: Send + Sync + 'static {
     fn project(&self, ctx: ProjectionCtx<'_>) -> Option<UiViewNode>;
 }
@@ -142,6 +143,7 @@ impl UiProjectorRegistry {
         entity: Entity,
         node_id: Option<UiNodeId>,
         children: Vec<UiViewNode>,
+        event_sender: mpsc::Sender<UiEvent>,
     ) -> UiViewNode {
         // Last registered projector wins, so users can override built-ins.
         for projector in self.projectors.iter().rev() {
@@ -150,6 +152,7 @@ impl UiProjectorRegistry {
                 entity,
                 node_id,
                 children: children.clone(),
+                event_sender: event_sender.clone(),
             };
             if let Some(node) = projector.project(ctx) {
                 return node;
@@ -220,15 +223,51 @@ impl UiSynthesisStats {
 }
 
 /// Semantic UI messages that business systems can consume.
-#[derive(Message, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum UiEvent {
     Clicked(Entity),
     Custom(String),
 }
 
-/// Convenience inbox for current-frame UI messages.
-#[derive(Resource, Debug, Clone, Default, PartialEq, Eq)]
-pub struct UiEventInbox(pub Vec<UiEvent>);
+/// Sender handle that can be cloned into projector closures.
+#[derive(Resource, Clone)]
+pub struct UiEventSender(pub mpsc::Sender<UiEvent>);
+
+impl UiEventSender {
+    #[must_use]
+    pub fn new(sender: mpsc::Sender<UiEvent>) -> Self {
+        Self(sender)
+    }
+}
+
+/// Convenience inbox that drains the UI event receiver each frame.
+#[derive(Resource)]
+pub struct UiEventInbox {
+    receiver: Mutex<mpsc::Receiver<UiEvent>>,
+    pub events: Vec<UiEvent>,
+}
+
+impl UiEventInbox {
+    #[must_use]
+    pub fn new(receiver: mpsc::Receiver<UiEvent>) -> Self {
+        Self {
+            receiver: Mutex::new(receiver),
+            events: Vec::new(),
+        }
+    }
+
+    pub fn drain(&mut self) {
+        self.events.clear();
+
+        let Ok(receiver) = self.receiver.lock() else {
+            return;
+        };
+
+        while let Ok(event) = receiver.try_recv() {
+            self.events.push(event);
+        }
+    }
+}
 
 /// Collect all entities marked with `UiRoot`.
 pub fn gather_ui_roots(world: &mut World) -> Vec<Entity> {
@@ -244,9 +283,22 @@ pub fn synthesize_roots(
 ) -> Vec<UiViewNode> {
     let mut output = Vec::new();
     let mut visiting = Vec::new();
+    let fallback_sender = world
+        .get_resource::<UiEventSender>()
+        .map(|sender| sender.0.clone())
+        .unwrap_or_else(|| {
+            let (sender, _receiver) = mpsc::channel();
+            sender
+        });
 
     for root in roots {
-        output.push(synthesize_entity(world, registry, root, &mut visiting));
+        output.push(synthesize_entity(
+            world,
+            registry,
+            root,
+            &mut visiting,
+            &fallback_sender,
+        ));
     }
 
     output
@@ -263,6 +315,7 @@ fn synthesize_entity(
     registry: &UiProjectorRegistry,
     entity: Entity,
     visiting: &mut Vec<Entity>,
+    event_sender: &mpsc::Sender<UiEvent>,
 ) -> UiViewNode {
     if world.get_entity(entity).is_err() {
         return UiViewNode::MissingEntity { entity };
@@ -275,18 +328,18 @@ fn synthesize_entity(
     visiting.push(entity);
 
     let child_entities = world
-        .get::<UiChildren>(entity)
-        .map(|children| children.0.clone())
+        .get::<Children>(entity)
+        .map(|children| children.iter().collect::<Vec<_>>())
         .unwrap_or_default();
 
     let children = child_entities
         .into_iter()
-        .map(|child| synthesize_entity(world, registry, child, visiting))
+        .map(|child| synthesize_entity(world, registry, child, visiting, event_sender))
         .collect();
 
     let node_id = world.get::<UiNodeId>(entity).copied();
 
-    let projected = registry.project_node(world, entity, node_id, children);
+    let projected = registry.project_node(world, entity, node_id, children, event_sender.clone());
 
     let popped = visiting.pop();
     debug_assert_eq!(popped, Some(entity));
@@ -294,9 +347,8 @@ fn synthesize_entity(
     projected
 }
 
-fn collect_ui_events(mut reader: MessageReader<UiEvent>, mut inbox: ResMut<UiEventInbox>) {
-    inbox.0.clear();
-    inbox.0.extend(reader.read().cloned());
+fn collect_ui_events(mut inbox: ResMut<UiEventInbox>) {
+    inbox.drain();
 }
 
 fn synthesize_ui_system(world: &mut World) {
@@ -347,11 +399,13 @@ pub struct BevyXilemPlugin;
 
 impl Plugin for BevyXilemPlugin {
     fn build(&self, app: &mut App) {
+        let (event_sender, event_receiver) = mpsc::channel();
+
         app.init_resource::<UiProjectorRegistry>()
             .init_resource::<SynthesizedUiTrees>()
             .init_resource::<UiSynthesisStats>()
-            .init_resource::<UiEventInbox>()
-            .add_message::<UiEvent>()
+            .insert_resource(UiEventSender::new(event_sender))
+            .insert_resource(UiEventInbox::new(event_receiver))
             .add_systems(PreUpdate, collect_ui_events)
             .add_systems(PostUpdate, synthesize_ui_system);
 
@@ -361,8 +415,10 @@ impl Plugin for BevyXilemPlugin {
 }
 
 pub mod prelude {
+    pub use bevy_ecs::hierarchy::{ChildOf, Children};
+
     pub use crate::{
-        BevyXilemPlugin, SynthesizedUiTrees, UiButton, UiChildren, UiEvent, UiEventInbox,
+        BevyXilemPlugin, SynthesizedUiTrees, UiButton, UiEvent, UiEventInbox, UiEventSender,
         UiFlexColumn, UiLabel, UiNodeId, UiProjector, UiProjectorRegistry, UiRoot,
         UiSynthesisStats, UiViewNode, gather_ui_roots, register_builtin_projectors,
         synthesize_roots, synthesize_world,
@@ -372,7 +428,7 @@ pub mod prelude {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bevy_ecs::message::Messages;
+    use bevy_ecs::hierarchy::ChildOf;
 
     #[test]
     fn synthesize_builtin_tree() {
@@ -380,14 +436,9 @@ mod tests {
         let mut registry = UiProjectorRegistry::default();
         register_builtin_projectors(&mut registry);
 
-        let label = world.spawn((UiNodeId(2), UiLabel::new("hello"))).id();
-        let root = world
-            .spawn((
-                UiRoot,
-                UiNodeId(1),
-                UiFlexColumn,
-                UiChildren::new(vec![label]),
-            ))
+        let root = world.spawn((UiRoot, UiNodeId(1), UiFlexColumn)).id();
+        let label = world
+            .spawn((UiNodeId(2), UiLabel::new("hello"), ChildOf(root)))
             .id();
 
         let trees = synthesize_roots(&world, &registry, [root]);
@@ -443,13 +494,9 @@ mod tests {
         let mut registry = UiProjectorRegistry::default();
         register_builtin_projectors(&mut registry);
 
-        let root = world.spawn_empty().id();
-        world.entity_mut(root).insert((
-            UiRoot,
-            UiNodeId(1),
-            UiFlexColumn,
-            UiChildren::new(vec![root]),
-        ));
+        let root = world.spawn((UiRoot, UiNodeId(1), UiFlexColumn)).id();
+        let child = world.spawn((UiNodeId(2), UiFlexColumn, ChildOf(root))).id();
+        world.entity_mut(root).insert(ChildOf(child));
 
         let trees = synthesize_roots(&world, &registry, [root]);
 
@@ -458,7 +505,11 @@ mod tests {
             vec![UiViewNode::FlexColumn {
                 entity: root,
                 id: Some(UiNodeId(1)),
-                children: vec![UiViewNode::Cycle { entity: root }],
+                children: vec![UiViewNode::FlexColumn {
+                    entity: child,
+                    id: Some(UiNodeId(2)),
+                    children: vec![UiViewNode::Cycle { entity: root }],
+                }],
             }]
         );
     }
@@ -468,28 +519,24 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(BevyXilemPlugin);
 
-        let label = app
-            .world_mut()
-            .spawn((UiNodeId(11), UiLabel::new("ok")))
-            .id();
         let root = app
             .world_mut()
-            .spawn((
-                UiRoot,
-                UiNodeId(10),
-                UiFlexColumn,
-                UiChildren::new(vec![label]),
-            ))
+            .spawn((UiRoot, UiNodeId(10), UiFlexColumn))
+            .id();
+        let label = app
+            .world_mut()
+            .spawn((UiNodeId(11), UiLabel::new("ok"), ChildOf(root)))
             .id();
 
-        app.world_mut()
-            .resource_mut::<Messages<UiEvent>>()
-            .write(UiEvent::Clicked(root));
+        let event_sender = app.world().resource::<UiEventSender>().0.clone();
+        event_sender
+            .send(UiEvent::Clicked(root))
+            .expect("event channel should accept UiEvent");
 
         app.update();
 
         let inbox = app.world().resource::<UiEventInbox>();
-        assert_eq!(inbox.0, vec![UiEvent::Clicked(root)]);
+        assert_eq!(inbox.events, vec![UiEvent::Clicked(root)]);
 
         let trees = app.world().resource::<SynthesizedUiTrees>();
         assert_eq!(
@@ -524,37 +571,22 @@ mod tests {
         let mut registry = UiProjectorRegistry::default();
         register_builtin_projectors(&mut registry);
 
-        let stale_child = world.spawn_empty().id();
-        assert!(world.despawn(stale_child));
+        let stale_root = world.spawn_empty().id();
+        assert!(world.despawn(stale_root));
 
-        let root = world
-            .spawn((
-                UiRoot,
-                UiNodeId(1),
-                UiFlexColumn,
-                UiChildren::new(vec![stale_child]),
-            ))
-            .id();
-
-        let trees = synthesize_roots(&world, &registry, [root]);
+        let trees = synthesize_roots(&world, &registry, [stale_root]);
         let stats = UiSynthesisStats::from_roots(&trees);
 
         assert_eq!(
             trees,
-            vec![UiViewNode::FlexColumn {
-                entity: root,
-                id: Some(UiNodeId(1)),
-                children: vec![UiViewNode::MissingEntity {
-                    entity: stale_child,
-                }],
-            }]
+            vec![UiViewNode::MissingEntity { entity: stale_root }]
         );
 
         assert_eq!(
             stats,
             UiSynthesisStats {
                 root_count: 1,
-                node_count: 2,
+                node_count: 1,
                 cycle_count: 0,
                 missing_entity_count: 1,
                 unhandled_count: 0,
