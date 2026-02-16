@@ -5,20 +5,20 @@ use std::{
 };
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiRoot, UiView,
+    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
+    StyleRule, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
+    apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
-    button_with_child, checkbox, run_app_with_window_options, slider, text_button,
+    button_with_child, checkbox, resolve_style, resolve_style_for_classes,
+    run_app_with_window_options, slider,
     xilem::{
         Color,
-        masonry::{
-            dpi::LogicalSize,
-            layout::{AsUnit, Length},
-        },
+        masonry::{dpi::LogicalSize, layout::AsUnit},
         style::Style as _,
         view::{
-            CrossAxisAlignment, FlexExt as _, FlexSpacer, GridExt as _, flex_col, flex_row, grid,
-            label, prose, sized_box,
+            CrossAxisAlignment, FlexExt as _, GridExt as _, flex_col, flex_row, grid, label, prose,
+            sized_box,
         },
         winit::error::EventLoopError,
     },
@@ -31,8 +31,9 @@ mod engine;
 const TIMER_TICK_MS: u64 = 100;
 const TIMER_TICK_SECS: f64 = TIMER_TICK_MS as f64 / 1000.0;
 const BOARD_SIZE: usize = 8;
-const GAP: Length = Length::const_px(12.0);
-const TINY_GAP: Length = Length::const_px(4.0);
+const BOARD_RECENT_MOVE_SHADE: u8 = 25;
+const BOARD_TARGET_SHADE: u8 = 50;
+const MOVELIST_WIDTH: i32 = 200;
 
 #[derive(Clone, Copy, Debug)]
 enum Piece {
@@ -174,6 +175,21 @@ fn formatted_clock(secs: f64) -> String {
     let minutes = total / 60;
     let seconds = total % 60;
     format!("{minutes:02}:{seconds:02}")
+}
+
+fn dimmed(color: Color, amount: u8) -> Color {
+    let rgba = color.to_rgba8();
+    let r = rgba.r;
+    let g = rgba.g;
+    let b = rgba.b;
+    let a = rgba.a;
+
+    Color::from_rgba8(
+        r.saturating_sub(amount),
+        g.saturating_sub(amount),
+        b.saturating_sub(amount),
+        a,
+    )
 }
 
 fn with_chess_resources<R>(
@@ -403,7 +419,22 @@ fn tick_once(
 #[derive(Component, Debug, Clone, Copy)]
 struct ChessRootView;
 
-fn build_chess_board_view(ui: &ChessUiResource, action_entity: Entity) -> UiView {
+fn build_chess_board_view(world: &World, ui: &ChessUiResource, action_entity: Entity) -> UiView {
+    let board_style = resolve_style_for_classes(world, ["chess.board"]);
+    let cell_style = resolve_style_for_classes(world, ["chess.cell"]);
+    let light_cell_style = resolve_style_for_classes(world, ["chess.cell.light"]);
+    let dark_cell_style = resolve_style_for_classes(world, ["chess.cell.dark"]);
+    let piece_style = resolve_style_for_classes(world, ["chess.cell-piece"]);
+
+    let light_bg = light_cell_style
+        .colors
+        .bg
+        .unwrap_or(Color::from_rgb8(0xFF, 0xFF, 0xFF));
+    let dark_bg = dark_cell_style
+        .colors
+        .bg
+        .unwrap_or(Color::from_rgb8(0xCD, 0xCD, 0xCD));
+
     let mut cells = Vec::with_capacity(BOARD_SIZE * BOARD_SIZE);
 
     for row in 0..BOARD_SIZE {
@@ -417,64 +448,108 @@ fn build_chess_board_view(ui: &ChessUiResource, action_entity: Entity) -> UiView
             };
 
             let shade = match ui.square_tags[idx] {
-                2 => 25,
-                1 => 50,
+                2 => BOARD_RECENT_MOVE_SHADE,
+                1 => BOARD_TARGET_SHADE,
                 _ => 0,
             };
 
             let color = if (row + col) % 2 == 0 {
-                Color::from_rgb8(255, 255, 255 - shade)
+                dimmed(light_bg, shade)
             } else {
-                Color::from_rgb8(205, 205, 205 - shade)
+                dimmed(dark_bg, shade)
             };
 
             let label_text = ui.board[row][col].map(piece_unicode).unwrap_or(" ");
 
-            let label_piece = label(label_text)
-                .text_size(96.0)
-                .font(chess_piece_font_family())
-                .color(Color::BLACK);
+            let label_piece = apply_label_style(
+                label(label_text).font(chess_piece_font_family()),
+                &piece_style,
+            );
 
             let cell = button_with_child(
                 action_entity,
                 ChessEvent::ClickSquare { row, col },
                 label_piece,
             )
-            .padding(0.0)
+            .padding(cell_style.layout.padding)
+            .corner_radius(cell_style.layout.corner_radius)
+            .border(
+                cell_style.colors.border.unwrap_or(Color::TRANSPARENT),
+                cell_style.layout.border_width,
+            )
             .background_color(color)
-            .corner_radius(0.0)
             .grid_pos(draw_col as i32, draw_row as i32);
 
             cells.push(cell);
         }
     }
 
-    let board = grid(cells, BOARD_SIZE as i32, BOARD_SIZE as i32);
-
-    Arc::new(flex_col((
-        FlexSpacer::Fixed(GAP),
-        board.flex(1.0),
-        FlexSpacer::Fixed(GAP),
-    )))
+    Arc::new(apply_widget_style(
+        flex_col((grid(cells, BOARD_SIZE as i32, BOARD_SIZE as i32).flex(1.0),)),
+        &board_style,
+    ))
 }
 
 fn build_chess_controls_view(
+    world: &World,
     game_res: &ChessGameResource,
     ui: &ChessUiResource,
     flow: &ChessFlowResource,
     action_entity: Entity,
 ) -> UiView {
+    let controls_style = resolve_style_for_classes(world, ["chess.controls"]);
+    let status_style = resolve_style_for_classes(world, ["chess.status"]);
+    let clock_style = resolve_style_for_classes(world, ["chess.clock"]);
+    let time_per_move_style = resolve_style_for_classes(world, ["chess.time-per-move"]);
+    let toggle_style = resolve_style_for_classes(world, ["chess.toggle"]);
+    let action_button_style = resolve_style_for_classes(world, ["chess.action-button"]);
+    let action_label_style = resolve_style_for_classes(world, ["chess.action-label"]);
+    let movelist_style = resolve_style_for_classes(world, ["chess.movelist"]);
+
     let movelist_text = ui.movelist_text();
 
-    Arc::new(
+    let rotate_button = apply_widget_style(
+        button_with_child(
+            action_entity,
+            ChessEvent::Rotate,
+            apply_label_style(label("Rotate"), &action_label_style),
+        ),
+        &action_button_style,
+    );
+
+    let new_game_button = apply_widget_style(
+        button_with_child(
+            action_entity,
+            ChessEvent::NewGame,
+            apply_label_style(label("New game"), &action_label_style),
+        ),
+        &action_button_style,
+    );
+
+    let print_movelist_button = apply_widget_style(
+        button_with_child(
+            action_entity,
+            ChessEvent::PrintMovelist,
+            apply_label_style(label("Print movelist"), &action_label_style),
+        ),
+        &action_button_style,
+    );
+
+    Arc::new(apply_widget_style(
         flex_col((
-            FlexSpacer::Fixed(GAP),
-            label(ui.status.clone()),
-            FlexSpacer::Fixed(TINY_GAP),
-            label(format!("White: {}", formatted_clock(flow.time_elapsed[0]))),
-            label(format!("Black: {}", formatted_clock(flow.time_elapsed[1]))),
-            FlexSpacer::Fixed(TINY_GAP),
-            label(format!("{:.2} sec/move", game_res.time_per_move)),
+            apply_label_style(label(ui.status.clone()), &status_style),
+            apply_label_style(
+                label(format!("White: {}", formatted_clock(flow.time_elapsed[0]))),
+                &clock_style,
+            ),
+            apply_label_style(
+                label(format!("Black: {}", formatted_clock(flow.time_elapsed[1]))),
+                &clock_style,
+            ),
+            apply_label_style(
+                label(format!("{:.2} sec/move", game_res.time_per_move)),
+                &time_per_move_style,
+            ),
             slider(
                 action_entity,
                 0.1,
@@ -482,57 +557,263 @@ fn build_chess_controls_view(
                 game_res.time_per_move,
                 ChessEvent::SetTimePerMove,
             ),
-            checkbox(
-                action_entity,
-                "Engine plays white",
-                ui.engine_plays_white,
-                |_| ChessEvent::ToggleEngineWhite,
+            apply_widget_style(
+                checkbox(
+                    action_entity,
+                    "Engine plays white",
+                    ui.engine_plays_white,
+                    |_| ChessEvent::ToggleEngineWhite,
+                )
+                .text_size(toggle_style.text.size),
+                &toggle_style,
             ),
-            checkbox(
-                action_entity,
-                "Engine plays black",
-                ui.engine_plays_black,
-                |_| ChessEvent::ToggleEngineBlack,
+            apply_widget_style(
+                checkbox(
+                    action_entity,
+                    "Engine plays black",
+                    ui.engine_plays_black,
+                    |_| ChessEvent::ToggleEngineBlack,
+                )
+                .text_size(toggle_style.text.size),
+                &toggle_style,
             ),
-            text_button(action_entity, ChessEvent::Rotate, "Rotate"),
-            text_button(action_entity, ChessEvent::NewGame, "New game"),
-            text_button(action_entity, ChessEvent::PrintMovelist, "Print movelist"),
-            sized_box(prose(movelist_text)).width(200_i32.px()),
-            FlexSpacer::Fixed(GAP),
+            rotate_button,
+            new_game_button,
+            print_movelist_button,
+            apply_widget_style(
+                sized_box(prose(movelist_text)).width(MOVELIST_WIDTH.px()),
+                &movelist_style,
+            ),
         ))
-        .cross_axis_alignment(CrossAxisAlignment::Start)
-        .gap(GAP),
-    )
+        .cross_axis_alignment(CrossAxisAlignment::Start),
+        &controls_style,
+    ))
 }
 
 fn project_chess_root(_: &ChessRootView, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
     let game_res = ctx.world.resource::<ChessGameResource>();
     let ui = ctx.world.resource::<ChessUiResource>();
     let flow = ctx.world.resource::<ChessFlowResource>();
-    let controls = build_chess_controls_view(&game_res, &ui, &flow, ctx.entity);
-    let board = build_chess_board_view(&ui, ctx.entity);
+    let controls = build_chess_controls_view(ctx.world, &game_res, &ui, &flow, ctx.entity);
+    let board = build_chess_board_view(ctx.world, &ui, ctx.entity);
 
-    let children = vec![
-        FlexSpacer::Fixed(GAP).into_any_flex(),
-        controls.into_any_flex(),
-        board.flex(1.0).into_any_flex(),
-        FlexSpacer::Fixed(GAP).into_any_flex(),
-    ];
-
-    Arc::new(
-        flex_row(children)
-            .cross_axis_alignment(CrossAxisAlignment::Start)
-            .gap(GAP),
-    )
+    Arc::new(apply_widget_style(
+        flex_row((controls, board.flex(1.0))).cross_axis_alignment(CrossAxisAlignment::Start),
+        &style,
+    ))
 }
 
 fn setup_chess_world(mut commands: Commands) {
-    commands.spawn((UiRoot, ChessRootView));
+    commands.spawn((
+        UiRoot,
+        ChessRootView,
+        StyleClass(vec!["chess.root".to_string()]),
+    ));
+}
+
+fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
+    style_sheet.set_class(
+        "chess.root",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(12.0),
+                gap: Some(12.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x1A, 0x1A, 0x1A)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "chess.controls",
+        StyleRule {
+            layout: LayoutStyle {
+                gap: Some(8.0),
+                padding: Some(8.0),
+                corner_radius: Some(8.0),
+                border_width: Some(1.0),
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x24, 0x24, 0x24)),
+                border: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "chess.status",
+        StyleRule {
+            text: TextStyle { size: Some(16.0) },
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE7)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "chess.clock",
+        StyleRule {
+            text: TextStyle { size: Some(14.0) },
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0xD4, 0xD4, 0xD8)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "chess.time-per-move",
+        StyleRule {
+            text: TextStyle { size: Some(14.0) },
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0xA1, 0xA1, 0xAA)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "chess.toggle",
+        StyleRule {
+            text: TextStyle { size: Some(14.0) },
+            layout: LayoutStyle {
+                padding: Some(2.0),
+                ..LayoutStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "chess.action-button",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(6.0),
+                border_width: Some(1.0),
+                corner_radius: Some(8.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
+                border: Some(Color::from_rgb8(0x52, 0x52, 0x5B)),
+                hover_bg: Some(Color::from_rgb8(0x52, 0x52, 0x5B)),
+                pressed_bg: Some(Color::from_rgb8(0x27, 0x27, 0x2A)),
+                ..ColorStyle::default()
+            },
+            transition: Some(StyleTransition { duration: 0.1 }),
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "chess.action-label",
+        StyleRule {
+            text: TextStyle { size: Some(14.0) },
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0xFA, 0xFA, 0xFA)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "chess.movelist",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(6.0),
+                border_width: Some(1.0),
+                corner_radius: Some(8.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x11, 0x11, 0x13)),
+                border: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "chess.board",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(8.0),
+                border_width: Some(1.0),
+                corner_radius: Some(8.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x24, 0x24, 0x24)),
+                border: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "chess.cell",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(0.0),
+                corner_radius: Some(0.0),
+                ..LayoutStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "chess.cell.light",
+        StyleRule {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "chess.cell.dark",
+        StyleRule {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0xCD, 0xCD, 0xCD)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "chess.cell-piece",
+        StyleRule {
+            text: TextStyle { size: Some(96.0) },
+            colors: ColorStyle {
+                text: Some(Color::BLACK),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
 }
 
 fn drain_events_and_tick(world: &mut World) {
     let events = world
-        .resource::<UiEventQueue>()
+        .resource_mut::<UiEventQueue>()
         .drain_actions::<ChessEvent>();
 
     with_chess_resources(world, |game_res, ui, flow| {
@@ -553,7 +834,7 @@ fn build_bevy_chess_app() -> App {
         .insert_resource(ui)
         .insert_resource(ChessFlowResource::default())
         .register_projector::<ChessRootView>(project_chess_root)
-        .add_systems(Startup, setup_chess_world);
+        .add_systems(Startup, (setup_chess_styles, setup_chess_world));
 
     app.add_systems(PreUpdate, drain_events_and_tick);
 

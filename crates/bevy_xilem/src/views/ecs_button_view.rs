@@ -1,12 +1,9 @@
 use bevy_ecs::entity::Entity;
-use masonry::{
-    core::ArcStr,
-    widgets::{self, ButtonPress},
-};
+use masonry::core::ArcStr;
 use xilem_core::{Arg, MessageCtx, MessageResult, Mut, View, ViewMarker};
 use xilem_masonry::{Pod, ViewCtx};
 
-use crate::events::emit_ui_action;
+use crate::widgets::EcsButtonWidget;
 
 /// ECS-dispatched view backed by Masonry's native `Button` widget.
 #[must_use = "View values do nothing unless returned into the synthesized UI tree."]
@@ -34,7 +31,7 @@ impl<A> View<(), (), ViewCtx> for EcsButtonView<A>
 where
     A: Clone + Send + Sync + 'static,
 {
-    type Element = Pod<widgets::Button>;
+    type Element = Pod<EcsButtonWidget<A>>;
     type ViewState = ();
 
     fn build(
@@ -43,9 +40,11 @@ where
         _app_state: Arg<'_, ()>,
     ) -> (Self::Element, Self::ViewState) {
         (
-            ctx.with_action_widget(|ctx| {
-                ctx.create_pod(widgets::Button::with_text(self.label.clone()))
-            }),
+            ctx.create_pod(EcsButtonWidget::new(
+                self.entity,
+                self.action.clone(),
+                self.label.clone(),
+            )),
             (),
         )
     }
@@ -58,10 +57,14 @@ where
         mut element: Mut<'_, Self::Element>,
         _app_state: Arg<'_, ()>,
     ) {
+        if self.entity != prev.entity {
+            EcsButtonWidget::set_entity(&mut element, self.entity);
+        }
+
+        EcsButtonWidget::set_action(&mut element, self.action.clone());
+
         if self.label != prev.label {
-            let mut child_mut = widgets::Button::child_mut(&mut element);
-            let mut child = child_mut.downcast::<widgets::Label>();
-            widgets::Label::set_text(&mut child, self.label.clone());
+            EcsButtonWidget::set_label(&mut element, self.label.clone());
         }
     }
 
@@ -77,24 +80,10 @@ where
     fn message(
         &self,
         _view_state: &mut Self::ViewState,
-        message: &mut MessageCtx,
+        _message: &mut MessageCtx,
         _element: Mut<'_, Self::Element>,
         _app_state: Arg<'_, ()>,
     ) -> MessageResult<()> {
-        if message.take_first().is_some() {
-            return MessageResult::Stale;
-        }
-
-        match message.take_message::<ButtonPress>() {
-            Some(press) => {
-                if press.button.is_none()
-                    || press.button == Some(masonry::core::PointerButton::Primary)
-                {
-                    emit_ui_action(self.entity, self.action.clone());
-                }
-                MessageResult::Nop
-            }
-            None => MessageResult::Stale,
-        }
+        MessageResult::Stale
     }
 }

@@ -8,6 +8,7 @@ use xilem_masonry::{
 
 use crate::{
     ecs::{UiButton, UiFlexColumn, UiFlexRow, UiLabel},
+    styling::{apply_label_style, apply_widget_style, resolve_style},
     views::ecs_button,
 };
 
@@ -111,34 +112,44 @@ impl UiProjectorRegistry {
 }
 
 fn project_flex_column(_: &UiFlexColumn, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
     let children = ctx
         .children
         .into_iter()
         .map(|child| child.into_any_flex())
         .collect::<Vec<_>>();
 
-    Arc::new(flex_col(children))
+    Arc::new(apply_widget_style(flex_col(children), &style))
 }
 
 fn project_flex_row(_: &UiFlexRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
     let children = ctx
         .children
         .into_iter()
         .map(|child| child.into_any_flex())
         .collect::<Vec<_>>();
 
-    Arc::new(flex_row(children))
+    Arc::new(apply_widget_style(flex_row(children), &style))
 }
 
-fn project_label(label_component: &UiLabel, _ctx: ProjectionCtx<'_>) -> UiView {
-    Arc::new(label(label_component.text.clone()))
+fn project_label(label_component: &UiLabel, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    Arc::new(apply_label_style(
+        label(label_component.text.clone()),
+        &style,
+    ))
 }
 
 fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>) -> UiView {
-    Arc::new(ecs_button(
-        ctx.entity,
-        BuiltinUiAction::Clicked,
-        button_component.label.clone(),
+    let style = resolve_style(ctx.world, ctx.entity);
+    Arc::new(apply_widget_style(
+        ecs_button(
+            ctx.entity,
+            BuiltinUiAction::Clicked,
+            button_component.label.clone(),
+        ),
+        &style,
     ))
 }
 

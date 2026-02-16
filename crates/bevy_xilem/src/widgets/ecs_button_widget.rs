@@ -15,13 +15,18 @@ use masonry::{
 };
 use vello::Scene;
 
-use crate::events::{UiEvent, push_global_ui_event};
+use crate::{
+    events::{UiEvent, push_global_ui_event},
+    styling::UiInteractionEvent,
+};
 
 /// Masonry widget that emits typed ECS actions without user-facing closures.
 pub struct EcsButtonWidget<A> {
     entity: Entity,
     action: A,
     label: WidgetPod<Label>,
+    hovered: bool,
+    pressed: bool,
 }
 
 impl<A> EcsButtonWidget<A> {
@@ -31,6 +36,8 @@ impl<A> EcsButtonWidget<A> {
             entity,
             action,
             label: Label::new(label).with_auto_id().to_pod(),
+            hovered: false,
+            pressed: false,
         }
     }
 }
@@ -54,6 +61,32 @@ where
     fn push_action(&self) {
         push_global_ui_event(UiEvent::typed(self.entity, self.action.clone()));
     }
+
+    fn push_interaction(&self, event: UiInteractionEvent) {
+        push_global_ui_event(UiEvent::typed(self.entity, event));
+    }
+
+    fn set_hovered(&mut self, hovered: bool) {
+        if self.hovered != hovered {
+            self.hovered = hovered;
+            self.push_interaction(if hovered {
+                UiInteractionEvent::PointerEntered
+            } else {
+                UiInteractionEvent::PointerLeft
+            });
+        }
+    }
+
+    fn set_pressed(&mut self, pressed: bool) {
+        if self.pressed != pressed {
+            self.pressed = pressed;
+            self.push_interaction(if pressed {
+                UiInteractionEvent::PointerPressed
+            } else {
+                UiInteractionEvent::PointerReleased
+            });
+        }
+    }
 }
 
 impl<A> Widget for EcsButtonWidget<A>
@@ -72,13 +105,27 @@ where
             PointerEvent::Down(..) => {
                 ctx.request_focus();
                 ctx.capture_pointer();
+                self.set_hovered(ctx.is_hovered());
+                self.set_pressed(true);
                 ctx.request_paint_only();
             }
             PointerEvent::Up(PointerButtonEvent { button, .. }) => {
-                if matches!(button, Some(PointerButton::Primary)) && ctx.is_active() {
+                if matches!(button, Some(PointerButton::Primary))
+                    && ctx.is_active()
+                    && ctx.is_hovered()
+                {
                     self.push_action();
                 }
+                self.set_pressed(false);
+                self.set_hovered(ctx.is_hovered());
                 ctx.request_paint_only();
+            }
+            PointerEvent::Move(..) => {
+                self.set_hovered(ctx.is_hovered());
+            }
+            PointerEvent::Leave(..) => {
+                self.set_hovered(false);
+                self.set_pressed(false);
             }
             _ => {}
         }

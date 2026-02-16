@@ -1,16 +1,14 @@
 use std::{sync::Arc, time::Instant};
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiRoot, UiView,
+    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
+    StyleRule, StyleSheet, TextStyle, UiEventQueue, UiRoot, UiView, apply_label_style,
+    apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
-    run_app_with_window_options, slider, text_button,
+    button_with_child, resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    slider,
     xilem::{
-        Color,
-        masonry::layout::Length,
-        masonry::properties::Padding,
-        palette,
-        style::Style as _,
         view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, progress_bar},
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
@@ -81,6 +79,13 @@ fn tick_timer(state: &mut TimerState) {
 }
 
 fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
+    let root_style = resolve_style(ctx.world, ctx.entity);
+    let title_style = resolve_style_for_classes(ctx.world, ["timer.title"]);
+    let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
+    let body_text_style = resolve_style_for_classes(ctx.world, ["timer.body-text"]);
+    let reset_button_style = resolve_style_for_classes(ctx.world, ["timer.reset-button"]);
+    let reset_label_style = resolve_style_for_classes(ctx.world, ["timer.reset-label"]);
+
     let state = ctx.world.resource::<TimerState>().clone();
 
     let progress = if state.duration_secs > 0.0 {
@@ -89,39 +94,46 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
         Some(1.0)
     };
 
-    let title = label("Timer")
-        .text_size(24.0)
-        .color(palette::css::WHITE)
-        .padding(Padding::bottom(8.0));
+    let title = apply_label_style(label("Timer"), &title_style);
 
-    let elapsed_row = flex_row((
-        label("Elapsed Time:").text_size(16.0),
-        label(format_secs(state.elapsed_secs))
-            .text_size(16.0)
-            .padding(Padding::left(8.0)),
-    ))
-    .gap(Length::px(8.0));
+    let elapsed_row = apply_widget_style(
+        flex_row((
+            apply_label_style(label("Elapsed Time:"), &body_text_style),
+            apply_label_style(label(format_secs(state.elapsed_secs)), &body_text_style),
+        )),
+        &row_style,
+    );
 
     let duration_value = state.duration_secs;
-    let duration_row = flex_row((
-        label(format!("Duration: {duration_value:.0} s"))
-            .text_size(16.0)
-            .padding(Padding::top(6.0)),
-        slider(
+    let duration_row = apply_widget_style(
+        flex_row((
+            apply_label_style(
+                label(format!("Duration: {duration_value:.0} s")),
+                &body_text_style,
+            ),
+            slider(
+                ctx.entity,
+                1.0,
+                60.0,
+                duration_value,
+                TimerEvent::SetDurationSecs,
+            )
+            .step(1.0)
+            .flex(1.0),
+        )),
+        &row_style,
+    );
+
+    let reset = apply_widget_style(
+        button_with_child(
             ctx.entity,
-            1.0,
-            60.0,
-            duration_value,
-            TimerEvent::SetDurationSecs,
-        )
-        .step(1.0)
-        .flex(1.0),
-    ))
-    .gap(Length::px(8.0));
+            TimerEvent::Reset,
+            apply_label_style(label("Reset"), &reset_label_style),
+        ),
+        &reset_button_style,
+    );
 
-    let reset = text_button(ctx.entity, TimerEvent::Reset, "Reset").padding(Padding::top(8.0));
-
-    Arc::new(
+    Arc::new(apply_widget_style(
         flex_col((
             title,
             elapsed_row,
@@ -129,22 +141,107 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
             duration_row,
             reset,
         ))
-        .cross_axis_alignment(CrossAxisAlignment::Start)
-        .gap(Length::px(10.0))
-        .padding(16.0)
-        .background_color(Color::from_rgb8(0x20, 0x20, 0x20))
-        .corner_radius(12.0)
-        .border(palette::css::DARK_SLATE_GRAY, 1.0),
-    )
+        .cross_axis_alignment(CrossAxisAlignment::Start),
+        &root_style,
+    ))
 }
 
 fn setup_timer_world(mut commands: Commands) {
-    commands.spawn((UiRoot, TimerRootView));
+    commands.spawn((
+        UiRoot,
+        TimerRootView,
+        StyleClass(vec!["timer.root".to_string()]),
+    ));
+}
+
+fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
+    style_sheet.set_class(
+        "timer.root",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(16.0),
+                gap: Some(10.0),
+                corner_radius: Some(12.0),
+                border_width: Some(1.0),
+            },
+            colors: ColorStyle {
+                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x20, 0x20, 0x20)),
+                border: Some(bevy_xilem::xilem::palette::css::DARK_SLATE_GRAY),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "timer.title",
+        StyleRule {
+            text: TextStyle { size: Some(24.0) },
+            colors: ColorStyle {
+                text: Some(bevy_xilem::xilem::palette::css::WHITE),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "timer.row",
+        StyleRule {
+            layout: LayoutStyle {
+                gap: Some(8.0),
+                ..LayoutStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "timer.body-text",
+        StyleRule {
+            text: TextStyle { size: Some(16.0) },
+            layout: LayoutStyle {
+                padding: Some(4.0),
+                ..LayoutStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "timer.reset-button",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(6.0),
+                corner_radius: Some(8.0),
+                border_width: Some(1.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x35, 0x35, 0x35)),
+                border: Some(bevy_xilem::xilem::palette::css::DARK_SLATE_GRAY),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "timer.reset-label",
+        StyleRule {
+            text: TextStyle { size: Some(16.0) },
+            colors: ColorStyle {
+                text: Some(bevy_xilem::xilem::palette::css::WHITE),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
 }
 
 fn drain_timer_events_and_tick(world: &mut World) {
     let events = world
-        .resource::<UiEventQueue>()
+        .resource_mut::<UiEventQueue>()
         .drain_actions::<TimerEvent>();
 
     {
@@ -161,7 +258,7 @@ fn build_bevy_timer_app() -> App {
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(TimerState::default())
         .register_projector::<TimerRootView>(project_timer_root)
-        .add_systems(Startup, setup_timer_world);
+        .add_systems(Startup, (setup_timer_styles, setup_timer_world));
 
     app.add_systems(PreUpdate, drain_timer_events_and_tick);
 

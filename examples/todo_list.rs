@@ -1,20 +1,19 @@
 use std::sync::Arc;
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiRoot, UiView,
+    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
+    StyleRule, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
+    apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{
         hierarchy::{ChildOf, Children},
         prelude::*,
     },
-    button_with_child, checkbox, emit_ui_action, run_app, text_button, text_input,
+    button_with_child, checkbox, emit_ui_action, resolve_style, resolve_style_for_classes, run_app,
+    text_input,
     xilem::{
-        InsertNewline,
-        masonry::{
-            layout::Length,
-            theme::{DEFAULT_GAP, ZYNC_800},
-        },
-        style::Style as _,
+        Color, InsertNewline,
+        masonry::{layout::Length, theme::DEFAULT_GAP},
         view::{
             FlexExt as _, FlexSpacer, MainAxisAlignment, flex_col, flex_row, label, sized_box,
             virtual_scroll,
@@ -22,6 +21,8 @@ use bevy_xilem::{
         winit::error::EventLoopError,
     },
 };
+
+const LIST_VIEWPORT_HEIGHT: f64 = 360.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum FilterType {
@@ -85,44 +86,60 @@ struct TodoFilterBar;
 struct FilterToggle(FilterType);
 
 fn project_todo_root(_: &TodoRootView, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
     let children = ctx
         .children
         .into_iter()
         .map(|child| child.into_any_flex())
         .collect::<Vec<_>>();
 
-    Arc::new(flex_col(children).gap(Length::px(4.)).padding(50.0))
+    Arc::new(apply_widget_style(flex_col(children), &style))
 }
 
-fn project_todo_header(_: &TodoHeader, _: ProjectionCtx<'_>) -> UiView {
-    Arc::new(label("todos").text_size(80.0))
+fn project_todo_header(_: &TodoHeader, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    Arc::new(apply_label_style(label("todos"), &style))
 }
 
 fn project_todo_input_area(_: &TodoInputArea, ctx: ProjectionCtx<'_>) -> UiView {
+    let area_style = resolve_style(ctx.world, ctx.entity);
+    let input_style = resolve_style_for_classes(ctx.world, ["todo.input"]);
+    let add_button_style = resolve_style_for_classes(ctx.world, ["todo.add-button"]);
+    let add_label_style = resolve_style_for_classes(ctx.world, ["todo.add-label"]);
+
     let draft = ctx.world.resource::<DraftTodo>().0.clone();
     let entity_for_enter = ctx.entity;
 
-    Arc::new(
+    Arc::new(apply_widget_style(
         flex_row((
-            text_input(ctx.entity, draft, TodoEvent::SetDraft)
-                .text_size(16.0)
-                .placeholder("What needs to be done?")
-                .insert_newline(InsertNewline::OnShiftEnter)
-                .on_enter(move |_, _| {
-                    emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
-                })
-                .flex(1.0),
-            button_with_child(
-                ctx.entity,
-                TodoEvent::SubmitDraft,
-                label("Add task").text_size(16.0),
+            apply_text_input_style(
+                text_input(ctx.entity, draft, TodoEvent::SetDraft)
+                    .placeholder("What needs to be done?")
+                    .insert_newline(InsertNewline::OnShiftEnter)
+                    .on_enter(move |_, _| {
+                        emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
+                    }),
+                &input_style,
+            )
+            .flex(1.0),
+            apply_widget_style(
+                button_with_child(
+                    ctx.entity,
+                    TodoEvent::SubmitDraft,
+                    apply_label_style(label("Add task"), &add_label_style),
+                ),
+                &add_button_style,
             ),
-        ))
-        .gap(DEFAULT_GAP),
-    )
+        )),
+        &area_style,
+    ))
 }
 
 fn project_todo_list_container(_: &TodoListContainer, ctx: ProjectionCtx<'_>) -> UiView {
+    let container_style = resolve_style(ctx.world, ctx.entity);
+    let empty_style = resolve_style_for_classes(ctx.world, ["todo.empty"]);
+    let viewport_style = resolve_style_for_classes(ctx.world, ["todo.list-viewport"]);
+
     let active_filter = ctx.world.resource::<ActiveFilter>().0;
     let child_entities = ctx
         .world
@@ -140,51 +157,67 @@ fn project_todo_list_container(_: &TodoListContainer, ctx: ProjectionCtx<'_>) ->
         .collect::<Vec<_>>();
 
     if visible_children.is_empty() {
-        return Arc::new(
-            label("No tasks for this filter.")
-                .padding(8.0)
-                .border(ZYNC_800, 1.0),
-        );
+        return Arc::new(apply_widget_style(
+            apply_label_style(label("No tasks for this filter."), &empty_style),
+            &container_style,
+        ));
     }
 
     let visible_children = Arc::new(visible_children);
     let item_count = i64::try_from(visible_children.len()).unwrap_or(i64::MAX);
 
-    Arc::new(
-        sized_box(virtual_scroll(0..item_count, {
-            let visible_children = Arc::clone(&visible_children);
-            move |_, idx| {
-                let index = usize::try_from(idx).expect("virtual scroll index should be positive");
-                visible_children
-                    .get(index)
-                    .cloned()
-                    .unwrap_or_else(|| Arc::new(label("")))
-            }
-        }))
-        .fixed_height(Length::px(360.0))
-        .padding(4.0)
-        .border(ZYNC_800, 1.0),
-    )
+    Arc::new(apply_widget_style(
+        apply_widget_style(
+            sized_box(virtual_scroll(0..item_count, {
+                let visible_children = Arc::clone(&visible_children);
+                move |_, idx| {
+                    let index =
+                        usize::try_from(idx).expect("virtual scroll index should be positive");
+                    visible_children
+                        .get(index)
+                        .cloned()
+                        .unwrap_or_else(|| Arc::new(label("")))
+                }
+            }))
+            .fixed_height(Length::px(LIST_VIEWPORT_HEIGHT)),
+            &viewport_style,
+        ),
+        &container_style,
+    ))
 }
 
 fn project_todo_item(item: &TodoItem, ctx: ProjectionCtx<'_>) -> UiView {
     let entity = ctx.entity;
+    let style = resolve_style(ctx.world, ctx.entity);
+    let checkbox_style = resolve_style_for_classes(ctx.world, ["todo.item-checkbox"]);
+    let delete_button_style = resolve_style_for_classes(ctx.world, ["todo.delete-button"]);
+    let delete_label_style = resolve_style_for_classes(ctx.world, ["todo.delete-label"]);
 
-    Arc::new(
+    Arc::new(apply_widget_style(
         flex_row((
-            checkbox(entity, item.text.clone(), item.completed, move |value| {
-                TodoEvent::SetCompleted(entity, value)
-            })
-            .text_size(16.0),
+            apply_widget_style(
+                checkbox(entity, item.text.clone(), item.completed, move |value| {
+                    TodoEvent::SetCompleted(entity, value)
+                })
+                .text_size(checkbox_style.text.size),
+                &checkbox_style,
+            ),
             FlexSpacer::Flex(1.0),
-            text_button(entity, TodoEvent::Delete(entity), "Delete").padding(5.0),
-        ))
-        .padding(DEFAULT_GAP.get())
-        .border(ZYNC_800, 1.0),
-    )
+            apply_widget_style(
+                button_with_child(
+                    entity,
+                    TodoEvent::Delete(entity),
+                    apply_label_style(label("Delete"), &delete_label_style),
+                ),
+                &delete_button_style,
+            ),
+        )),
+        &style,
+    ))
 }
 
 fn project_filter_bar(_: &TodoFilterBar, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
     let list_container = ctx.world.resource::<TodoRuntime>().list_container;
     let has_tasks = ctx
         .world
@@ -201,18 +234,23 @@ fn project_filter_bar(_: &TodoFilterBar, ctx: ProjectionCtx<'_>) -> UiView {
         .map(|child| child.into_any_flex())
         .collect::<Vec<_>>();
 
-    Arc::new(flex_row(children).main_axis_alignment(MainAxisAlignment::Center))
+    Arc::new(apply_widget_style(
+        flex_row(children).main_axis_alignment(MainAxisAlignment::Center),
+        &style,
+    ))
 }
 
 fn project_filter_toggle(filter_toggle: &FilterToggle, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
     let filter = filter_toggle.0;
     let active = ctx.world.resource::<ActiveFilter>().0;
 
-    Arc::new(checkbox(
-        ctx.entity,
-        filter.as_str(),
-        active == filter,
-        move |_| TodoEvent::SetFilter(filter),
+    Arc::new(apply_widget_style(
+        checkbox(ctx.entity, filter.as_str(), active == filter, move |_| {
+            TodoEvent::SetFilter(filter)
+        })
+        .text_size(style.text.size),
+        &style,
     ))
 }
 
@@ -228,6 +266,7 @@ fn spawn_todo_item(world: &mut World, text: String, done: bool) -> Entity {
     let list_container = world.resource::<TodoRuntime>().list_container;
     world
         .spawn((
+            StyleClass(vec!["todo.item".to_string()]),
             TodoItem {
                 text,
                 completed: done,
@@ -238,22 +277,61 @@ fn spawn_todo_item(world: &mut World, text: String, done: bool) -> Entity {
 }
 
 fn setup_todo_world(mut commands: Commands) {
-    let root = commands.spawn((UiRoot, TodoRootView)).id();
+    let root = commands
+        .spawn((
+            UiRoot,
+            TodoRootView,
+            StyleClass(vec!["todo.root".to_string()]),
+        ))
+        .id();
 
-    commands.spawn((TodoHeader, ChildOf(root)));
-    commands.spawn((TodoInputArea, ChildOf(root)));
+    commands.spawn((
+        TodoHeader,
+        StyleClass(vec!["todo.header".to_string()]),
+        ChildOf(root),
+    ));
+    commands.spawn((
+        TodoInputArea,
+        StyleClass(vec!["todo.input-area".to_string()]),
+        ChildOf(root),
+    ));
 
-    let list_container = commands.spawn((TodoListContainer, ChildOf(root))).id();
+    let list_container = commands
+        .spawn((
+            TodoListContainer,
+            StyleClass(vec!["todo.list-container".to_string()]),
+            ChildOf(root),
+        ))
+        .id();
 
-    let footer_bar = commands.spawn((TodoFilterBar, ChildOf(root))).id();
-    commands.spawn((FilterToggle(FilterType::All), ChildOf(footer_bar)));
-    commands.spawn((FilterToggle(FilterType::Active), ChildOf(footer_bar)));
-    commands.spawn((FilterToggle(FilterType::Completed), ChildOf(footer_bar)));
+    let footer_bar = commands
+        .spawn((
+            TodoFilterBar,
+            StyleClass(vec!["todo.filter-bar".to_string()]),
+            ChildOf(root),
+        ))
+        .id();
+    commands.spawn((
+        FilterToggle(FilterType::All),
+        StyleClass(vec!["todo.filter-toggle".to_string()]),
+        ChildOf(footer_bar),
+    ));
+    commands.spawn((
+        FilterToggle(FilterType::Active),
+        StyleClass(vec!["todo.filter-toggle".to_string()]),
+        ChildOf(footer_bar),
+    ));
+    commands.spawn((
+        FilterToggle(FilterType::Completed),
+        StyleClass(vec!["todo.filter-toggle".to_string()]),
+        ChildOf(footer_bar),
+    ));
 
     commands.insert_resource(TodoRuntime { list_container });
 
     for i in 1..=120 {
         commands.spawn((
+            StyleClass(vec!["todo.item".to_string()]),
             TodoItem {
                 text: format!("Sample task #{i}"),
                 completed: i % 3 == 0,
@@ -263,9 +341,215 @@ fn setup_todo_world(mut commands: Commands) {
     }
 }
 
+fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
+    style_sheet.set_class(
+        "todo.root",
+        StyleRule {
+            layout: LayoutStyle {
+                gap: Some(4.0),
+                padding: Some(50.0),
+                ..LayoutStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "todo.header",
+        StyleRule {
+            text: TextStyle { size: Some(80.0) },
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0xE5, 0xE7, 0xEB)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "todo.input-area",
+        StyleRule {
+            layout: LayoutStyle {
+                gap: Some(DEFAULT_GAP.get()),
+                ..LayoutStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "todo.input",
+        StyleRule {
+            text: TextStyle { size: Some(16.0) },
+            layout: LayoutStyle {
+                padding: Some(6.0),
+                corner_radius: Some(8.0),
+                border_width: Some(1.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x22, 0x22, 0x22)),
+                border: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
+                text: Some(Color::from_rgb8(0xF4, 0xF4, 0xF5)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "todo.add-button",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(6.0),
+                corner_radius: Some(8.0),
+                border_width: Some(1.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x25, 0x63, 0xEB)),
+                border: Some(Color::from_rgb8(0x1D, 0x4E, 0xD8)),
+                hover_bg: Some(Color::from_rgb8(0x1D, 0x4E, 0xD8)),
+                pressed_bg: Some(Color::from_rgb8(0x1E, 0x40, 0xAF)),
+                ..ColorStyle::default()
+            },
+            transition: Some(StyleTransition { duration: 0.12 }),
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "todo.add-label",
+        StyleRule {
+            text: TextStyle { size: Some(16.0) },
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class("todo.list-container", StyleRule::default());
+
+    style_sheet.set_class(
+        "todo.empty",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(8.0),
+                border_width: Some(1.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                border: Some(Color::from_rgb8(0x27, 0x2A, 0x36)),
+                text: Some(Color::from_rgb8(0xA1, 0xA1, 0xAA)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "todo.list-viewport",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(4.0),
+                border_width: Some(1.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                border: Some(Color::from_rgb8(0x27, 0x2A, 0x36)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "todo.item",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(DEFAULT_GAP.get()),
+                border_width: Some(1.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                border: Some(Color::from_rgb8(0x27, 0x2A, 0x36)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "todo.item-checkbox",
+        StyleRule {
+            text: TextStyle { size: Some(16.0) },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "todo.delete-button",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(5.0),
+                corner_radius: Some(6.0),
+                border_width: Some(1.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x45, 0x45, 0x45)),
+                border: Some(Color::from_rgb8(0x5A, 0x5A, 0x5A)),
+                hover_bg: Some(Color::from_rgb8(0x55, 0x55, 0x55)),
+                pressed_bg: Some(Color::from_rgb8(0x35, 0x35, 0x35)),
+                ..ColorStyle::default()
+            },
+            transition: Some(StyleTransition { duration: 0.12 }),
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "todo.delete-label",
+        StyleRule {
+            text: TextStyle { size: Some(14.0) },
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0xFA, 0xFA, 0xFA)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "todo.filter-bar",
+        StyleRule {
+            layout: LayoutStyle {
+                gap: Some(DEFAULT_GAP.get()),
+                ..LayoutStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "todo.filter-toggle",
+        StyleRule {
+            text: TextStyle { size: Some(14.0) },
+            layout: LayoutStyle {
+                padding: Some(4.0),
+                corner_radius: Some(6.0),
+                ..LayoutStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+}
+
 fn drain_todo_events_and_mutate_world(world: &mut World) {
     let events = world
-        .resource::<UiEventQueue>()
+        .resource_mut::<UiEventQueue>()
         .drain_actions::<TodoEvent>();
     if events.is_empty() {
         return;
@@ -319,7 +603,7 @@ fn build_bevy_todo_app() -> App {
         .register_projector::<TodoItem>(project_todo_item)
         .register_projector::<TodoFilterBar>(project_filter_bar)
         .register_projector::<FilterToggle>(project_filter_toggle)
-        .add_systems(Startup, setup_todo_world);
+        .add_systems(Startup, (setup_todo_styles, setup_todo_world));
 
     app.add_systems(PreUpdate, drain_todo_events_and_mutate_world);
 

@@ -9,6 +9,7 @@ readme = "../../README.md"
 bevy_app.workspace = true
 bevy_ecs.workspace = true
 bevy_input.workspace = true
+bevy_time.workspace = true
 bevy_window.workspace = true
 crossbeam-queue.workspace = true
 masonry.workspace = true

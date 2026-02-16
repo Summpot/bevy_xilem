@@ -56,9 +56,12 @@ which are injected into `MasonryRuntime.render_root`.
 
 To remove user-facing closure boilerplate:
 
-- `EcsButtonView` implements `xilem_core::View` on top of Masonry's native `Button` widget.
+- `EcsButtonView` implements `xilem_core::View` on top of a custom `EcsButtonWidget`
+  that wraps Masonry button behavior for ECS integration.
 - `ecs_button(entity, action, label)` builds this view directly.
 - On click, keyboard activate, or accessibility click, it emits typed ECS actions into `UiEventQueue`.
+- It also emits structural interaction events (`PointerEntered`, `PointerLeft`,
+  `PointerPressed`, `PointerReleased`) used to drive pseudo-class state.
 
 This enables projector code like:
 
@@ -81,8 +84,26 @@ This removes direct `UiProjectorRegistry` mutation from most app setup code.
 
 - Widgets push type-erased actions (`Box<dyn Any + Send + Sync>`).
 - Bevy systems drain typed actions via `drain_actions::<T>()`.
+- Typed draining is non-destructive: events with other payload types are preserved for
+  later consumers.
 - `emit_ui_action(entity, action)` provides a public adapter entry-point for callback-heavy
   Xilem controls while still routing through the same ECS queue path.
+
+### 5.5) ECS styling engine (CSS-like cascade)
+
+The runtime now supports a data-driven style pipeline with four phases:
+
+- **Inline style components:**
+  `LayoutStyle`, `ColorStyle`, `TextStyle`, `StyleTransition`
+- **Class-based stylesheet + cascading:**
+  `StyleClass` component and `StyleSheet` resource with `StyleRule`
+- **Pseudo classes from structural interaction events:**
+  `Hovered` / `Pressed` marker components synchronized from interaction events
+- **Smooth transitions:**
+  `TargetColorStyle` + `CurrentColorStyle` interpolated each update tick
+
+Style resolution helpers (`resolve_style`, `resolve_style_for_classes`) and application helpers
+(`apply_widget_style`, `apply_label_style`, `apply_text_input_style`) are provided for projectors.
 
 ### 6) ECS control adapter coverage
 
@@ -130,11 +151,13 @@ so user code no longer needs to allocate/store a dedicated node-id component.
 - `SynthesizedUiViews`
 - `UiSynthesisStats`
 - `UiEventQueue`
+- `StyleSheet`
 - `MasonryRuntime`
 
 and registers systems:
 
-- `PreUpdate`: `inject_bevy_input_into_masonry`
+- `PreUpdate`: `inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
+- `Update`: `sync_style_targets -> animate_style_transitions`
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime` (chained)
 
 It also registers built-in projectors.
@@ -175,6 +198,8 @@ Examples were rewritten to demonstrate this architecture with:
 - GUI windows via the bridge runner
 - Bevy-driven synthesis updates each frame
 - typed action handling via `UiEventQueue` (ECS queue path only)
+- stylesheet-driven styling (class rules + cascade) instead of hardcoded projector styles
+- pseudo-class interaction styling and transition-capable style resolution
 - virtualized task scrolling in `todo_list` using `xilem_masonry::view::virtual_scroll`
 - no `xilem::Xilem::new_simple` usage
 

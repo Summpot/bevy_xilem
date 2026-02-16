@@ -43,12 +43,21 @@ impl UiEvent {
     /// Attempt to recover a typed event payload.
     #[must_use]
     pub fn into_action<T: Any + Send + Sync>(self) -> Option<TypedUiEvent<T>> {
+        self.try_into_action::<T>().ok()
+    }
+
+    /// Attempt to recover a typed event payload, returning the original event on mismatch.
+    #[must_use]
+    pub fn try_into_action<T: Any + Send + Sync>(self) -> Result<TypedUiEvent<T>, Self> {
         match self.action.downcast::<T>() {
-            Ok(action) => Some(TypedUiEvent {
+            Ok(action) => Ok(TypedUiEvent {
                 entity: self.entity,
                 action: *action,
             }),
-            Err(_) => None,
+            Err(action) => Err(Self {
+                entity: self.entity,
+                action,
+            }),
         }
     }
 }
@@ -70,7 +79,7 @@ pub struct TypedUiEvent<T> {
 /// let mut world = World::new();
 /// let entity = world.spawn_empty().id();
 ///
-/// let queue = UiEventQueue::default();
+/// let mut queue = UiEventQueue::default();
 /// queue.push_typed(entity, 7_u32);
 ///
 /// let drained = queue.drain_actions::<u32>();
@@ -110,7 +119,7 @@ impl UiEventQueue {
 
     /// Drain every queued event, regardless of payload type.
     #[must_use]
-    pub fn drain_all(&self) -> Vec<UiEvent> {
+    pub fn drain_all(&mut self) -> Vec<UiEvent> {
         let mut drained = Vec::new();
         while let Some(event) = self.queue.pop() {
             drained.push(event);
@@ -120,15 +129,22 @@ impl UiEventQueue {
 
     /// Drain queue entries and keep only typed actions.
     ///
-    /// Note: entries with other action types are discarded.
+    /// Entries with other action types are preserved in the queue.
     #[must_use]
-    pub fn drain_actions<T: Any + Send + Sync>(&self) -> Vec<TypedUiEvent<T>> {
+    pub fn drain_actions<T: Any + Send + Sync>(&mut self) -> Vec<TypedUiEvent<T>> {
         let mut drained = Vec::new();
+        let mut unmatched = Vec::new();
         while let Some(event) = self.queue.pop() {
-            if let Some(event) = event.into_action::<T>() {
-                drained.push(event);
+            match event.try_into_action::<T>() {
+                Ok(typed) => drained.push(typed),
+                Err(event) => unmatched.push(event),
             }
         }
+
+        for event in unmatched {
+            self.queue.push(event);
+        }
+
         drained
     }
 }
@@ -171,7 +187,7 @@ pub(crate) fn push_global_ui_event(event: UiEvent) {
 ///
 /// let mut world = World::new();
 /// let entity = world.spawn_empty().id();
-/// let queue = UiEventQueue::default();
+/// let mut queue = UiEventQueue::default();
 ///
 /// // In real app wiring this global queue is installed by `MasonryRuntime`.
 /// // Here we directly push through queue APIs in tests/docs.

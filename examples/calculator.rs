@@ -1,15 +1,13 @@
 use std::sync::Arc;
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiRoot, UiView,
+    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
+    StyleRule, StyleSheet, TextStyle, UiEventQueue, UiRoot, UiView, apply_label_style,
+    apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
-    button_with_child, run_app_with_window_options, text_button,
+    button_with_child, resolve_style, resolve_style_for_classes, run_app_with_window_options,
     xilem::{
-        Color,
-        masonry::layout::Length,
-        palette,
-        style::Style as _,
         view::{FlexExt as _, flex_col, flex_row, label},
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
@@ -389,67 +387,195 @@ fn project_calc_button(
     entity: Entity,
     button_data: &CalcButtonSpec,
     highlight_clear_entry: bool,
+    world: &World,
 ) -> UiView {
     let event = button_data.event.clone();
 
-    match button_data.kind {
-        CalcButtonKind::Digit => Arc::new(
-            text_button(entity, event, button_data.label)
-                .background_color(Color::from_rgb8(0x3a, 0x3a, 0x3a))
-                .corner_radius(10.0)
-                .border_color(Color::TRANSPARENT),
-        ),
-        CalcButtonKind::Action | CalcButtonKind::Operator => {
-            let label_color = if button_data.event == CalcEvent::ClearEntry && highlight_clear_entry
-            {
-                palette::css::MEDIUM_VIOLET_RED
-            } else {
-                palette::css::WHITE
-            };
+    let button_class = match button_data.kind {
+        CalcButtonKind::Digit => "calc.button.digit",
+        CalcButtonKind::Action => "calc.button.action",
+        CalcButtonKind::Operator => "calc.button.operator",
+    };
 
-            Arc::new(
-                button_with_child(entity, event, label(button_data.label).color(label_color))
-                    .background_color(Color::from_rgb8(0x00, 0x8d, 0xdd))
-                    .corner_radius(10.0)
-                    .border_color(Color::TRANSPARENT)
-                    .hovered_border_color(Color::WHITE),
-            )
-        }
-    }
+    let button_style = resolve_style_for_classes(world, [button_class]);
+
+    let label_style = if button_data.event == CalcEvent::ClearEntry && highlight_clear_entry {
+        resolve_style_for_classes(world, ["calc.button.label.clear"])
+    } else {
+        resolve_style_for_classes(world, ["calc.button.label.default"])
+    };
+
+    let label_view = apply_label_style(label(button_data.label), &label_style);
+
+    Arc::new(apply_widget_style(
+        button_with_child(entity, event, label_view),
+        &button_style,
+    ))
 }
 
 fn project_calc_root(_: &CalcRoot, ctx: ProjectionCtx<'_>) -> UiView {
+    let root_style = resolve_style(ctx.world, ctx.entity);
+    let display_row_style = resolve_style_for_classes(ctx.world, ["calc.display.row"]);
+    let display_text_style = resolve_style_for_classes(ctx.world, ["calc.display.text"]);
+    let row_style = resolve_style_for_classes(ctx.world, ["calc.row"]);
+
     let engine = ctx.world.resource::<CalculatorEngine>();
     let highlight_clear_entry = engine.current_number().is_empty();
 
     let mut children = vec![
-        flex_row((label(engine.display_text()).text_size(30.0),))
-            .padding(8.0)
-            .border(palette::css::DARK_SLATE_GRAY, 1.0)
-            .into_any_flex(),
+        apply_widget_style(
+            flex_row((
+                apply_label_style(label(engine.display_text()), &display_text_style)
+                    .into_any_flex(),
+            )),
+            &display_row_style,
+        )
+        .into_any_flex(),
     ];
 
     for row in calc_button_rows() {
         let row_children = row
             .iter()
             .map(|button_data| {
-                project_calc_button(ctx.entity, button_data, highlight_clear_entry).into_any_flex()
+                project_calc_button(ctx.entity, button_data, highlight_clear_entry, ctx.world)
+                    .into_any_flex()
             })
             .collect::<Vec<_>>();
 
-        children.push(flex_row(row_children).gap(Length::px(2.)).into_any_flex());
+        children.push(apply_widget_style(flex_row(row_children), &row_style).into_any_flex());
     }
 
-    Arc::new(flex_col(children).gap(Length::px(2.)).padding(12.0))
+    Arc::new(apply_widget_style(flex_col(children), &root_style))
 }
 
 fn setup_calculator_world(mut commands: Commands) {
-    commands.spawn((UiRoot, CalcRoot));
+    commands.spawn((UiRoot, CalcRoot, StyleClass(vec!["calc.root".to_string()])));
+}
+
+fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
+    style_sheet.set_class(
+        "calc.root",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(12.0),
+                gap: Some(2.0),
+                ..LayoutStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "calc.display.row",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(8.0),
+                border_width: Some(1.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                border: Some(bevy_xilem::xilem::palette::css::DARK_SLATE_GRAY),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "calc.display.text",
+        StyleRule {
+            text: TextStyle { size: Some(30.0) },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "calc.row",
+        StyleRule {
+            layout: LayoutStyle {
+                gap: Some(2.0),
+                ..LayoutStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "calc.button.digit",
+        StyleRule {
+            layout: LayoutStyle {
+                corner_radius: Some(10.0),
+                border_width: Some(0.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x3a, 0x3a, 0x3a)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "calc.button.action",
+        StyleRule {
+            layout: LayoutStyle {
+                corner_radius: Some(10.0),
+                border_width: Some(0.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x8d, 0xdd)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "calc.button.operator",
+        StyleRule {
+            layout: LayoutStyle {
+                corner_radius: Some(10.0),
+                border_width: Some(0.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x8d, 0xdd)),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "calc.button.label.default",
+        StyleRule {
+            text: TextStyle { size: Some(18.0) },
+            colors: ColorStyle {
+                text: Some(bevy_xilem::xilem::palette::css::WHITE),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "calc.button.label.clear",
+        StyleRule {
+            text: TextStyle { size: Some(18.0) },
+            colors: ColorStyle {
+                text: Some(bevy_xilem::xilem::palette::css::MEDIUM_VIOLET_RED),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
 }
 
 fn drain_calc_events(world: &mut World) {
     let events = world
-        .resource::<UiEventQueue>()
+        .resource_mut::<UiEventQueue>()
         .drain_actions::<CalcEvent>();
     if events.is_empty() {
         return;
@@ -466,7 +592,7 @@ fn build_bevy_calculator_app() -> App {
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(CalculatorEngine::default())
         .register_projector::<CalcRoot>(project_calc_root)
-        .add_systems(Startup, setup_calculator_world);
+        .add_systems(Startup, (setup_calculator_styles, setup_calculator_world));
 
     app.add_systems(PreUpdate, drain_calc_events);
 
