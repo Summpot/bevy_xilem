@@ -5,7 +5,7 @@ use masonry::{
     accesskit::{Node, Role},
     core::keyboard::{Key, NamedKey},
     core::{
-        AccessCtx, AccessEvent, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, NoAction, PaintCtx,
+        AccessCtx, AccessEvent, ChildrenIds, EventCtx, LayoutCtx, MeasureCtx, PaintCtx,
         PointerButton, PointerButtonEvent, PointerEvent, PropertiesMut, PropertiesRef, RegisterCtx,
         TextEvent, Update, UpdateCtx, Widget, WidgetMut, WidgetPod,
     },
@@ -19,6 +19,12 @@ use crate::{
     events::{UiEvent, push_global_ui_event},
     styling::UiInteractionEvent,
 };
+
+/// Internal action used to force Xilem driver ticks for ECS button state changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EcsButtonWidgetAction {
+    StateChanged,
+}
 
 /// Masonry widget that emits typed ECS actions without user-facing closures.
 pub struct EcsButtonWidget<A> {
@@ -66,7 +72,7 @@ where
         push_global_ui_event(UiEvent::typed(self.entity, event));
     }
 
-    fn set_hovered(&mut self, hovered: bool) {
+    fn set_hovered(&mut self, hovered: bool) -> bool {
         if self.hovered != hovered {
             self.hovered = hovered;
             self.push_interaction(if hovered {
@@ -74,10 +80,13 @@ where
             } else {
                 UiInteractionEvent::PointerLeft
             });
+            true
+        } else {
+            false
         }
     }
 
-    fn set_pressed(&mut self, pressed: bool) {
+    fn set_pressed(&mut self, pressed: bool) -> bool {
         if self.pressed != pressed {
             self.pressed = pressed;
             self.push_interaction(if pressed {
@@ -85,6 +94,9 @@ where
             } else {
                 UiInteractionEvent::PointerReleased
             });
+            true
+        } else {
+            false
         }
     }
 }
@@ -93,7 +105,7 @@ impl<A> Widget for EcsButtonWidget<A>
 where
     A: Clone + Send + Sync + 'static,
 {
-    type Action = NoAction;
+    type Action = EcsButtonWidgetAction;
 
     fn on_pointer_event(
         &mut self,
@@ -105,9 +117,12 @@ where
             PointerEvent::Down(..) => {
                 ctx.request_focus();
                 ctx.capture_pointer();
-                self.set_hovered(ctx.is_hovered());
-                self.set_pressed(true);
-                ctx.request_paint_only();
+                let hover_changed = self.set_hovered(ctx.is_hovered());
+                let pressed_changed = self.set_pressed(true);
+                if hover_changed || pressed_changed {
+                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
+                }
+                ctx.request_render();
             }
             PointerEvent::Up(PointerButtonEvent { button, .. }) => {
                 if matches!(button, Some(PointerButton::Primary))
@@ -115,17 +130,28 @@ where
                     && ctx.is_hovered()
                 {
                     self.push_action();
+                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
                 }
-                self.set_pressed(false);
-                self.set_hovered(ctx.is_hovered());
-                ctx.request_paint_only();
+                let pressed_changed = self.set_pressed(false);
+                let hover_changed = self.set_hovered(ctx.is_hovered());
+                if hover_changed || pressed_changed {
+                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
+                }
+                ctx.request_render();
             }
             PointerEvent::Move(..) => {
-                self.set_hovered(ctx.is_hovered());
+                if self.set_hovered(ctx.is_hovered()) {
+                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
+                    ctx.request_render();
+                }
             }
             PointerEvent::Leave(..) => {
-                self.set_hovered(false);
-                self.set_pressed(false);
+                let hover_changed = self.set_hovered(false);
+                let pressed_changed = self.set_pressed(false);
+                if hover_changed || pressed_changed {
+                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
+                    ctx.request_render();
+                }
             }
             _ => {}
         }
@@ -143,18 +169,21 @@ where
                 || event.key == Key::Named(NamedKey::Enter))
         {
             self.push_action();
-            ctx.request_paint_only();
+            ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
+            ctx.request_render();
         }
     }
 
     fn on_access_event(
         &mut self,
-        _ctx: &mut EventCtx<'_>,
+        ctx: &mut EventCtx<'_>,
         _props: &mut PropertiesMut<'_>,
         event: &AccessEvent,
     ) {
         if matches!(event.action, masonry::accesskit::Action::Click) {
             self.push_action();
+            ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
+            ctx.request_render();
         }
     }
 

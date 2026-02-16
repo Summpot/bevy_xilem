@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
-use bevy_ecs::{entity::Entity, prelude::*};
-use bevy_time::Time;
+use bevy_ecs::{change_detection::Mut, entity::Entity, prelude::*};
+use bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim};
 use masonry::theme;
 use xilem::{Color, style::Style as _};
 use xilem_masonry::{
@@ -366,6 +366,25 @@ pub fn resolve_style_for_classes<'a>(
     }
 }
 
+/// Resolve style from class names while applying pseudo-state from a specific entity.
+///
+/// This is useful when a control's visual style is class-driven, but hover/pressed
+/// state is tracked on an ECS entity via [`Hovered`] / [`Pressed`].
+#[must_use]
+pub fn resolve_style_for_entity_classes<'a>(
+    world: &World,
+    entity: Entity,
+    class_names: impl IntoIterator<Item = &'a str>,
+) -> ResolvedStyle {
+    let cascaded = merged_from_class_names(world, class_names);
+    ResolvedStyle {
+        layout: to_resolved_layout(&cascaded.layout),
+        colors: target_colors(world, entity, &cascaded.colors),
+        text: to_resolved_text(&cascaded.text),
+        transition: cascaded.transition,
+    }
+}
+
 /// Apply box/layout styling on any widget view.
 pub fn apply_widget_style<V>(view: V, style: &ResolvedStyle) -> impl WidgetView<(), ()>
 where
@@ -381,22 +400,53 @@ where
         .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
 }
 
-/// Apply text + box styling to a label view.
-pub fn apply_label_style(view: Label, style: &ResolvedStyle) -> impl WidgetView<(), ()> {
-    view.text_size(style.text.size)
-        .color(style.colors.text.unwrap_or(Color::WHITE))
+fn to_target_component(colors: ResolvedColorStyle) -> TargetColorStyle {
+    TargetColorStyle {
+        bg: colors.bg,
+        text: colors.text,
+        border: colors.border,
+    }
 }
 
-/// Apply text + box styling to a text input view.
-pub fn apply_text_input_style(
-    view: TextInput<(), ()>,
-    style: &ResolvedStyle,
-) -> impl WidgetView<(), ()> {
-    let mut styled = view.text_size(style.text.size);
-    if let Some(text_color) = style.colors.text {
-        styled = styled.text_color(text_color);
+fn to_current_component(colors: TargetColorStyle) -> CurrentColorStyle {
+    CurrentColorStyle {
+        bg: colors.bg,
+        text: colors.text,
+        border: colors.border,
     }
-    styled
+}
+
+fn ensure_current(world: &mut World, entity: Entity, current: CurrentColorStyle) {
+    if let Some(mut current_component) = world.get_mut::<CurrentColorStyle>(entity) {
+        *current_component = current;
+    } else {
+        world.entity_mut(entity).insert(current);
+    }
+}
+
+fn quadratic_in_out(x: f32) -> f32 {
+    let x = x.clamp(0.0, 1.0);
+    if x < 0.5 {
+        2.0 * x * x
+    } else {
+        1.0 - ((-2.0 * x + 2.0).powi(2) / 2.0)
+    }
+}
+
+fn spawn_color_style_tween(
+    world: &mut World,
+    entity: Entity,
+    start: CurrentColorStyle,
+    end: CurrentColorStyle,
+    duration_secs: f32,
+) {
+    let tween = Tween::new::<CurrentColorStyle, _>(
+        EaseMethod::CustomFunction(quadratic_in_out),
+        Duration::from_secs_f32(duration_secs.max(0.0)),
+        ColorStyleLens { start, end },
+    );
+
+    world.entity_mut(entity).insert(TweenAnim::new(tween));
 }
 
 /// Consume interaction events and synchronize [`Hovered`] / [`Pressed`] marker components.
@@ -449,7 +499,8 @@ pub fn sync_style_targets(world: &mut World) {
             .into_iter()
             .map(|entity| {
                 let cascaded = merged_for_entity(world_ref, entity);
-                let target = target_colors(world_ref, entity, &cascaded.colors);
+                let target =
+                    to_target_component(target_colors(world_ref, entity, &cascaded.colors));
                 (entity, cascaded.transition, target)
             })
             .collect::<Vec<_>>()
@@ -460,31 +511,39 @@ pub fn sync_style_targets(world: &mut World) {
             Some(transition) => {
                 world.entity_mut(entity).insert(transition);
 
+                let previous_target = world.get::<TargetColorStyle>(entity).copied();
                 if let Some(mut target_component) = world.get_mut::<TargetColorStyle>(entity) {
-                    *target_component = TargetColorStyle {
-                        bg: target.bg,
-                        text: target.text,
-                        border: target.border,
-                    };
+                    *target_component = target;
                 } else {
-                    world.entity_mut(entity).insert(TargetColorStyle {
-                        bg: target.bg,
-                        text: target.text,
-                        border: target.border,
-                    });
+                    world.entity_mut(entity).insert(target);
                 }
 
                 if world.get::<CurrentColorStyle>(entity).is_none() {
-                    world.entity_mut(entity).insert(CurrentColorStyle {
-                        bg: target.bg,
-                        text: target.text,
-                        border: target.border,
-                    });
+                    world
+                        .entity_mut(entity)
+                        .insert(to_current_component(target));
+                }
+
+                if transition.duration <= f32::EPSILON {
+                    ensure_current(world, entity, to_current_component(target));
+                    world.entity_mut(entity).remove::<TweenAnim>();
+                    continue;
+                }
+
+                let target_changed = previous_target.is_some_and(|prev| prev != target);
+                if target_changed {
+                    let start = world
+                        .get::<CurrentColorStyle>(entity)
+                        .copied()
+                        .unwrap_or_else(|| to_current_component(target));
+                    let end = to_current_component(target);
+                    spawn_color_style_tween(world, entity, start, end, transition.duration);
                 }
             }
             None => {
                 world.entity_mut(entity).remove::<TargetColorStyle>();
                 world.entity_mut(entity).remove::<CurrentColorStyle>();
+                world.entity_mut(entity).remove::<TweenAnim>();
             }
         }
     }
@@ -512,35 +571,63 @@ fn lerp_color(current: Color, target: Color, t: f32) -> Color {
     )
 }
 
-fn lerp_optional_color(current: Option<Color>, target: Option<Color>, t: f32) -> Option<Color> {
-    match (current, target) {
-        (Some(current), Some(target)) => Some(lerp_color(current, target, t)),
-        (None, Some(target)) => Some(target),
-        (Some(current), None) => {
+fn transparent_like(color: Color) -> Color {
+    let rgba = color.to_rgba8();
+    Color::from_rgba8(rgba.r, rgba.g, rgba.b, 0)
+}
+
+fn lerp_optional_color(start: Option<Color>, end: Option<Color>, t: f32) -> Option<Color> {
+    match (start, end) {
+        (Some(start), Some(end)) => Some(lerp_color(start, end, t)),
+        (None, Some(end)) => Some(lerp_color(transparent_like(end), end, t)),
+        (Some(start), None) => {
             if t >= 1.0 {
                 None
             } else {
-                Some(current)
+                Some(lerp_color(start, transparent_like(start), t))
             }
         }
         (None, None) => None,
     }
 }
 
-/// Lerp [`CurrentColorStyle`] towards [`TargetColorStyle`] each frame.
-pub fn animate_style_transitions(world: &mut World) {
-    let delta_secs = world.resource::<Time>().delta_secs();
+/// Tween lens for animating [`CurrentColorStyle`] with CSS-like smooth transitions.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ColorStyleLens {
+    pub start: CurrentColorStyle,
+    pub end: CurrentColorStyle,
+}
 
-    let mut query = world.query::<(&StyleTransition, &TargetColorStyle, &mut CurrentColorStyle)>();
-    for (transition, target, mut current) in query.iter_mut(world) {
-        let t = if transition.duration <= f32::EPSILON {
-            1.0
-        } else {
-            (delta_secs / transition.duration).clamp(0.0, 1.0)
-        };
-
-        current.bg = lerp_optional_color(current.bg, target.bg, t);
-        current.text = lerp_optional_color(current.text, target.text, t);
-        current.border = lerp_optional_color(current.border, target.border, t);
+impl Lens<CurrentColorStyle> for ColorStyleLens {
+    fn lerp(&mut self, mut target: Mut<'_, CurrentColorStyle>, ratio: f32) {
+        target.bg = lerp_optional_color(self.start.bg, self.end.bg, ratio);
+        target.text = lerp_optional_color(self.start.text, self.end.text, ratio);
+        target.border = lerp_optional_color(self.start.border, self.end.border, ratio);
     }
+}
+
+/// Style transition stepping is handled by `bevy_tweening::TweeningPlugin`.
+///
+/// This hook is intentionally kept as a no-op for schedule readability and
+/// compatibility with existing system chains.
+pub fn animate_style_transitions(world: &mut World) {
+    let _ = world;
+}
+
+/// Apply text + box styling to a label view.
+pub fn apply_label_style(view: Label, style: &ResolvedStyle) -> impl WidgetView<(), ()> {
+    view.text_size(style.text.size)
+        .color(style.colors.text.unwrap_or(Color::WHITE))
+}
+
+/// Apply text + box styling to a text input view.
+pub fn apply_text_input_style(
+    view: TextInput<(), ()>,
+    style: &ResolvedStyle,
+) -> impl WidgetView<(), ()> {
+    let mut styled = view.text_size(style.text.size);
+    if let Some(text_color) = style.colors.text {
+        styled = styled.text_color(text_color);
+    }
+    styled
 }

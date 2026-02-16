@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use crate::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiProjectorRegistry, UiRoot,
-    UiView, ecs_button, register_builtin_projectors, synthesize_roots_with_stats,
+    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, Hovered, ProjectionCtx, StyleRule, StyleSheet,
+    UiEventQueue, UiProjectorRegistry, UiRoot, UiView, ecs_button, register_builtin_projectors,
+    resolve_style_for_entity_classes, synthesize_roots_with_stats,
 };
 use bevy_app::App;
 use bevy_ecs::prelude::*;
@@ -32,7 +33,7 @@ fn plugin_wires_synthesis_and_runtime() {
     let synthesized = app.world().resource::<crate::SynthesizedUiViews>();
     assert_eq!(synthesized.roots.len(), 1);
 
-    let _runtime = app.world().non_send::<crate::MasonryRuntime>();
+    let _runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
 }
 
 #[test]
@@ -90,4 +91,30 @@ fn builtin_registry_projects_label() {
     assert_eq!(roots.len(), 1);
     assert_eq!(stats.unhandled_count, 0);
     assert_eq!(stats.missing_entity_count, 0);
+}
+
+#[test]
+fn resolve_style_for_entity_classes_applies_hover_pseudo_state() {
+    let mut world = World::new();
+    let mut sheet = StyleSheet::default();
+    let base = crate::xilem::Color::from_rgb8(0x11, 0x22, 0x33);
+    let hover = crate::xilem::Color::from_rgb8(0xAA, 0xBB, 0xCC);
+
+    sheet.set_class(
+        "test.button",
+        StyleRule {
+            colors: ColorStyle {
+                bg: Some(base),
+                hover_bg: Some(hover),
+                ..ColorStyle::default()
+            },
+            ..StyleRule::default()
+        },
+    );
+    world.insert_resource(sheet);
+
+    let entity = world.spawn((Hovered,)).id();
+    let resolved = resolve_style_for_entity_classes(&world, entity, ["test.button"]);
+
+    assert_eq!(resolved.colors.bg, Some(hover));
 }

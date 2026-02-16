@@ -100,7 +100,10 @@ The runtime now supports a data-driven style pipeline with four phases:
 - **Pseudo classes from structural interaction events:**
   `Hovered` / `Pressed` marker components synchronized from interaction events
 - **Smooth transitions:**
-  `TargetColorStyle` + `CurrentColorStyle` interpolated each update tick
+  `TargetColorStyle` + `CurrentColorStyle` driven by
+  `bevy_tweening::TweenAnim` tween instances targeting
+  `CurrentColorStyle`
+  (`EaseFunction::QuadraticInOut` by default for interaction transitions)
 
 Style resolution helpers (`resolve_style`, `resolve_style_for_classes`) and application helpers
 (`apply_widget_style`, `apply_label_style`, `apply_text_input_style`) are provided for projectors.
@@ -154,11 +157,25 @@ so user code no longer needs to allocate/store a dedicated node-id component.
 - `StyleSheet`
 - `MasonryRuntime`
 
+and registers tweening support with:
+
+- `TweeningPlugin` (from crates.io `bevy_tweening` crate)
+
 and registers systems:
 
 - `PreUpdate`: `inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
 - `Update`: `sync_style_targets -> animate_style_transitions`
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime` (chained)
+
+Transition execution details:
+
+- `sync_style_targets` computes target interaction colors and, on target changes,
+  inserts/replaces a `TweenAnim` with a fresh tween targeting
+  `CurrentColorStyle` on the same entity.
+- Tween advancement is performed by `TweeningPlugin`'s
+  `AnimationSystem::AnimationUpdate` system set.
+- `resolve_style` reads `CurrentColorStyle` so projectors render in-between values,
+  producing smooth CSS-like transitions instead of color snapping.
 
 It also registers built-in projectors.
 

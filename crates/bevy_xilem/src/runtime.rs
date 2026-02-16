@@ -304,6 +304,6 @@ pub fn rebuild_masonry_runtime(world: &mut World) {
         .unwrap_or_else(|| Arc::new(label("bevy_xilem: no synthesized root")));
 
     world
-        .non_send_mut::<MasonryRuntime>()
+        .non_send_resource_mut::<MasonryRuntime>()
         .rebuild_root_view(next_root);
 }

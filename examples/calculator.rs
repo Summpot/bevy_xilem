@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleRule, StyleSheet, TextStyle, UiEventQueue, UiRoot, UiView, apply_label_style,
-    apply_widget_style,
+    StyleRule, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
+    apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
-    button_with_child, resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    button, resolve_style, resolve_style_for_classes, run_app_with_window_options,
     xilem::{
         view::{FlexExt as _, flex_col, flex_row, label},
         winit::{dpi::LogicalSize, error::EventLoopError},
@@ -383,12 +383,7 @@ fn calc_button_rows() -> Vec<Vec<CalcButtonSpec>> {
     ]
 }
 
-fn project_calc_button(
-    entity: Entity,
-    button_data: &CalcButtonSpec,
-    highlight_clear_entry: bool,
-    world: &World,
-) -> UiView {
+fn project_calc_button(entity: Entity, button_data: &CalcButtonSpec, world: &World) -> UiView {
     let event = button_data.event.clone();
 
     let button_class = match button_data.kind {
@@ -399,16 +394,8 @@ fn project_calc_button(
 
     let button_style = resolve_style_for_classes(world, [button_class]);
 
-    let label_style = if button_data.event == CalcEvent::ClearEntry && highlight_clear_entry {
-        resolve_style_for_classes(world, ["calc.button.label.clear"])
-    } else {
-        resolve_style_for_classes(world, ["calc.button.label.default"])
-    };
-
-    let label_view = apply_label_style(label(button_data.label), &label_style);
-
     Arc::new(apply_widget_style(
-        button_with_child(entity, event, label_view),
+        button(entity, event, button_data.label),
         &button_style,
     ))
 }
@@ -420,7 +407,6 @@ fn project_calc_root(_: &CalcRoot, ctx: ProjectionCtx<'_>) -> UiView {
     let row_style = resolve_style_for_classes(ctx.world, ["calc.row"]);
 
     let engine = ctx.world.resource::<CalculatorEngine>();
-    let highlight_clear_entry = engine.current_number().is_empty();
 
     let mut children = vec![
         apply_widget_style(
@@ -437,8 +423,7 @@ fn project_calc_root(_: &CalcRoot, ctx: ProjectionCtx<'_>) -> UiView {
         let row_children = row
             .iter()
             .map(|button_data| {
-                project_calc_button(ctx.entity, button_data, highlight_clear_entry, ctx.world)
-                    .into_any_flex()
+                project_calc_button(ctx.entity, button_data, ctx.world).into_any_flex()
             })
             .collect::<Vec<_>>();
 
@@ -504,14 +489,18 @@ fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
         "calc.button.digit",
         StyleRule {
             layout: LayoutStyle {
+                padding: Some(10.0),
                 corner_radius: Some(10.0),
                 border_width: Some(0.0),
                 ..LayoutStyle::default()
             },
             colors: ColorStyle {
                 bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x3a, 0x3a, 0x3a)),
+                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x4a, 0x4a, 0x4a)),
+                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x2e, 0x2e, 0x2e)),
                 ..ColorStyle::default()
             },
+            transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleRule::default()
         },
     );
@@ -520,14 +509,18 @@ fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
         "calc.button.action",
         StyleRule {
             layout: LayoutStyle {
+                padding: Some(10.0),
                 corner_radius: Some(10.0),
                 border_width: Some(0.0),
                 ..LayoutStyle::default()
             },
             colors: ColorStyle {
                 bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x8d, 0xdd)),
+                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x7b, 0xc2)),
+                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x64, 0x9c)),
                 ..ColorStyle::default()
             },
+            transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleRule::default()
         },
     );
@@ -536,14 +529,18 @@ fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
         "calc.button.operator",
         StyleRule {
             layout: LayoutStyle {
+                padding: Some(10.0),
                 corner_radius: Some(10.0),
                 border_width: Some(0.0),
                 ..LayoutStyle::default()
             },
             colors: ColorStyle {
                 bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x8d, 0xdd)),
+                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x7b, 0xc2)),
+                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x64, 0x9c)),
                 ..ColorStyle::default()
             },
+            transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleRule::default()
         },
     );

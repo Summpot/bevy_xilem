@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["crates/bevy_xilem"]
+exclude = ["third_party/xilem"]
 
 [workspace.package]
 version = "0.1.0"
@@ -8,16 +9,17 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-bevy_app = { path = "../bevy/crates/bevy_app", version = "0.19.0-dev", default-features = false, features = ["std"] }
-bevy_ecs = { path = "../bevy/crates/bevy_ecs", version = "0.19.0-dev", default-features = false, features = ["std"] }
-bevy_input = { path = "../bevy/crates/bevy_input", version = "0.19.0-dev", default-features = false, features = ["std", "mouse", "keyboard"] }
-bevy_time = { path = "../bevy/crates/bevy_time", version = "0.19.0-dev", default-features = false, features = ["std"] }
-bevy_window = { path = "../bevy/crates/bevy_window", version = "0.19.0-dev", default-features = false, features = ["std"] }
+bevy_app = { version = "0.18", default-features = false, features = ["std"] }
+bevy_ecs = { version = "0.18", default-features = false, features = ["std"] }
+bevy_input = { version = "0.18", default-features = false, features = ["std", "mouse", "keyboard"] }
+bevy_time = { version = "0.18", default-features = false, features = ["std"] }
+bevy_window = { version = "0.18", default-features = false, features = ["std"] }
+bevy_tweening = { version = "0.15", default-features = false }
 crossbeam-queue = "0.3.12"
 tokio = { version = "1.49.0", features = ["rt-multi-thread"] }
 num-traits = "0.2.19"
-masonry = { path = "../xilem/masonry" }
-xilem = { path = "../xilem/xilem" }
-xilem_core = { path = "../xilem/xilem_core" }
-xilem_masonry = { path = "../xilem/xilem_masonry" }
+masonry = { path = "third_party/xilem/masonry" }
+xilem = { path = "third_party/xilem/xilem" }
+xilem_core = { path = "third_party/xilem/xilem_core" }
+xilem_masonry = { path = "third_party/xilem/xilem_masonry" }
 vello = "0.7.0"

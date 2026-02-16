@@ -2,12 +2,12 @@ use std::{sync::Arc, time::Instant};
 
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleRule, StyleSheet, TextStyle, UiEventQueue, UiRoot, UiView, apply_label_style,
-    apply_widget_style,
+    StyleRule, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
+    apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
-    button_with_child, resolve_style, resolve_style_for_classes, run_app_with_window_options,
-    slider,
+    button, resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
+    run_app_with_window_options, slider,
     xilem::{
         view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, progress_bar},
         winit::{dpi::LogicalSize, error::EventLoopError},
@@ -83,8 +83,8 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let title_style = resolve_style_for_classes(ctx.world, ["timer.title"]);
     let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
     let body_text_style = resolve_style_for_classes(ctx.world, ["timer.body-text"]);
-    let reset_button_style = resolve_style_for_classes(ctx.world, ["timer.reset-button"]);
-    let reset_label_style = resolve_style_for_classes(ctx.world, ["timer.reset-label"]);
+    let reset_button_style =
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["timer.reset-button"]);
 
     let state = ctx.world.resource::<TimerState>().clone();
 
@@ -125,11 +125,7 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
     );
 
     let reset = apply_widget_style(
-        button_with_child(
-            ctx.entity,
-            TimerEvent::Reset,
-            apply_label_style(label("Reset"), &reset_label_style),
-        ),
+        button(ctx.entity, TimerEvent::Reset, "Reset"),
         &reset_button_style,
     );
 
@@ -214,14 +210,16 @@ fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
             layout: LayoutStyle {
                 padding: Some(6.0),
                 corner_radius: Some(8.0),
-                border_width: Some(1.0),
+                border_width: Some(0.0),
                 ..LayoutStyle::default()
             },
             colors: ColorStyle {
                 bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x35, 0x35, 0x35)),
-                border: Some(bevy_xilem::xilem::palette::css::DARK_SLATE_GRAY),
+                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x4A, 0x4A, 0x4A)),
+                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x22, 0x22, 0x22)),
                 ..ColorStyle::default()
             },
+            transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleRule::default()
         },
     );

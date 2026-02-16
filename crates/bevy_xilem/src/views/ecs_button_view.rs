@@ -3,7 +3,7 @@ use masonry::core::ArcStr;
 use xilem_core::{Arg, MessageCtx, MessageResult, Mut, View, ViewMarker};
 use xilem_masonry::{Pod, ViewCtx};
 
-use crate::widgets::EcsButtonWidget;
+use crate::widgets::{EcsButtonWidget, EcsButtonWidgetAction};
 
 /// ECS-dispatched view backed by Masonry's native `Button` widget.
 #[must_use = "View values do nothing unless returned into the synthesized UI tree."]
@@ -40,11 +40,13 @@ where
         _app_state: Arg<'_, ()>,
     ) -> (Self::Element, Self::ViewState) {
         (
-            ctx.create_pod(EcsButtonWidget::new(
-                self.entity,
-                self.action.clone(),
-                self.label.clone(),
-            )),
+            ctx.with_action_widget(|ctx| {
+                ctx.create_pod(EcsButtonWidget::new(
+                    self.entity,
+                    self.action.clone(),
+                    self.label.clone(),
+                ))
+            }),
             (),
         )
     }
@@ -84,6 +86,12 @@ where
         _element: Mut<'_, Self::Element>,
         _app_state: Arg<'_, ()>,
     ) -> MessageResult<()> {
-        MessageResult::Stale
+        match _message.take_first() {
+            None => match _message.take_message::<EcsButtonWidgetAction>() {
+                Some(_) => MessageResult::Action(()),
+                None => MessageResult::Stale,
+            },
+            _ => MessageResult::Stale,
+        }
     }
 }

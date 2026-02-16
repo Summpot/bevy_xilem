@@ -95,6 +95,65 @@ fn main() -> Result<(), EventLoopError> {
 
 ---
 
+## Styling system (brief)
+
+`bevy_xilem` includes an ECS-driven, CSS-like styling pipeline:
+
+- define class rules in `StyleSheet`
+- attach classes to entities with `StyleClass`
+- resolve/apply styles in projectors with helper functions
+- configure hover/pressed + transition colors for smooth interaction feedback
+
+Minimal setup sketch:
+
+```rust,no_run
+use bevy_xilem::{
+    ColorStyle, LayoutStyle, StyleClass, StyleRule, StyleSheet, StyleTransition, TextStyle,
+    apply_label_style, apply_widget_style, resolve_style,
+    bevy_ecs::prelude::*,
+    xilem::{Color, view::{flex_col, label}},
+};
+
+fn setup_styles(mut sheet: ResMut<StyleSheet>) {
+    sheet.set_class(
+        "demo.button",
+        StyleRule {
+            layout: LayoutStyle {
+                padding: Some(8.0),
+                corner_radius: Some(8.0),
+                border_width: Some(0.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x25, 0x63, 0xEB)),
+                hover_bg: Some(Color::from_rgb8(0x1D, 0x4E, 0xD8)),
+                pressed_bg: Some(Color::from_rgb8(0x1E, 0x40, 0xAF)),
+                text: Some(Color::WHITE),
+                ..ColorStyle::default()
+            },
+            text: TextStyle { size: Some(16.0) },
+            transition: Some(StyleTransition { duration: 0.15 }),
+        },
+    );
+}
+
+fn project_demo(entity: Entity, world: &World) -> impl bevy_xilem::xilem_masonry::WidgetView<(), ()> {
+    let style = resolve_style(world, entity);
+    apply_widget_style(
+        flex_col((apply_label_style(label("Hello styled UI"), &style),)),
+        &style,
+    )
+}
+
+fn spawn_demo(mut commands: Commands) {
+    commands.spawn(StyleClass(vec!["demo.button".to_string()]));
+}
+```
+
+For the full guide (cascade rules, projector patterns, transitions, caveats), see [`STYLING.md`](./STYLING.md).
+
+---
+
 ## Reusable custom view helper
 
 You can wrap repeated UI patterns as reusable helper functions that return a typed view.

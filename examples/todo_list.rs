@@ -9,8 +9,8 @@ use bevy_xilem::{
         hierarchy::{ChildOf, Children},
         prelude::*,
     },
-    button_with_child, checkbox, emit_ui_action, resolve_style, resolve_style_for_classes, run_app,
-    text_input,
+    button, checkbox, emit_ui_action, resolve_style, resolve_style_for_classes,
+    resolve_style_for_entity_classes, run_app, text_input,
     xilem::{
         Color, InsertNewline,
         masonry::{layout::Length, theme::DEFAULT_GAP},
@@ -104,8 +104,8 @@ fn project_todo_header(_: &TodoHeader, ctx: ProjectionCtx<'_>) -> UiView {
 fn project_todo_input_area(_: &TodoInputArea, ctx: ProjectionCtx<'_>) -> UiView {
     let area_style = resolve_style(ctx.world, ctx.entity);
     let input_style = resolve_style_for_classes(ctx.world, ["todo.input"]);
-    let add_button_style = resolve_style_for_classes(ctx.world, ["todo.add-button"]);
-    let add_label_style = resolve_style_for_classes(ctx.world, ["todo.add-label"]);
+    let add_button_style =
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["todo.add-button"]);
 
     let draft = ctx.world.resource::<DraftTodo>().0.clone();
     let entity_for_enter = ctx.entity;
@@ -123,11 +123,7 @@ fn project_todo_input_area(_: &TodoInputArea, ctx: ProjectionCtx<'_>) -> UiView 
             )
             .flex(1.0),
             apply_widget_style(
-                button_with_child(
-                    ctx.entity,
-                    TodoEvent::SubmitDraft,
-                    apply_label_style(label("Add task"), &add_label_style),
-                ),
+                button(ctx.entity, TodoEvent::SubmitDraft, "Add task"),
                 &add_button_style,
             ),
         )),
@@ -190,8 +186,8 @@ fn project_todo_item(item: &TodoItem, ctx: ProjectionCtx<'_>) -> UiView {
     let entity = ctx.entity;
     let style = resolve_style(ctx.world, ctx.entity);
     let checkbox_style = resolve_style_for_classes(ctx.world, ["todo.item-checkbox"]);
-    let delete_button_style = resolve_style_for_classes(ctx.world, ["todo.delete-button"]);
-    let delete_label_style = resolve_style_for_classes(ctx.world, ["todo.delete-label"]);
+    let delete_button_style =
+        resolve_style_for_entity_classes(ctx.world, entity, ["todo.delete-button"]);
 
     Arc::new(apply_widget_style(
         flex_row((
@@ -204,11 +200,7 @@ fn project_todo_item(item: &TodoItem, ctx: ProjectionCtx<'_>) -> UiView {
             ),
             FlexSpacer::Flex(1.0),
             apply_widget_style(
-                button_with_child(
-                    entity,
-                    TodoEvent::Delete(entity),
-                    apply_label_style(label("Delete"), &delete_label_style),
-                ),
+                button(entity, TodoEvent::Delete(entity), "Delete"),
                 &delete_button_style,
             ),
         )),
@@ -403,12 +395,11 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
             layout: LayoutStyle {
                 padding: Some(6.0),
                 corner_radius: Some(8.0),
-                border_width: Some(1.0),
+                border_width: Some(0.0),
                 ..LayoutStyle::default()
             },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0x25, 0x63, 0xEB)),
-                border: Some(Color::from_rgb8(0x1D, 0x4E, 0xD8)),
                 hover_bg: Some(Color::from_rgb8(0x1D, 0x4E, 0xD8)),
                 pressed_bg: Some(Color::from_rgb8(0x1E, 0x40, 0xAF)),
                 ..ColorStyle::default()
@@ -474,9 +465,12 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..LayoutStyle::default()
             },
             colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x16, 0x17, 0x1C)),
+                hover_bg: Some(Color::from_rgb8(0x20, 0x22, 0x2B)),
                 border: Some(Color::from_rgb8(0x27, 0x2A, 0x36)),
                 ..ColorStyle::default()
             },
+            transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleRule::default()
         },
     );
@@ -485,6 +479,12 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
         "todo.item-checkbox",
         StyleRule {
             text: TextStyle { size: Some(16.0) },
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE7)),
+                hover_text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                ..ColorStyle::default()
+            },
+            transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleRule::default()
         },
     );
@@ -495,12 +495,11 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
             layout: LayoutStyle {
                 padding: Some(5.0),
                 corner_radius: Some(6.0),
-                border_width: Some(1.0),
+                border_width: Some(0.0),
                 ..LayoutStyle::default()
             },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0x45, 0x45, 0x45)),
-                border: Some(Color::from_rgb8(0x5A, 0x5A, 0x5A)),
                 hover_bg: Some(Color::from_rgb8(0x55, 0x55, 0x55)),
                 pressed_bg: Some(Color::from_rgb8(0x35, 0x35, 0x35)),
                 ..ColorStyle::default()
@@ -542,6 +541,13 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
                 corner_radius: Some(6.0),
                 ..LayoutStyle::default()
             },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x22, 0x23, 0x28)),
+                hover_bg: Some(Color::from_rgb8(0x2D, 0x30, 0x3A)),
+                pressed_bg: Some(Color::from_rgb8(0x1B, 0x1D, 0x24)),
+                ..ColorStyle::default()
+            },
+            transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleRule::default()
         },
     );

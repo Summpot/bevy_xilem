@@ -2,6 +2,7 @@ use bevy_app::{App, Plugin, PostUpdate, PreUpdate, Update};
 use bevy_ecs::schedule::IntoScheduleConfigs;
 use bevy_input::mouse::{MouseButtonInput, MouseWheel};
 use bevy_time::TimePlugin;
+use bevy_tweening::{AnimationSystem, TweeningPlugin};
 use bevy_window::{CursorLeft, CursorMoved, WindowResized};
 
 use crate::{
@@ -20,13 +21,13 @@ pub struct BevyXilemPlugin;
 
 impl Plugin for BevyXilemPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(TimePlugin)
+        app.add_plugins((TimePlugin, TweeningPlugin))
             .init_resource::<UiProjectorRegistry>()
             .init_resource::<SynthesizedUiViews>()
             .init_resource::<UiSynthesisStats>()
             .init_resource::<UiEventQueue>()
             .init_resource::<StyleSheet>()
-            .init_non_send::<MasonryRuntime>()
+            .init_non_send_resource::<MasonryRuntime>()
             .add_message::<CursorMoved>()
             .add_message::<CursorLeft>()
             .add_message::<MouseButtonInput>()
@@ -38,7 +39,11 @@ impl Plugin for BevyXilemPlugin {
             )
             .add_systems(
                 Update,
-                (sync_style_targets, animate_style_transitions).chain(),
+                sync_style_targets.before(AnimationSystem::AnimationUpdate),
+            )
+            .add_systems(
+                Update,
+                animate_style_transitions.after(AnimationSystem::AnimationUpdate),
             )
             .add_systems(PostUpdate, (synthesize_ui, rebuild_masonry_runtime).chain());
 

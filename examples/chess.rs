@@ -10,7 +10,7 @@ use bevy_xilem::{
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
-    button_with_child, checkbox, resolve_style, resolve_style_for_classes,
+    button, button_with_child, checkbox, resolve_style, resolve_style_for_classes,
     run_app_with_window_options, slider,
     xilem::{
         Color,
@@ -503,35 +503,22 @@ fn build_chess_controls_view(
     let time_per_move_style = resolve_style_for_classes(world, ["chess.time-per-move"]);
     let toggle_style = resolve_style_for_classes(world, ["chess.toggle"]);
     let action_button_style = resolve_style_for_classes(world, ["chess.action-button"]);
-    let action_label_style = resolve_style_for_classes(world, ["chess.action-label"]);
     let movelist_style = resolve_style_for_classes(world, ["chess.movelist"]);
 
     let movelist_text = ui.movelist_text();
 
     let rotate_button = apply_widget_style(
-        button_with_child(
-            action_entity,
-            ChessEvent::Rotate,
-            apply_label_style(label("Rotate"), &action_label_style),
-        ),
+        button(action_entity, ChessEvent::Rotate, "Rotate"),
         &action_button_style,
     );
 
     let new_game_button = apply_widget_style(
-        button_with_child(
-            action_entity,
-            ChessEvent::NewGame,
-            apply_label_style(label("New game"), &action_label_style),
-        ),
+        button(action_entity, ChessEvent::NewGame, "New game"),
         &action_button_style,
     );
 
     let print_movelist_button = apply_widget_style(
-        button_with_child(
-            action_entity,
-            ChessEvent::PrintMovelist,
-            apply_label_style(label("Print movelist"), &action_label_style),
-        ),
+        button(action_entity, ChessEvent::PrintMovelist, "Print movelist"),
         &action_button_style,
     );
 
@@ -691,6 +678,13 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
                 padding: Some(2.0),
                 ..LayoutStyle::default()
             },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x2B, 0x2B, 0x2F)),
+                hover_bg: Some(Color::from_rgb8(0x3A, 0x3A, 0x40)),
+                pressed_bg: Some(Color::from_rgb8(0x22, 0x22, 0x25)),
+                ..ColorStyle::default()
+            },
+            transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleRule::default()
         },
     );
@@ -700,13 +694,12 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
         StyleRule {
             layout: LayoutStyle {
                 padding: Some(6.0),
-                border_width: Some(1.0),
+                border_width: Some(0.0),
                 corner_radius: Some(8.0),
                 ..LayoutStyle::default()
             },
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
-                border: Some(Color::from_rgb8(0x52, 0x52, 0x5B)),
                 hover_bg: Some(Color::from_rgb8(0x52, 0x52, 0x5B)),
                 pressed_bg: Some(Color::from_rgb8(0x27, 0x27, 0x2A)),
                 ..ColorStyle::default()
