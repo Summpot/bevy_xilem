@@ -15,7 +15,10 @@ use bevy_xilem::{
             theme::{DEFAULT_GAP, ZYNC_800},
         },
         style::Style as _,
-        view::{FlexExt as _, FlexSpacer, MainAxisAlignment, flex_col, flex_row, label},
+        view::{
+            FlexExt as _, FlexSpacer, MainAxisAlignment, flex_col, flex_row, label, sized_box,
+            virtual_scroll,
+        },
         winit::error::EventLoopError,
     },
 };
@@ -120,26 +123,51 @@ fn project_todo_input_area(_: &TodoInputArea, ctx: ProjectionCtx<'_>) -> UiView 
 }
 
 fn project_todo_list_container(_: &TodoListContainer, ctx: ProjectionCtx<'_>) -> UiView {
-    let children = ctx
-        .children
+    let active_filter = ctx.world.resource::<ActiveFilter>().0;
+    let child_entities = ctx
+        .world
+        .get::<Children>(ctx.entity)
+        .map(|children| children.iter().collect::<Vec<_>>())
+        .unwrap_or_default();
+
+    let visible_children = child_entities
         .into_iter()
-        .map(|child| child.into_any_flex())
+        .zip(ctx.children)
+        .filter_map(|(entity, child)| {
+            let item = ctx.world.get::<TodoItem>(entity)?;
+            todo_matches_filter(item, active_filter).then_some(child)
+        })
         .collect::<Vec<_>>();
 
-    Arc::new(flex_col(children).gap(DEFAULT_GAP))
+    if visible_children.is_empty() {
+        return Arc::new(
+            label("No tasks for this filter.")
+                .padding(8.0)
+                .border(ZYNC_800, 1.0),
+        );
+    }
+
+    let visible_children = Arc::new(visible_children);
+    let item_count = i64::try_from(visible_children.len()).unwrap_or(i64::MAX);
+
+    Arc::new(
+        sized_box(virtual_scroll(0..item_count, {
+            let visible_children = Arc::clone(&visible_children);
+            move |_, idx| {
+                let index = usize::try_from(idx).expect("virtual scroll index should be positive");
+                visible_children
+                    .get(index)
+                    .cloned()
+                    .unwrap_or_else(|| Arc::new(label("")))
+            }
+        }))
+        .fixed_height(Length::px(360.0))
+        .padding(4.0)
+        .border(ZYNC_800, 1.0),
+    )
 }
 
 fn project_todo_item(item: &TodoItem, ctx: ProjectionCtx<'_>) -> UiView {
-    let should_show = match ctx.world.resource::<ActiveFilter>().0 {
-        FilterType::All => true,
-        FilterType::Active => !item.completed,
-        FilterType::Completed => item.completed,
-    };
-
-    if !should_show {
-        return Arc::new(label(""));
-    }
-
     let entity = ctx.entity;
 
     Arc::new(
@@ -188,6 +216,14 @@ fn project_filter_toggle(filter_toggle: &FilterToggle, ctx: ProjectionCtx<'_>) -
     ))
 }
 
+fn todo_matches_filter(item: &TodoItem, filter: FilterType) -> bool {
+    match filter {
+        FilterType::All => true,
+        FilterType::Active => !item.completed,
+        FilterType::Completed => item.completed,
+    }
+}
+
 fn spawn_todo_item(world: &mut World, text: String, done: bool) -> Entity {
     let list_container = world.resource::<TodoRuntime>().list_container;
     world
@@ -216,27 +252,15 @@ fn setup_todo_world(mut commands: Commands) {
 
     commands.insert_resource(TodoRuntime { list_container });
 
-    commands.spawn((
-        TodoItem {
-            text: "Buy milk".to_string(),
-            completed: false,
-        },
-        ChildOf(list_container),
-    ));
-    commands.spawn((
-        TodoItem {
-            text: "Buy eggs".to_string(),
-            completed: true,
-        },
-        ChildOf(list_container),
-    ));
-    commands.spawn((
-        TodoItem {
-            text: "Buy bread".to_string(),
-            completed: false,
-        },
-        ChildOf(list_container),
-    ));
+    for i in 1..=120 {
+        commands.spawn((
+            TodoItem {
+                text: format!("Sample task #{i}"),
+                completed: i % 3 == 0,
+            },
+            ChildOf(list_container),
+        ));
+    }
 }
 
 fn drain_todo_events_and_mutate_world(world: &mut World) {

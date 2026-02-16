@@ -78,11 +78,37 @@ fn app_logic(
 }
 
 /// Run a Bevy app inside a GUI window while preserving the Bevy-driven synthesis architecture.
+///
+/// # Example
+///
+/// ```no_run
+/// use bevy_xilem::{bevy_app::App, run_app};
+///
+/// let app = App::new();
+/// # let _ =
+/// run_app(app, "My App");
+/// ```
 pub fn run_app(bevy_app: App, window_title: impl Into<String>) -> Result<(), EventLoopError> {
     run_app_with_window_options(bevy_app, window_title, |options| options)
 }
 
 /// Same as [`run_app`] with custom window options.
+///
+/// # Example
+///
+/// ```no_run
+/// use bevy_xilem::{
+///     bevy_app::App,
+///     run_app_with_window_options,
+///     xilem::winit::dpi::LogicalSize,
+/// };
+///
+/// let app = App::new();
+/// # let _ =
+/// run_app_with_window_options(app, "My App", |options| {
+///     options.with_initial_inner_size(LogicalSize::new(640.0, 480.0))
+/// });
+/// ```
 pub fn run_app_with_window_options(
     bevy_app: App,
     window_title: impl Into<String>,

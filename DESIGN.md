@@ -175,6 +175,7 @@ Examples were rewritten to demonstrate this architecture with:
 - GUI windows via the bridge runner
 - Bevy-driven synthesis updates each frame
 - typed action handling via `UiEventQueue` (ECS queue path only)
+- virtualized task scrolling in `todo_list` using `xilem_masonry::view::virtual_scroll`
 - no `xilem::Xilem::new_simple` usage
 
 ## Non-goals in current repository state

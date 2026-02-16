@@ -9,7 +9,9 @@ use crossbeam_queue::SegQueue;
 
 /// Type-erased UI action emitted by Masonry widgets.
 pub struct UiEvent {
+    /// Source ECS entity for this action.
     pub entity: Entity,
+    /// Type-erased action payload.
     pub action: Box<dyn Any + Send + Sync>,
 }
 
@@ -23,11 +25,13 @@ impl fmt::Debug for UiEvent {
 }
 
 impl UiEvent {
+    /// Create a new type-erased UI event.
     #[must_use]
     pub fn new(entity: Entity, action: Box<dyn Any + Send + Sync>) -> Self {
         Self { entity, action }
     }
 
+    /// Create a typed UI event and erase it into [`UiEvent`].
     #[must_use]
     pub fn typed<T: Any + Send + Sync>(entity: Entity, action: T) -> Self {
         Self {
@@ -36,6 +40,7 @@ impl UiEvent {
         }
     }
 
+    /// Attempt to recover a typed event payload.
     #[must_use]
     pub fn into_action<T: Any + Send + Sync>(self) -> Option<TypedUiEvent<T>> {
         match self.action.downcast::<T>() {
@@ -56,6 +61,23 @@ pub struct TypedUiEvent<T> {
 }
 
 /// Lock-free queue shared between Bevy systems and Masonry widgets.
+///
+/// # Example
+///
+/// ```
+/// use bevy_xilem::{UiEventQueue, bevy_ecs::world::World};
+///
+/// let mut world = World::new();
+/// let entity = world.spawn_empty().id();
+///
+/// let queue = UiEventQueue::default();
+/// queue.push_typed(entity, 7_u32);
+///
+/// let drained = queue.drain_actions::<u32>();
+/// assert_eq!(drained.len(), 1);
+/// assert_eq!(drained[0].entity, entity);
+/// assert_eq!(drained[0].action, 7);
+/// ```
 #[derive(Resource, Clone, Debug)]
 pub struct UiEventQueue {
     queue: Arc<SegQueue<UiEvent>>,
@@ -70,19 +92,23 @@ impl Default for UiEventQueue {
 }
 
 impl UiEventQueue {
+    /// Get a shared queue handle for cross-runtime wiring.
     #[must_use]
     pub fn shared_queue(&self) -> Arc<SegQueue<UiEvent>> {
         self.queue.clone()
     }
 
+    /// Push a pre-built type-erased event.
     pub fn push(&self, event: UiEvent) {
         self.queue.push(event);
     }
 
+    /// Push a typed action payload for an entity.
     pub fn push_typed<T: Any + Send + Sync>(&self, entity: Entity, action: T) {
         self.push(UiEvent::typed(entity, action));
     }
 
+    /// Drain every queued event, regardless of payload type.
     #[must_use]
     pub fn drain_all(&self) -> Vec<UiEvent> {
         let mut drained = Vec::new();
@@ -137,6 +163,23 @@ pub(crate) fn push_global_ui_event(event: UiEvent) {
 ///
 /// This is intended for callback-based widget APIs in examples/apps that still
 /// want to route all interactions through [`UiEventQueue`].
+///
+/// # Example
+///
+/// ```
+/// use bevy_xilem::{emit_ui_action, UiEventQueue, bevy_ecs::world::World};
+///
+/// let mut world = World::new();
+/// let entity = world.spawn_empty().id();
+/// let queue = UiEventQueue::default();
+///
+/// // In real app wiring this global queue is installed by `MasonryRuntime`.
+/// // Here we directly push through queue APIs in tests/docs.
+/// emit_ui_action(entity, "ignored without installed global queue".to_string());
+/// queue.push_typed(entity, "clicked".to_string());
+/// let actions = queue.drain_actions::<String>();
+/// assert_eq!(actions[0].action, "clicked");
+/// ```
 pub fn emit_ui_action<T: Any + Send + Sync>(entity: Entity, action: T) {
     push_global_ui_event(UiEvent::typed(entity, action));
 }

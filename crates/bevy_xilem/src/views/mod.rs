@@ -1,3 +1,25 @@
+//! View helpers exported by `bevy_xilem`.
+//!
+//! This module exposes two naming groups:
+//! - ECS-adapted controls (`button`, `button_with_child`, `checkbox`, `slider`, `switch`,
+//!   `text_button`, `text_input`)
+//! - Raw Xilem controls with `xilem_` prefix (`xilem_button`, `xilem_checkbox`, ...)
+//!
+//! # Example
+//!
+//! ```
+//! use bevy_xilem::{
+//!     button, xilem_button,
+//!     bevy_ecs::world::World,
+//!     xilem::view::label,
+//! };
+//!
+//! let mut world = World::new();
+//! let entity = world.spawn_empty().id();
+//!
+//! let _ecs_adapted = button(entity, (), "ECS event button");
+//! let _raw_xilem = xilem_button::<(), (), _, _>(label("Raw xilem button"), |_| ());
+//! ```
 mod ecs_button_view;
 mod ecs_control_views;
 

@@ -3,6 +3,7 @@ name = "bevy_xilem"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+readme = "../../README.md"
 
 [dependencies]
 bevy_app.workspace = true
