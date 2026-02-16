@@ -13,12 +13,7 @@ This document defines how automated agents (and humans operating like them) shou
    - Add/adjust tests for behavior changes.
    - Ensure `cargo test` passes before finishing.
 
-3. **Prefer minimal, reviewable diffs**
-   - Make small, incremental changes.
-   - Avoid unrelated refactors/renames.
-   - Don’t reformat unrelated code; only apply formatting that naturally results from touching code (`cargo fmt`, Biome).
-
-4. **Rust dependency hygiene**
+3. **Rust dependency hygiene**
    - Before adding a new Rust dependency (new crate in `Cargo.toml`), check whether `cargo upgrade` is available.
      - If it exists, run `cargo upgrade` to see whether a newer compatible version is available and prefer the newest reasonable versions.
      - If it does **not** exist (e.g., `cargo-edit` not installed), **do not check newer version**; just skip this step and proceed.
