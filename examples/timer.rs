@@ -1,4 +1,5 @@
 use std::{sync::Arc, time::Instant};
+use tokio::time;
 
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
@@ -6,10 +7,11 @@ use bevy_xilem::{
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
-    button, resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
-    run_app_with_window_options, slider,
+    button, emit_ui_action, resolve_style, resolve_style_for_classes,
+    resolve_style_for_entity_classes, run_app_with_window_options, slider,
     xilem::{
-        view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, progress_bar},
+        core::fork,
+        view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, progress_bar, task},
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
@@ -41,6 +43,7 @@ impl Default for TimerState {
 enum TimerEvent {
     SetDurationSecs(f64),
     Reset,
+    Tick,
 }
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -65,6 +68,7 @@ fn apply_timer_event(state: &mut TimerState, event: TimerEvent) {
             state.elapsed_secs = 0.0;
             state.last_tick = Instant::now();
         }
+        TimerEvent::Tick => {}
     }
 }
 
@@ -129,7 +133,7 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
         &reset_button_style,
     );
 
-    Arc::new(apply_widget_style(
+    let content = apply_widget_style(
         flex_col((
             title,
             elapsed_row,
@@ -139,7 +143,25 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
         ))
         .cross_axis_alignment(CrossAxisAlignment::Start),
         &root_style,
-    ))
+    );
+
+    let tick_entity = ctx.entity;
+    let heartbeat = task(
+        |proxy, _| async move {
+            let mut interval = time::interval(std::time::Duration::from_millis(50));
+            loop {
+                interval.tick().await;
+                let Ok(()) = proxy.message(()) else {
+                    break;
+                };
+            }
+        },
+        move |_: (), ()| {
+            emit_ui_action(tick_entity, TimerEvent::Tick);
+        },
+    );
+
+    Arc::new(fork(content, Some(heartbeat)))
 }
 
 fn setup_timer_world(mut commands: Commands) {

@@ -154,7 +154,7 @@ fn project_temperature_root(_: &TemperatureRootView, ctx: ProjectionCtx<'_>) -> 
     );
 
     let hint = apply_label_style(
-        label("Tip: 输入无法解析的内容时，另一侧不会被覆盖。"),
+        label("Tip: invalid numeric input will not overwrite the other field."),
         &hint_style,
     );
 

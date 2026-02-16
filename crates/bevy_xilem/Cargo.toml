@@ -22,6 +22,7 @@ vello.workspace = true
 
 [dev-dependencies]
 num-traits.workspace = true
+reqwest.workspace = true
 
 [[example]]
 name = "calculator"
@@ -42,3 +43,7 @@ path = "../../examples/temperature_converter.rs"
 [[example]]
 name = "timer"
 path = "../../examples/timer.rs"
+
+[[example]]
+name = "download_with_progress"
+path = "../../examples/download_with_progress.rs"

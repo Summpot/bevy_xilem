@@ -18,6 +18,7 @@ bevy_tweening = { version = "0.15", default-features = false }
 crossbeam-queue = "0.3.12"
 tokio = { version = "1.49.0", features = ["rt-multi-thread"] }
 num-traits = "0.2.19"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 masonry = { path = "third_party/xilem/masonry" }
 xilem = { path = "third_party/xilem/xilem" }
 xilem_core = { path = "third_party/xilem/xilem_core" }

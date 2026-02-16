@@ -34,6 +34,7 @@ const BOARD_SIZE: usize = 8;
 const BOARD_RECENT_MOVE_SHADE: u8 = 25;
 const BOARD_TARGET_SHADE: u8 = 50;
 const MOVELIST_WIDTH: i32 = 200;
+const MOVELIST_HEIGHT: i32 = 260;
 
 #[derive(Clone, Copy, Debug)]
 enum Piece {
@@ -568,7 +569,9 @@ fn build_chess_controls_view(
             new_game_button,
             print_movelist_button,
             apply_widget_style(
-                sized_box(prose(movelist_text)).width(MOVELIST_WIDTH.px()),
+                sized_box(prose(movelist_text))
+                    .width(MOVELIST_WIDTH.px())
+                    .height(MOVELIST_HEIGHT.px()),
                 &movelist_style,
             ),
         ))
@@ -604,8 +607,8 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
         "chess.root",
         StyleSetter {
             layout: LayoutStyle {
-                padding: Some(12.0),
-                gap: Some(12.0),
+                padding: Some(8.0),
+                gap: Some(8.0),
                 ..LayoutStyle::default()
             },
             colors: ColorStyle {
@@ -620,8 +623,8 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
         "chess.controls",
         StyleSetter {
             layout: LayoutStyle {
-                gap: Some(8.0),
-                padding: Some(8.0),
+                gap: Some(6.0),
+                padding: Some(6.0),
                 corner_radius: Some(8.0),
                 border_width: Some(1.0),
             },
@@ -743,7 +746,7 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
         "chess.board",
         StyleSetter {
             layout: LayoutStyle {
-                padding: Some(8.0),
+                padding: Some(4.0),
                 border_width: Some(1.0),
                 corner_radius: Some(8.0),
                 ..LayoutStyle::default()
@@ -794,7 +797,7 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "chess.cell-piece",
         StyleSetter {
-            text: TextStyle { size: Some(96.0) },
+            text: TextStyle { size: Some(48.0) },
             colors: ColorStyle {
                 text: Some(Color::BLACK),
                 ..ColorStyle::default()
@@ -905,7 +908,8 @@ fn chess_piece_font_family() -> &'static str {
 fn main() -> Result<(), EventLoopError> {
     run_app_with_window_options(build_bevy_chess_app(), "Xilem Chess GUI", |options| {
         options
-            .with_min_inner_size(LogicalSize::new(800.0, 800.0))
-            .with_initial_inner_size(LogicalSize::new(1200.0, 1000.0))
+            .with_resizable(true)
+            .with_min_inner_size(LogicalSize::new(640.0, 560.0))
+            .with_initial_inner_size(LogicalSize::new(1024.0, 760.0))
     })
 }
