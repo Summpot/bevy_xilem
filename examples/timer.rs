@@ -2,7 +2,7 @@ use std::{sync::Arc, time::Instant};
 
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleRule, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
+    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
@@ -153,7 +153,7 @@ fn setup_timer_world(mut commands: Commands) {
 fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "timer.root",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(16.0),
                 gap: Some(10.0),
@@ -165,48 +165,48 @@ fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
                 border: Some(bevy_xilem::xilem::palette::css::DARK_SLATE_GRAY),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "timer.title",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(24.0) },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::palette::css::WHITE),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "timer.row",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 gap: Some(8.0),
                 ..LayoutStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "timer.body-text",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(16.0) },
             layout: LayoutStyle {
                 padding: Some(4.0),
                 ..LayoutStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "timer.reset-button",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(6.0),
                 corner_radius: Some(8.0),
@@ -220,19 +220,19 @@ fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..ColorStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "timer.reset-label",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(16.0) },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::palette::css::WHITE),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 }

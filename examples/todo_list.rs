@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleRule, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
+    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{
@@ -336,42 +336,42 @@ fn setup_todo_world(mut commands: Commands) {
 fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "todo.root",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 gap: Some(4.0),
                 padding: Some(50.0),
                 ..LayoutStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "todo.header",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(80.0) },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xE5, 0xE7, 0xEB)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "todo.input-area",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 gap: Some(DEFAULT_GAP.get()),
                 ..LayoutStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "todo.input",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(16.0) },
             layout: LayoutStyle {
                 padding: Some(6.0),
@@ -385,13 +385,13 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
                 text: Some(Color::from_rgb8(0xF4, 0xF4, 0xF5)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "todo.add-button",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(6.0),
                 corner_radius: Some(8.0),
@@ -405,27 +405,27 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..ColorStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.12 }),
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "todo.add-label",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(16.0) },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
-    style_sheet.set_class("todo.list-container", StyleRule::default());
+    style_sheet.set_class("todo.list-container", StyleSetter::default());
 
     style_sheet.set_class(
         "todo.empty",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(8.0),
                 border_width: Some(1.0),
@@ -436,13 +436,13 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
                 text: Some(Color::from_rgb8(0xA1, 0xA1, 0xAA)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "todo.list-viewport",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(4.0),
                 border_width: Some(1.0),
@@ -452,13 +452,13 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
                 border: Some(Color::from_rgb8(0x27, 0x2A, 0x36)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "todo.item",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(DEFAULT_GAP.get()),
                 border_width: Some(1.0),
@@ -471,13 +471,13 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..ColorStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "todo.item-checkbox",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(16.0) },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE7)),
@@ -485,13 +485,13 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..ColorStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "todo.delete-button",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(5.0),
                 corner_radius: Some(6.0),
@@ -505,36 +505,36 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..ColorStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.12 }),
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "todo.delete-label",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(14.0) },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xFA, 0xFA, 0xFA)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "todo.filter-bar",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 gap: Some(DEFAULT_GAP.get()),
                 ..LayoutStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "todo.filter-toggle",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(14.0) },
             layout: LayoutStyle {
                 padding: Some(4.0),
@@ -548,7 +548,7 @@ fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..ColorStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 }

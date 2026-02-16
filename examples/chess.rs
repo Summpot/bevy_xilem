@@ -6,7 +6,7 @@ use std::{
 
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleRule, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
+    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
@@ -602,7 +602,7 @@ fn setup_chess_world(mut commands: Commands) {
 fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "chess.root",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(12.0),
                 gap: Some(12.0),
@@ -612,13 +612,13 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
                 bg: Some(Color::from_rgb8(0x1A, 0x1A, 0x1A)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "chess.controls",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 gap: Some(8.0),
                 padding: Some(8.0),
@@ -630,49 +630,49 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
                 border: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "chess.status",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(16.0) },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE7)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "chess.clock",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(14.0) },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xD4, 0xD4, 0xD8)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "chess.time-per-move",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(14.0) },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xA1, 0xA1, 0xAA)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "chess.toggle",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(14.0) },
             layout: LayoutStyle {
                 padding: Some(2.0),
@@ -685,13 +685,13 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..ColorStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "chess.action-button",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(6.0),
                 border_width: Some(0.0),
@@ -705,25 +705,25 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..ColorStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.1 }),
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "chess.action-label",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(14.0) },
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0xFA, 0xFA, 0xFA)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "chess.movelist",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(6.0),
                 border_width: Some(1.0),
@@ -735,13 +735,13 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
                 border: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "chess.board",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(8.0),
                 border_width: Some(1.0),
@@ -753,53 +753,53 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
                 border: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "chess.cell",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(0.0),
                 corner_radius: Some(0.0),
                 ..LayoutStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "chess.cell.light",
-        StyleRule {
+        StyleSetter {
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "chess.cell.dark",
-        StyleRule {
+        StyleSetter {
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0xCD, 0xCD, 0xCD)),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "chess.cell-piece",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(96.0) },
             colors: ColorStyle {
                 text: Some(Color::BLACK),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 }

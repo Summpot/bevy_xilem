@@ -1,6 +1,6 @@
-use std::{collections::HashMap, time::Duration};
+use std::{any::TypeId, collections::HashSet, time::Duration};
 
-use bevy_ecs::{change_detection::Mut, entity::Entity, prelude::*};
+use bevy_ecs::{change_detection::Mut, component::ComponentId, entity::Entity, prelude::*};
 use bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim};
 use masonry::theme;
 use xilem::{Color, style::Style as _};
@@ -14,6 +14,10 @@ use crate::UiEventQueue;
 /// Marker component for CSS-like class names attached to an entity.
 #[derive(Component, Debug, Clone, Default, PartialEq, Eq)]
 pub struct StyleClass(pub Vec<String>);
+
+/// Marker component for entities whose style cache needs recomputation.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StyleDirty;
 
 /// Inline layout style that can be attached to entities.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
@@ -59,6 +63,15 @@ pub struct StyleTransition {
     pub duration: f32,
 }
 
+/// Cached resolved style used by projectors.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
+pub struct ComputedStyle {
+    pub layout: ResolvedLayoutStyle,
+    pub colors: ResolvedColorStyle,
+    pub text: ResolvedTextStyle,
+    pub transition: Option<StyleTransition>,
+}
+
 /// Interpolated color state currently rendered by projectors.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
 pub struct CurrentColorStyle {
@@ -75,44 +88,131 @@ pub struct TargetColorStyle {
     pub border: Option<Color>,
 }
 
-/// A named style rule used by [`StyleSheet`].
+/// Pseudo classes supported by selectors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PseudoClass {
+    Hovered,
+    Pressed,
+}
+
+/// CSS-like selector AST for style rules.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Selector {
+    Type(TypeId),
+    Class(String),
+    PseudoClass(PseudoClass),
+    And(Vec<Selector>),
+}
+
+impl Selector {
+    #[must_use]
+    pub fn of_type<T: Component>() -> Self {
+        Self::Type(TypeId::of::<T>())
+    }
+
+    #[must_use]
+    pub fn class(name: impl Into<String>) -> Self {
+        Self::Class(name.into())
+    }
+
+    #[must_use]
+    pub const fn pseudo(pseudo: PseudoClass) -> Self {
+        Self::PseudoClass(pseudo)
+    }
+
+    #[must_use]
+    pub fn and(selectors: impl Into<Vec<Selector>>) -> Self {
+        Self::And(selectors.into())
+    }
+
+    #[must_use]
+    fn contains_type(&self) -> bool {
+        match self {
+            Selector::Type(_) => true,
+            Selector::Class(_) | Selector::PseudoClass(_) => false,
+            Selector::And(selectors) => selectors.iter().any(Self::contains_type),
+        }
+    }
+}
+
+/// Style payload set by a matching rule.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct StyleRule {
+pub struct StyleSetter {
     pub layout: LayoutStyle,
     pub colors: ColorStyle,
     pub text: TextStyle,
     pub transition: Option<StyleTransition>,
 }
 
+/// Selector + style payload.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StyleRule {
+    pub selector: Selector,
+    pub setter: StyleSetter,
+}
+
+impl StyleRule {
+    #[must_use]
+    pub fn new(selector: Selector, setter: StyleSetter) -> Self {
+        Self { selector, setter }
+    }
+
+    #[must_use]
+    pub fn class(class_name: impl Into<String>, setter: StyleSetter) -> Self {
+        Self::new(Selector::class(class_name), setter)
+    }
+}
+
 /// Global class-based style table.
 #[derive(Resource, Debug, Clone, Default)]
 pub struct StyleSheet {
-    pub classes: HashMap<String, StyleRule>,
+    pub rules: Vec<StyleRule>,
 }
 
 impl StyleSheet {
     #[must_use]
-    pub fn with_class(mut self, class_name: impl Into<String>, rule: StyleRule) -> Self {
-        self.classes.insert(class_name.into(), rule);
+    pub fn with_rule(mut self, rule: StyleRule) -> Self {
+        self.rules.push(rule);
         self
     }
 
-    pub fn set_class(&mut self, class_name: impl Into<String>, rule: StyleRule) {
-        self.classes.insert(class_name.into(), rule);
+    pub fn add_rule(&mut self, rule: StyleRule) {
+        self.rules.push(rule);
     }
 
     #[must_use]
-    pub fn get_class(&self, class_name: &str) -> Option<&StyleRule> {
-        self.classes.get(class_name)
+    pub fn with_class(mut self, class_name: impl Into<String>, setter: StyleSetter) -> Self {
+        self.set_class(class_name, setter);
+        self
     }
-}
 
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-struct CascadedStyle {
-    layout: LayoutStyle,
-    colors: ColorStyle,
-    text: TextStyle,
-    transition: Option<StyleTransition>,
+    pub fn set_class(&mut self, class_name: impl Into<String>, setter: StyleSetter) {
+        let class_name = class_name.into();
+        if let Some(existing) = self.rules.iter_mut().find(|rule| {
+            matches!(&rule.selector, Selector::Class(existing_name) if existing_name == &class_name)
+        }) {
+            existing.setter = setter;
+            return;
+        }
+
+        self.rules.push(StyleRule::class(class_name, setter));
+    }
+
+    #[must_use]
+    pub fn get_class(&self, class_name: &str) -> Option<&StyleSetter> {
+        self.rules.iter().find_map(|rule| {
+            if matches!(&rule.selector, Selector::Class(name) if name == class_name) {
+                Some(&rule.setter)
+            } else {
+                None
+            }
+        })
+    }
+
+    #[must_use]
+    fn has_type_selectors(&self) -> bool {
+        self.rules.iter().any(|rule| rule.selector.contains_type())
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -211,56 +311,108 @@ fn merge_text(dst: &mut TextStyle, src: &TextStyle) {
     }
 }
 
-fn merge_rule(dst: &mut CascadedStyle, rule: &StyleRule) {
-    merge_layout(&mut dst.layout, &rule.layout);
-    merge_colors(&mut dst.colors, &rule.colors);
-    merge_text(&mut dst.text, &rule.text);
-    if rule.transition.is_some() {
-        dst.transition = rule.transition;
+fn merge_setter(dst: &mut StyleSetter, setter: &StyleSetter) {
+    merge_layout(&mut dst.layout, &setter.layout);
+    merge_colors(&mut dst.colors, &setter.colors);
+    merge_text(&mut dst.text, &setter.text);
+    if setter.transition.is_some() {
+        dst.transition = setter.transition;
+    }
+}
+
+fn component_matches_type(world: &World, entity: Entity, component_id: ComponentId) -> bool {
+    world
+        .get_entity(entity)
+        .is_ok_and(|entity_ref| entity_ref.contains_id(component_id))
+}
+
+fn selector_matches_entity(world: &World, entity: Entity, selector: &Selector) -> bool {
+    match selector {
+        Selector::Type(type_id) => world
+            .components()
+            .get_id(*type_id)
+            .is_some_and(|component_id| component_matches_type(world, entity, component_id)),
+        Selector::Class(name) => world
+            .get::<StyleClass>(entity)
+            .is_some_and(|style_class| style_class.0.iter().any(|class| class == name)),
+        Selector::PseudoClass(PseudoClass::Hovered) => world.get::<Hovered>(entity).is_some(),
+        Selector::PseudoClass(PseudoClass::Pressed) => world.get::<Pressed>(entity).is_some(),
+        Selector::And(selectors) => selectors
+            .iter()
+            .all(|selector| selector_matches_entity(world, entity, selector)),
+    }
+}
+
+fn selector_matches_class_context(
+    world: &World,
+    entity: Option<Entity>,
+    selector: &Selector,
+    has_class: &impl Fn(&str) -> bool,
+) -> bool {
+    match selector {
+        Selector::Type(_) => false,
+        Selector::Class(name) => has_class(name),
+        Selector::PseudoClass(PseudoClass::Hovered) => {
+            entity.is_some_and(|entity| world.get::<Hovered>(entity).is_some())
+        }
+        Selector::PseudoClass(PseudoClass::Pressed) => {
+            entity.is_some_and(|entity| world.get::<Pressed>(entity).is_some())
+        }
+        Selector::And(selectors) => selectors
+            .iter()
+            .all(|selector| selector_matches_class_context(world, entity, selector, has_class)),
     }
 }
 
 fn merged_from_class_names<'a>(
     world: &World,
+    entity: Option<Entity>,
     class_names: impl IntoIterator<Item = &'a str>,
-) -> CascadedStyle {
-    let mut cascaded = CascadedStyle::default();
+) -> StyleSetter {
+    let mut merged = StyleSetter::default();
     let Some(sheet) = world.get_resource::<StyleSheet>() else {
-        return cascaded;
+        return merged;
     };
 
-    for class_name in class_names {
-        if let Some(rule) = sheet.get_class(class_name) {
-            merge_rule(&mut cascaded, rule);
+    let class_set = class_names.into_iter().collect::<HashSet<_>>();
+    let has_class = |class_name: &str| class_set.contains(class_name);
+
+    for rule in &sheet.rules {
+        if selector_matches_class_context(world, entity, &rule.selector, &has_class) {
+            merge_setter(&mut merged, &rule.setter);
         }
     }
 
-    cascaded
+    merged
 }
 
-fn merged_for_entity(world: &World, entity: Entity) -> CascadedStyle {
-    let mut cascaded = CascadedStyle::default();
+fn merged_for_entity(world: &World, entity: Entity) -> (StyleSetter, bool) {
+    let mut merged = StyleSetter::default();
+    let mut matched_rule = false;
 
-    if let Some(class_component) = world.get::<StyleClass>(entity) {
-        let class_cascaded =
-            merged_from_class_names(world, class_component.0.iter().map(String::as_str));
-        cascaded = class_cascaded;
+    if let Some(sheet) = world.get_resource::<StyleSheet>() {
+        for rule in &sheet.rules {
+            if selector_matches_entity(world, entity, &rule.selector) {
+                merge_setter(&mut merged, &rule.setter);
+                matched_rule = true;
+            }
+        }
     }
 
     if let Some(layout) = world.get::<LayoutStyle>(entity) {
-        merge_layout(&mut cascaded.layout, layout);
+        merge_layout(&mut merged.layout, layout);
     }
     if let Some(colors) = world.get::<ColorStyle>(entity) {
-        merge_colors(&mut cascaded.colors, colors);
+        merge_colors(&mut merged.colors, colors);
     }
     if let Some(text) = world.get::<TextStyle>(entity) {
-        merge_text(&mut cascaded.text, text);
+        merge_text(&mut merged.text, text);
     }
     if let Some(transition) = world.get::<StyleTransition>(entity) {
-        cascaded.transition = Some(*transition);
+        merged.transition = Some(*transition);
     }
 
-    cascaded
+    (merged, matched_rule)
 }
 
 fn target_colors(world: &World, entity: Entity, colors: &ColorStyle) -> ResolvedColorStyle {
@@ -315,19 +467,24 @@ fn to_resolved_text(text: &TextStyle) -> ResolvedTextStyle {
     }
 }
 
-/// Resolve final style for an entity.
-///
-/// Cascading order:
-/// 1. class styles from [`StyleSheet`] and [`StyleClass`]
-/// 2. inline components [`LayoutStyle`], [`ColorStyle`], [`TextStyle`]
-/// 3. pseudo classes [`Hovered`] / [`Pressed`]
-/// 4. animated override from [`CurrentColorStyle`] when present
-#[must_use]
-pub fn resolve_style(world: &World, entity: Entity) -> ResolvedStyle {
-    let cascaded = merged_for_entity(world, entity);
-    let mut colors = target_colors(world, entity, &cascaded.colors);
+fn has_any_style_source(world: &World, entity: Entity, matched_rule: bool) -> bool {
+    matched_rule
+        || world.get::<StyleClass>(entity).is_some()
+        || world.get::<LayoutStyle>(entity).is_some()
+        || world.get::<ColorStyle>(entity).is_some()
+        || world.get::<TextStyle>(entity).is_some()
+        || world.get::<StyleTransition>(entity).is_some()
+}
 
-    if let Some(current) = world.get::<CurrentColorStyle>(entity) {
+fn resolved_from_merged(
+    world: &World,
+    entity: Entity,
+    merged: &StyleSetter,
+    include_current_override: bool,
+) -> ResolvedStyle {
+    let mut colors = target_colors(world, entity, &merged.colors);
+
+    if include_current_override && let Some(current) = world.get::<CurrentColorStyle>(entity) {
         if current.bg.is_some() {
             colors.bg = current.bg;
         }
@@ -340,11 +497,55 @@ pub fn resolve_style(world: &World, entity: Entity) -> ResolvedStyle {
     }
 
     ResolvedStyle {
-        layout: to_resolved_layout(&cascaded.layout),
+        layout: to_resolved_layout(&merged.layout),
         colors,
-        text: to_resolved_text(&cascaded.text),
-        transition: cascaded.transition,
+        text: to_resolved_text(&merged.text),
+        transition: merged.transition,
     }
+}
+
+fn compute_resolved_style(world: &World, entity: Entity) -> Option<ResolvedStyle> {
+    let (merged, matched_rule) = merged_for_entity(world, entity);
+    if !has_any_style_source(world, entity, matched_rule) {
+        return None;
+    }
+
+    Some(resolved_from_merged(world, entity, &merged, false))
+}
+
+/// Resolve final style for an entity.
+///
+/// Cascading order:
+/// 1. class styles from [`StyleSheet`] and [`StyleClass`]
+/// 2. inline components [`LayoutStyle`], [`ColorStyle`], [`TextStyle`]
+/// 3. pseudo classes [`Hovered`] / [`Pressed`]
+/// 4. animated override from [`CurrentColorStyle`] when present
+#[must_use]
+pub fn resolve_style(world: &World, entity: Entity) -> ResolvedStyle {
+    if let Some(computed) = world.get::<ComputedStyle>(entity) {
+        let mut style = ResolvedStyle {
+            layout: computed.layout,
+            colors: computed.colors,
+            text: computed.text,
+            transition: computed.transition,
+        };
+
+        if let Some(current) = world.get::<CurrentColorStyle>(entity) {
+            if current.bg.is_some() {
+                style.colors.bg = current.bg;
+            }
+            if current.text.is_some() {
+                style.colors.text = current.text;
+            }
+            if current.border.is_some() {
+                style.colors.border = current.border;
+            }
+        }
+
+        return style;
+    }
+
+    compute_resolved_style(world, entity).unwrap_or_default()
 }
 
 /// Resolve style from class names only, without inline entity overrides.
@@ -353,16 +554,17 @@ pub fn resolve_style_for_classes<'a>(
     world: &World,
     class_names: impl IntoIterator<Item = &'a str>,
 ) -> ResolvedStyle {
-    let cascaded = merged_from_class_names(world, class_names);
+    let merged = merged_from_class_names(world, None, class_names);
+
     ResolvedStyle {
-        layout: to_resolved_layout(&cascaded.layout),
+        layout: to_resolved_layout(&merged.layout),
         colors: ResolvedColorStyle {
-            bg: cascaded.colors.bg,
-            text: cascaded.colors.text,
-            border: cascaded.colors.border,
+            bg: merged.colors.bg,
+            text: merged.colors.text,
+            border: merged.colors.border,
         },
-        text: to_resolved_text(&cascaded.text),
-        transition: cascaded.transition,
+        text: to_resolved_text(&merged.text),
+        transition: merged.transition,
     }
 }
 
@@ -376,13 +578,8 @@ pub fn resolve_style_for_entity_classes<'a>(
     entity: Entity,
     class_names: impl IntoIterator<Item = &'a str>,
 ) -> ResolvedStyle {
-    let cascaded = merged_from_class_names(world, class_names);
-    ResolvedStyle {
-        layout: to_resolved_layout(&cascaded.layout),
-        colors: target_colors(world, entity, &cascaded.colors),
-        text: to_resolved_text(&cascaded.text),
-        transition: cascaded.transition,
-    }
+    let merged = merged_from_class_names(world, Some(entity), class_names);
+    resolved_from_merged(world, entity, &merged, false)
 }
 
 /// Apply box/layout styling on any widget view.
@@ -462,18 +659,102 @@ pub fn sync_ui_interaction_markers(world: &mut World) {
 
         match event.action {
             UiInteractionEvent::PointerEntered => {
-                world.entity_mut(event.entity).insert(Hovered);
+                if world.get::<Hovered>(event.entity).is_none() {
+                    world.entity_mut(event.entity).insert(Hovered);
+                    world.entity_mut(event.entity).insert(StyleDirty);
+                }
             }
             UiInteractionEvent::PointerLeft => {
-                world.entity_mut(event.entity).remove::<Hovered>();
-                world.entity_mut(event.entity).remove::<Pressed>();
+                let mut changed = false;
+                if world.get::<Hovered>(event.entity).is_some() {
+                    world.entity_mut(event.entity).remove::<Hovered>();
+                    changed = true;
+                }
+                if world.get::<Pressed>(event.entity).is_some() {
+                    world.entity_mut(event.entity).remove::<Pressed>();
+                    changed = true;
+                }
+                if changed {
+                    world.entity_mut(event.entity).insert(StyleDirty);
+                }
             }
             UiInteractionEvent::PointerPressed => {
-                world.entity_mut(event.entity).insert(Pressed);
+                if world.get::<Pressed>(event.entity).is_none() {
+                    world.entity_mut(event.entity).insert(Pressed);
+                    world.entity_mut(event.entity).insert(StyleDirty);
+                }
             }
             UiInteractionEvent::PointerReleased => {
-                world.entity_mut(event.entity).remove::<Pressed>();
+                if world.get::<Pressed>(event.entity).is_some() {
+                    world.entity_mut(event.entity).remove::<Pressed>();
+                    world.entity_mut(event.entity).insert(StyleDirty);
+                }
             }
+        }
+    }
+}
+
+/// Incremental invalidation: marks entities that need style recomputation.
+pub fn mark_style_dirty(world: &mut World) {
+    let stylesheet_changed =
+        world.is_resource_added::<StyleSheet>() || world.is_resource_changed::<StyleSheet>();
+
+    let mut dirty = {
+        let mut query = world.query_filtered::<Entity, Or<(
+            Changed<StyleClass>,
+            Changed<LayoutStyle>,
+            Changed<ColorStyle>,
+            Changed<TextStyle>,
+            Changed<StyleTransition>,
+            Changed<Hovered>,
+            Changed<Pressed>,
+        )>>();
+        query.iter(world).collect::<Vec<_>>()
+    };
+
+    let has_type_selectors = world
+        .get_resource::<StyleSheet>()
+        .is_some_and(StyleSheet::has_type_selectors);
+
+    if stylesheet_changed {
+        if has_type_selectors {
+            let mut all_entities = world.query::<Entity>();
+            dirty.extend(all_entities.iter(world));
+        } else {
+            let mut candidates = world.query_filtered::<Entity, Or<(
+                With<StyleClass>,
+                With<LayoutStyle>,
+                With<ColorStyle>,
+                With<TextStyle>,
+                With<StyleTransition>,
+                With<ComputedStyle>,
+            )>>();
+            dirty.extend(candidates.iter(world));
+        }
+    }
+
+    if !has_type_selectors {
+        let stale = {
+            let mut stale_query =
+                world.query_filtered::<Entity, (With<ComputedStyle>, Without<StyleDirty>)>();
+            stale_query
+                .iter(world)
+                .filter(|entity| {
+                    world.get::<StyleClass>(*entity).is_none()
+                        && world.get::<LayoutStyle>(*entity).is_none()
+                        && world.get::<ColorStyle>(*entity).is_none()
+                        && world.get::<TextStyle>(*entity).is_none()
+                        && world.get::<StyleTransition>(*entity).is_none()
+                })
+                .collect::<Vec<_>>()
+        };
+        dirty.extend(stale);
+    }
+
+    let mut unique = HashSet::new();
+    for entity in dirty {
+        if unique.insert(entity) && world.get_entity(entity).is_ok() {
+            world.entity_mut(entity).insert(StyleDirty);
         }
     }
 }
@@ -481,71 +762,94 @@ pub fn sync_ui_interaction_markers(world: &mut World) {
 /// Compute and store target/current style states used by transition animation.
 pub fn sync_style_targets(world: &mut World) {
     let entities = {
-        let mut query = world.query_filtered::<Entity, Or<(
-            With<StyleClass>,
-            With<LayoutStyle>,
-            With<ColorStyle>,
-            With<TextStyle>,
-            With<StyleTransition>,
-            With<Hovered>,
-            With<Pressed>,
-        )>>();
+        let mut query = world.query_filtered::<Entity, With<StyleDirty>>();
         query.iter(world).collect::<Vec<_>>()
     };
+
+    if entities.is_empty() {
+        return;
+    }
 
     let snapshots = {
         let world_ref: &World = world;
         entities
             .into_iter()
-            .map(|entity| {
-                let cascaded = merged_for_entity(world_ref, entity);
-                let target =
-                    to_target_component(target_colors(world_ref, entity, &cascaded.colors));
-                (entity, cascaded.transition, target)
-            })
+            .map(|entity| (entity, compute_resolved_style(world_ref, entity)))
             .collect::<Vec<_>>()
     };
 
-    for (entity, transition, target) in snapshots {
-        match transition {
-            Some(transition) => {
-                world.entity_mut(entity).insert(transition);
-
-                let previous_target = world.get::<TargetColorStyle>(entity).copied();
-                if let Some(mut target_component) = world.get_mut::<TargetColorStyle>(entity) {
-                    *target_component = target;
+    for (entity, resolved) in snapshots {
+        match resolved {
+            Some(resolved) => {
+                if let Some(mut computed) = world.get_mut::<ComputedStyle>(entity) {
+                    computed.layout = resolved.layout;
+                    computed.colors = resolved.colors;
+                    computed.text = resolved.text;
+                    computed.transition = resolved.transition;
                 } else {
-                    world.entity_mut(entity).insert(target);
+                    world.entity_mut(entity).insert(ComputedStyle {
+                        layout: resolved.layout,
+                        colors: resolved.colors,
+                        text: resolved.text,
+                        transition: resolved.transition,
+                    });
                 }
 
-                if world.get::<CurrentColorStyle>(entity).is_none() {
-                    world
-                        .entity_mut(entity)
-                        .insert(to_current_component(target));
-                }
+                let target = to_target_component(resolved.colors);
+                match resolved.transition {
+                    Some(transition) => {
+                        let previous_target = world.get::<TargetColorStyle>(entity).copied();
+                        if let Some(mut target_component) =
+                            world.get_mut::<TargetColorStyle>(entity)
+                        {
+                            *target_component = target;
+                        } else {
+                            world.entity_mut(entity).insert(target);
+                        }
 
-                if transition.duration <= f32::EPSILON {
-                    ensure_current(world, entity, to_current_component(target));
-                    world.entity_mut(entity).remove::<TweenAnim>();
-                    continue;
-                }
+                        if world.get::<CurrentColorStyle>(entity).is_none() {
+                            world
+                                .entity_mut(entity)
+                                .insert(to_current_component(target));
+                        }
 
-                let target_changed = previous_target.is_some_and(|prev| prev != target);
-                if target_changed {
-                    let start = world
-                        .get::<CurrentColorStyle>(entity)
-                        .copied()
-                        .unwrap_or_else(|| to_current_component(target));
-                    let end = to_current_component(target);
-                    spawn_color_style_tween(world, entity, start, end, transition.duration);
+                        if transition.duration <= f32::EPSILON {
+                            ensure_current(world, entity, to_current_component(target));
+                            world.entity_mut(entity).remove::<TweenAnim>();
+                        } else {
+                            let target_changed = previous_target.is_some_and(|prev| prev != target);
+                            if target_changed {
+                                let start = world
+                                    .get::<CurrentColorStyle>(entity)
+                                    .copied()
+                                    .unwrap_or_else(|| to_current_component(target));
+                                let end = to_current_component(target);
+                                spawn_color_style_tween(
+                                    world,
+                                    entity,
+                                    start,
+                                    end,
+                                    transition.duration,
+                                );
+                            }
+                        }
+                    }
+                    None => {
+                        world.entity_mut(entity).remove::<TargetColorStyle>();
+                        world.entity_mut(entity).remove::<CurrentColorStyle>();
+                        world.entity_mut(entity).remove::<TweenAnim>();
+                    }
                 }
             }
             None => {
+                world.entity_mut(entity).remove::<ComputedStyle>();
                 world.entity_mut(entity).remove::<TargetColorStyle>();
                 world.entity_mut(entity).remove::<CurrentColorStyle>();
                 world.entity_mut(entity).remove::<TweenAnim>();
             }
         }
+
+        world.entity_mut(entity).remove::<StyleDirty>();
     }
 }
 

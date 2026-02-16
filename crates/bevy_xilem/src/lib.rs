@@ -83,19 +83,19 @@ pub mod prelude {
 
     pub use crate::{
         AppBevyXilemExt, BevyXilemPlugin, BevyXilemRuntime, BuiltinUiAction, ColorStyle,
-        CurrentColorStyle, EcsButtonView, Hovered, LayoutStyle, MasonryRuntime, Pressed,
-        ProjectionCtx, StyleClass, StyleRule, StyleSheet, StyleTransition, SynthesizedUiViews,
-        TargetColorStyle, TextStyle, TypedUiEvent, UiAnyView, UiButton, UiEvent, UiEventQueue,
-        UiFlexColumn, UiFlexRow, UiInteractionEvent, UiLabel, UiProjector, UiProjectorRegistry,
-        UiRoot, UiSynthesisStats, UiView, button, button_with_child, checkbox, ecs_button,
-        ecs_button_with_child, ecs_checkbox, ecs_slider, ecs_switch, ecs_text_button,
-        ecs_text_input, emit_ui_action, gather_ui_roots, inject_bevy_input_into_masonry,
-        rebuild_masonry_runtime, register_builtin_projectors, resolve_style,
-        resolve_style_for_classes, resolve_style_for_entity_classes, run_app,
-        run_app_with_window_options, slider, switch, synthesize_roots, synthesize_roots_with_stats,
-        synthesize_ui, synthesize_world, text_button, text_input, xilem_button,
-        xilem_button_any_pointer, xilem_checkbox, xilem_slider, xilem_switch, xilem_text_button,
-        xilem_text_input,
+        ComputedStyle, CurrentColorStyle, EcsButtonView, Hovered, LayoutStyle, MasonryRuntime,
+        Pressed, ProjectionCtx, PseudoClass, Selector, StyleClass, StyleDirty, StyleRule,
+        StyleSetter, StyleSheet, StyleTransition, SynthesizedUiViews, TargetColorStyle, TextStyle,
+        TypedUiEvent, UiAnyView, UiButton, UiEvent, UiEventQueue, UiFlexColumn, UiFlexRow,
+        UiInteractionEvent, UiLabel, UiProjector, UiProjectorRegistry, UiRoot, UiSynthesisStats,
+        UiView, button, button_with_child, checkbox, ecs_button, ecs_button_with_child,
+        ecs_checkbox, ecs_slider, ecs_switch, ecs_text_button, ecs_text_input, emit_ui_action,
+        gather_ui_roots, inject_bevy_input_into_masonry, mark_style_dirty, rebuild_masonry_runtime,
+        register_builtin_projectors, resolve_style, resolve_style_for_classes,
+        resolve_style_for_entity_classes, run_app, run_app_with_window_options, slider, switch,
+        synthesize_roots, synthesize_roots_with_stats, synthesize_ui, synthesize_world,
+        text_button, text_input, xilem_button, xilem_button_any_pointer, xilem_checkbox,
+        xilem_slider, xilem_switch, xilem_text_button, xilem_text_input,
     };
 
     pub use crate::{

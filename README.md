@@ -108,7 +108,7 @@ Minimal setup sketch:
 
 ```rust,no_run
 use bevy_xilem::{
-    ColorStyle, LayoutStyle, StyleClass, StyleRule, StyleSheet, StyleTransition, TextStyle,
+    ColorStyle, LayoutStyle, StyleClass, StyleSetter, StyleSheet, StyleTransition, TextStyle,
     apply_label_style, apply_widget_style, resolve_style,
     bevy_ecs::prelude::*,
     xilem::{Color, view::{flex_col, label}},
@@ -117,7 +117,7 @@ use bevy_xilem::{
 fn setup_styles(mut sheet: ResMut<StyleSheet>) {
     sheet.set_class(
         "demo.button",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(8.0),
                 corner_radius: Some(8.0),

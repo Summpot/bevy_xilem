@@ -10,7 +10,8 @@ use crate::{
     projection::{UiProjectorRegistry, register_builtin_projectors},
     runtime::{MasonryRuntime, inject_bevy_input_into_masonry, rebuild_masonry_runtime},
     styling::{
-        StyleSheet, animate_style_transitions, sync_style_targets, sync_ui_interaction_markers,
+        StyleSheet, animate_style_transitions, mark_style_dirty, sync_style_targets,
+        sync_ui_interaction_markers,
     },
     synthesize::{SynthesizedUiViews, UiSynthesisStats, synthesize_ui},
 };
@@ -39,7 +40,9 @@ impl Plugin for BevyXilemPlugin {
             )
             .add_systems(
                 Update,
-                sync_style_targets.before(AnimationSystem::AnimationUpdate),
+                (mark_style_dirty, sync_style_targets)
+                    .chain()
+                    .before(AnimationSystem::AnimationUpdate),
             )
             .add_systems(
                 Update,

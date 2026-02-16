@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleRule, StyleSheet, TextStyle, UiEventQueue, UiRoot, UiView, apply_label_style,
+    StyleSetter, StyleSheet, TextStyle, UiEventQueue, UiRoot, UiView, apply_label_style,
     apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
@@ -176,7 +176,7 @@ fn setup_temperature_world(mut commands: Commands) {
 fn setup_temperature_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "temp.root",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(16.0),
                 gap: Some(8.0),
@@ -188,56 +188,56 @@ fn setup_temperature_styles(mut style_sheet: ResMut<StyleSheet>) {
                 border: Some(bevy_xilem::xilem::palette::css::DARK_SLATE_GRAY),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "temp.title",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(24.0) },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::palette::css::WHITE),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "temp.row",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 gap: Some(8.0),
                 ..LayoutStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "temp.unit-label",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(16.0) },
             layout: LayoutStyle {
                 padding: Some(8.0),
                 ..LayoutStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "temp.input",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(16.0) },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "temp.hint",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(12.0) },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::Color::from_rgb8(0xb0, 0xb0, 0xb0)),
@@ -247,7 +247,7 @@ fn setup_temperature_styles(mut style_sheet: ResMut<StyleSheet>) {
                 padding: Some(8.0),
                 ..LayoutStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 }

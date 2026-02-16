@@ -95,10 +95,14 @@ The runtime now supports a data-driven style pipeline with four phases:
 
 - **Inline style components:**
   `LayoutStyle`, `ColorStyle`, `TextStyle`, `StyleTransition`
-- **Class-based stylesheet + cascading:**
-  `StyleClass` component and `StyleSheet` resource with `StyleRule`
+- **Selector-based stylesheet + cascading:**
+  `StyleSheet { rules: Vec<StyleRule> }` with selector AST:
+  `Selector::{Type, Class, PseudoClass, And}` and payload `StyleSetter`
 - **Pseudo classes from structural interaction events:**
   `Hovered` / `Pressed` marker components synchronized from interaction events
+- **Computed-style cache + incremental invalidation:**
+  `StyleDirty` marks entities requiring recomputation; `ComputedStyle` stores
+  cached resolved layout/text/color/transition for projector reads
 - **Smooth transitions:**
   `TargetColorStyle` + `CurrentColorStyle` driven by
   `bevy_tweening::TweenAnim` tween instances targeting
@@ -107,6 +111,8 @@ The runtime now supports a data-driven style pipeline with four phases:
 
 Style resolution helpers (`resolve_style`, `resolve_style_for_classes`) and application helpers
 (`apply_widget_style`, `apply_label_style`, `apply_text_input_style`) are provided for projectors.
+Projectors now primarily consume `ComputedStyle` (through `resolve_style`) rather than
+re-running a full cascade per frame.
 
 ### 6) ECS control adapter coverage
 
@@ -164,17 +170,19 @@ and registers tweening support with:
 and registers systems:
 
 - `PreUpdate`: `inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
-- `Update`: `sync_style_targets -> animate_style_transitions`
+- `Update`: `mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime` (chained)
 
 Transition execution details:
 
-- `sync_style_targets` computes target interaction colors and, on target changes,
-  inserts/replaces a `TweenAnim` with a fresh tween targeting
-  `CurrentColorStyle` on the same entity.
+- `mark_style_dirty` incrementally marks entities whose style dependencies changed
+  (class/inline/pseudo/style resource changes).
+- `sync_style_targets` recomputes style only for dirty entities, updates `ComputedStyle`,
+  computes target interaction colors, and on target changes inserts/replaces
+  a `TweenAnim` with a fresh tween targeting `CurrentColorStyle`.
 - Tween advancement is performed by `TweeningPlugin`'s
   `AnimationSystem::AnimationUpdate` system set.
-- `resolve_style` reads `CurrentColorStyle` so projectors render in-between values,
+- `resolve_style` reads `ComputedStyle` + `CurrentColorStyle` so projectors render in-between values,
   producing smooth CSS-like transitions instead of color snapping.
 
 It also registers built-in projectors.

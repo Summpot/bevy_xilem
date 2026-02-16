@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleRule, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
+    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
@@ -440,19 +440,19 @@ fn setup_calculator_world(mut commands: Commands) {
 fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class(
         "calc.root",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(12.0),
                 gap: Some(2.0),
                 ..LayoutStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "calc.display.row",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(8.0),
                 border_width: Some(1.0),
@@ -462,32 +462,32 @@ fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
                 border: Some(bevy_xilem::xilem::palette::css::DARK_SLATE_GRAY),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "calc.display.text",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(30.0) },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "calc.row",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 gap: Some(2.0),
                 ..LayoutStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "calc.button.digit",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(10.0),
                 corner_radius: Some(10.0),
@@ -501,13 +501,13 @@ fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..ColorStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "calc.button.action",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(10.0),
                 corner_radius: Some(10.0),
@@ -521,13 +521,13 @@ fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..ColorStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "calc.button.operator",
-        StyleRule {
+        StyleSetter {
             layout: LayoutStyle {
                 padding: Some(10.0),
                 corner_radius: Some(10.0),
@@ -541,31 +541,31 @@ fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..ColorStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "calc.button.label.default",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(18.0) },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::palette::css::WHITE),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 
     style_sheet.set_class(
         "calc.button.label.clear",
-        StyleRule {
+        StyleSetter {
             text: TextStyle { size: Some(18.0) },
             colors: ColorStyle {
                 text: Some(bevy_xilem::xilem::palette::css::MEDIUM_VIOLET_RED),
                 ..ColorStyle::default()
             },
-            ..StyleRule::default()
+            ..StyleSetter::default()
         },
     );
 }

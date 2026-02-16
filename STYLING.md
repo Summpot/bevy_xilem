@@ -4,8 +4,9 @@ This document explains the CSS-like, ECS-driven styling pipeline used by `bevy_x
 
 It covers:
 
-- style data model (`StyleRule`, `StyleSheet`, inline style components)
+- style data model (`Selector`, `StyleSetter`, `StyleRule`, `StyleSheet`, inline style components)
 - cascade + pseudo state resolution
+- computed style cache + incremental invalidation
 - projector integration patterns
 - smooth transition animations (Phase 4) powered by `bevy_tweening`
 - practical usage patterns and common pitfalls
@@ -47,15 +48,27 @@ All style primitives live in `crates/bevy_xilem/src/styling.rs`.
 ### 2.2 Class stylesheet model
 
 - `StyleClass(pub Vec<String>)` (component on entities)
-- `StyleRule { layout, colors, text, transition }`
-- `StyleSheet { classes: HashMap<String, StyleRule> }` (resource)
+- `Selector::{Type, Class, PseudoClass, And}`
+- `StyleSetter { layout, colors, text, transition }`
+- `StyleRule { selector, setter }`
+- `StyleSheet { rules: Vec<StyleRule> }` (resource)
+
+Convenience APIs still exist for class-only rules:
+
+- `StyleSheet::set_class("name", setter)`
+- `StyleSheet::with_class("name", setter)`
 
 ### 2.3 Pseudo-state markers
 
 - `Hovered`
 - `Pressed`
 
-### 2.4 Transition runtime state
+### 2.4 Cache + invalidation runtime state
+
+- `StyleDirty` (marks entities requiring recomputation)
+- `ComputedStyle` (cached resolved style read by projectors)
+
+### 2.5 Transition runtime state
 
 - `TargetColorStyle` (resolved target colors for the current pseudo state)
 - `CurrentColorStyle` (animated colors read by projectors)
@@ -67,9 +80,9 @@ All style primitives live in `crates/bevy_xilem/src/styling.rs`.
 
 `resolve_style(world, entity)` follows this precedence (low → high):
 
-1. class rules from `StyleSheet` via `StyleClass`
+1. selector-matched rules from `StyleSheet` (`Type`/`Class`/`PseudoClass`/`And`)
 2. inline component overrides (`LayoutStyle`, `ColorStyle`, `TextStyle`, `StyleTransition`)
-3. pseudo-state overrides (`hover_*`, `pressed_*`) based on `Hovered`/`Pressed`
+3. compatibility pseudo color overrides (`hover_*`, `pressed_*`) from `ColorStyle`
 4. animated override from `CurrentColorStyle` if present
 
 In short: class + inline define intent, pseudo state chooses target, animator provides smooth in-between values.
@@ -82,7 +95,7 @@ In short: class + inline define intent, pseudo state chooses target, animator pr
 
 - initializes `StyleSheet`
 - `PreUpdate`: `sync_ui_interaction_markers`
-- `Update`: `sync_style_targets -> animate_style_transitions`
+- `Update`: `mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - registers `TweeningPlugin` (from crates.io `bevy_tweening`)
 
 So users only need to define styles and apply them from projectors.
@@ -98,9 +111,9 @@ A common pattern is one startup system per screen/example:
 
 Example shape:
 
-- `style_sheet.set_class("todo.root", rule)`
-- `style_sheet.set_class("todo.add-button", rule)`
-- `style_sheet.set_class("todo.item", rule)`
+- `style_sheet.set_class("todo.root", setter)`
+- `style_sheet.set_class("todo.add-button", setter)`
+- `style_sheet.add_rule(StyleRule::new(Selector::and(...), setter))`
 
 Naming suggestions:
 
@@ -118,6 +131,7 @@ Key helper functions:
 
 - `resolve_style(world, entity)`
 - `resolve_style_for_classes(world, ["class.a", "class.b"])`
+- `resolve_style_for_entity_classes(world, entity, ["class.a", "class.b"])`
 - `apply_widget_style(view, &style)`
 - `apply_label_style(label(...), &style)`
 - `apply_text_input_style(text_input(...), &style)`
@@ -179,12 +193,13 @@ while easing is applied by tween sampling (`QuadraticInOut` by default for inter
 
 When target style changes (for example, due to hover/press changes):
 
-1. `sync_style_targets` computes new `TargetColorStyle`
-2. if a transition is configured and target changed:
+- `mark_style_dirty` marks entities with changed style dependencies.
+- `sync_style_targets` recomputes dirty entities, updates `ComputedStyle`, and computes a new `TargetColorStyle`.
+- If a transition is configured and target changed:
   - insert/update `TweenAnim` with a new `Tween` targeting `CurrentColorStyle`
-   - tween starts from current animated value and ends at new target value
-3. `TweeningPlugin` advances animations each frame in `AnimationSystem::AnimationUpdate`
-4. projectors read `CurrentColorStyle` through `resolve_style`
+  - tween starts from current animated value and ends at new target value
+- `TweeningPlugin` advances animations each frame in `AnimationSystem::AnimationUpdate`.
+- Projectors read `ComputedStyle` (+ animated `CurrentColorStyle`) via `resolve_style`.
 
 Result: no color snap; smooth CSS-like interpolation.
 
@@ -203,21 +218,22 @@ To make a control animate on interaction:
 
 1. define base and hover/pressed colors in `ColorStyle`
 2. set `transition: Some(StyleTransition { duration: ... })`
-3. ensure control path emits interaction events (`Hovered`/`Pressed` updates)
+3. ensure control path emits interaction events (`Hovered`/`Pressed` updates) so entities become `StyleDirty`
 4. apply style with projector helpers
 
 ---
 
 ## 10. Common Pitfalls
 
-1. **Class-only resolution is static**
-   - `resolve_style_for_classes(...)` does not implicitly bind pseudo state unless your entity/state flow updates the relevant animated components.
-2. **Interaction event source matters**
-   - if a control path does not emit `UiInteractionEvent`, pseudo-state-based transitions will not trigger.
-3. **Wrapper styling vs. inner widget styling**
-   - some controls may have internal defaults (such as borders) that require styling the interactive path itself.
-4. **Keep design/docs in sync**
-   - if style behavior changes, update both implementation and `DESIGN.md`/docs in one change.
+- **Class-only resolution is static**
+  - `resolve_style_for_classes(...)` does not bind pseudo state by itself.
+  - Use `resolve_style_for_entity_classes(...)` when pseudo-state-dependent classes are needed.
+- **Interaction event source matters**
+  - if a control path does not emit `UiInteractionEvent`, pseudo-state-based transitions will not trigger.
+- **Wrapper styling vs. inner widget styling**
+  - some controls may have internal defaults (such as borders) that require styling the interactive path itself.
+- **Keep design/docs in sync**
+  - if style behavior changes, update both implementation and `DESIGN.md`/docs in one change.
 
 ---
 
