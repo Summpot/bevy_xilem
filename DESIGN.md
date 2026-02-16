@@ -56,10 +56,9 @@ which are injected into `MasonryRuntime.render_root`.
 
 To remove user-facing closure boilerplate:
 
-- `EcsButtonWidget` implements `masonry::core::Widget`.
-- `EcsButtonView` implements `xilem_core::View`.
+- `EcsButtonView` implements `xilem_core::View` on top of Masonry's native `Button` widget.
 - `ecs_button(entity, action, label)` builds this view directly.
-- On click, widget pushes `UiEvent { entity, action }` into global queue-backed resource.
+- On click, keyboard activate, or accessibility click, it emits typed ECS actions into `UiEventQueue`.
 
 This enables projector code like:
 
@@ -73,6 +72,22 @@ with no per-button channel sender/closure wiring by end users.
 
 - Widgets push type-erased actions (`Box<dyn Any + Send + Sync>`).
 - Bevy systems drain typed actions via `drain_actions::<T>()`.
+- `emit_ui_action(entity, action)` provides a public adapter entry-point for callback-heavy
+  Xilem controls while still routing through the same ECS queue path.
+
+### 6) ECS control adapter coverage
+
+`bevy_xilem` scanned `xilem_masonry::view::*` controls and currently provides ECS adapters
+for controls that naturally produce user actions:
+
+- `ecs_button` / `ecs_button_with_child` / `ecs_text_button`
+- `ecs_checkbox`
+- `ecs_slider`
+- `ecs_switch`
+- `ecs_text_input`
+
+Non-interactive display/layout controls (`label`, `flex`, `grid`, `prose`, `progress_bar`,
+`sized_box`, etc.) are reused directly since they do not require event adaptation.
 
 ## ECS data model
 

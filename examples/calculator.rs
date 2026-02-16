@@ -4,14 +4,14 @@ use bevy_app::{App, PreUpdate};
 use bevy_ecs::prelude::*;
 use bevy_xilem::{
     BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    emit_ui_action, run_app_with_window_options,
+    ecs_button_with_child, ecs_text_button, run_app_with_window_options,
 };
 use xilem::{
     Color,
     masonry::layout::Length,
     palette,
     style::Style as _,
-    view::{FlexExt as _, button, flex_col, flex_row, label, text_button},
+    view::{FlexExt as _, flex_col, flex_row, label},
     winit::{dpi::LogicalSize, error::EventLoopError},
 };
 
@@ -394,12 +394,10 @@ fn project_calc_button(
 
     match button_data.kind {
         CalcButtonKind::Digit => Arc::new(
-            text_button(button_data.label, move |_| {
-                emit_ui_action(entity, event.clone());
-            })
-            .background_color(Color::from_rgb8(0x3a, 0x3a, 0x3a))
-            .corner_radius(10.0)
-            .border_color(Color::TRANSPARENT),
+            ecs_text_button(entity, event, button_data.label)
+                .background_color(Color::from_rgb8(0x3a, 0x3a, 0x3a))
+                .corner_radius(10.0)
+                .border_color(Color::TRANSPARENT),
         ),
         CalcButtonKind::Action | CalcButtonKind::Operator => {
             let label_color = if button_data.event == CalcEvent::ClearEntry && highlight_clear_entry
@@ -410,13 +408,11 @@ fn project_calc_button(
             };
 
             Arc::new(
-                button(label(button_data.label).color(label_color), move |_| {
-                    emit_ui_action(entity, event.clone());
-                })
-                .background_color(Color::from_rgb8(0x00, 0x8d, 0xdd))
-                .corner_radius(10.0)
-                .border_color(Color::TRANSPARENT)
-                .hovered_border_color(Color::WHITE),
+                ecs_button_with_child(entity, event, label(button_data.label).color(label_color))
+                    .background_color(Color::from_rgb8(0x00, 0x8d, 0xdd))
+                    .corner_radius(10.0)
+                    .border_color(Color::TRANSPARENT)
+                    .hovered_border_color(Color::WHITE),
             )
         }
     }

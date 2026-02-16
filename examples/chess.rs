@@ -8,7 +8,7 @@ use bevy_app::{App, PreUpdate};
 use bevy_ecs::prelude::*;
 use bevy_xilem::{
     BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    emit_ui_action, run_app_with_window_options,
+    ecs_button_with_child, ecs_checkbox, ecs_slider, ecs_text_button, run_app_with_window_options,
 };
 use xilem::{
     Color,
@@ -18,8 +18,8 @@ use xilem::{
     },
     style::Style as _,
     view::{
-        CrossAxisAlignment, FlexExt as _, FlexSpacer, GridExt as _, button, checkbox, flex_col,
-        flex_row, grid, label, prose, sized_box, slider, text_button,
+        CrossAxisAlignment, FlexExt as _, FlexSpacer, GridExt as _, flex_col, flex_row, grid,
+        label, prose, sized_box,
     },
     winit::error::EventLoopError,
 };
@@ -435,10 +435,11 @@ fn build_chess_board_view(ui: &ChessUiResource, action_entity: Entity) -> UiView
                 .font(chess_piece_font_family())
                 .color(Color::BLACK);
 
-            let cell_entity = action_entity;
-            let cell = button(label_piece, move |_| {
-                emit_ui_action(cell_entity, ChessEvent::ClickSquare { row, col });
-            })
+            let cell = ecs_button_with_child(
+                action_entity,
+                ChessEvent::ClickSquare { row, col },
+                label_piece,
+            )
             .padding(0.0)
             .background_color(color)
             .corner_radius(0.0)
@@ -464,12 +465,6 @@ fn build_chess_controls_view(
     action_entity: Entity,
 ) -> UiView {
     let movelist_text = ui.movelist_text();
-    let entity_set_time = action_entity;
-    let entity_toggle_white = action_entity;
-    let entity_toggle_black = action_entity;
-    let entity_rotate = action_entity;
-    let entity_new_game = action_entity;
-    let entity_print_movelist = action_entity;
 
     Arc::new(
         flex_col((
@@ -480,24 +475,28 @@ fn build_chess_controls_view(
             label(format!("Black: {}", formatted_clock(flow.time_elapsed[1]))),
             FlexSpacer::Fixed(TINY_GAP),
             label(format!("{:.2} sec/move", game_res.time_per_move)),
-            slider(0.1, 5.0, game_res.time_per_move, move |_, val| {
-                emit_ui_action(entity_set_time, ChessEvent::SetTimePerMove(val));
-            }),
-            checkbox("Engine plays white", ui.engine_plays_white, move |_, _| {
-                emit_ui_action(entity_toggle_white, ChessEvent::ToggleEngineWhite);
-            }),
-            checkbox("Engine plays black", ui.engine_plays_black, move |_, _| {
-                emit_ui_action(entity_toggle_black, ChessEvent::ToggleEngineBlack);
-            }),
-            text_button("Rotate", move |_| {
-                emit_ui_action(entity_rotate, ChessEvent::Rotate);
-            }),
-            text_button("New game", move |_| {
-                emit_ui_action(entity_new_game, ChessEvent::NewGame);
-            }),
-            text_button("Print movelist", move |_| {
-                emit_ui_action(entity_print_movelist, ChessEvent::PrintMovelist);
-            }),
+            ecs_slider(
+                action_entity,
+                0.1,
+                5.0,
+                game_res.time_per_move,
+                ChessEvent::SetTimePerMove,
+            ),
+            ecs_checkbox(
+                action_entity,
+                "Engine plays white",
+                ui.engine_plays_white,
+                |_| ChessEvent::ToggleEngineWhite,
+            ),
+            ecs_checkbox(
+                action_entity,
+                "Engine plays black",
+                ui.engine_plays_black,
+                |_| ChessEvent::ToggleEngineBlack,
+            ),
+            ecs_text_button(action_entity, ChessEvent::Rotate, "Rotate"),
+            ecs_text_button(action_entity, ChessEvent::NewGame, "New game"),
+            ecs_text_button(action_entity, ChessEvent::PrintMovelist, "Print movelist"),
             sized_box(prose(movelist_text)).width(200_i32.px()),
             FlexSpacer::Fixed(GAP),
         ))

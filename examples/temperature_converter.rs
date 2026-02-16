@@ -4,7 +4,7 @@ use bevy_app::{App, PreUpdate};
 use bevy_ecs::prelude::*;
 use bevy_xilem::{
     BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    emit_ui_action, run_app_with_window_options,
+    ecs_text_input, run_app_with_window_options,
 };
 use xilem::{
     Color,
@@ -12,7 +12,7 @@ use xilem::{
     masonry::properties::Padding,
     palette,
     style::Style as _,
-    view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, text_input},
+    view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label},
     winit::{dpi::LogicalSize, error::EventLoopError},
 };
 
@@ -112,7 +112,6 @@ fn apply_temperature_event(state: &mut TemperatureState, event: TemperatureEvent
 
 fn project_temperature_root(_: &TemperatureRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let state = ctx.world.resource::<TemperatureState>().clone();
-    let entity = ctx.entity;
 
     let title = label("Temperature Converter")
         .text_size(24.0)
@@ -120,9 +119,11 @@ fn project_temperature_root(_: &TemperatureRootView, ctx: ProjectionCtx<'_>) -> 
         .padding(Padding::bottom(8.0));
 
     let celsius_row = flex_row((
-        text_input(state.celsius_text, move |_, new_value| {
-            emit_ui_action(entity, TemperatureEvent::SetCelsiusText(new_value));
-        })
+        ecs_text_input(
+            ctx.entity,
+            state.celsius_text,
+            TemperatureEvent::SetCelsiusText,
+        )
         .placeholder("0")
         .text_size(16.0)
         .flex(1.0),
@@ -130,11 +131,12 @@ fn project_temperature_root(_: &TemperatureRootView, ctx: ProjectionCtx<'_>) -> 
     ))
     .gap(Length::px(8.0));
 
-    let entity_for_f = ctx.entity;
     let fahrenheit_row = flex_row((
-        text_input(state.fahrenheit_text, move |_, new_value| {
-            emit_ui_action(entity_for_f, TemperatureEvent::SetFahrenheitText(new_value));
-        })
+        ecs_text_input(
+            ctx.entity,
+            state.fahrenheit_text,
+            TemperatureEvent::SetFahrenheitText,
+        )
         .placeholder("32")
         .text_size(16.0)
         .flex(1.0),

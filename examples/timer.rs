@@ -4,7 +4,7 @@ use bevy_app::{App, PreUpdate};
 use bevy_ecs::prelude::*;
 use bevy_xilem::{
     BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    emit_ui_action, run_app_with_window_options,
+    ecs_slider, ecs_text_button, run_app_with_window_options,
 };
 use xilem::{
     Color,
@@ -12,10 +12,7 @@ use xilem::{
     masonry::properties::Padding,
     palette,
     style::Style as _,
-    view::{
-        CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, progress_bar, slider,
-        text_button,
-    },
+    view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, progress_bar},
     winit::{dpi::LogicalSize, error::EventLoopError},
 };
 
@@ -85,7 +82,6 @@ fn tick_timer(state: &mut TimerState) {
 
 fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let state = ctx.world.resource::<TimerState>().clone();
-    let entity = ctx.entity;
 
     let progress = if state.duration_secs > 0.0 {
         Some(clamp01(state.elapsed_secs / state.duration_secs))
@@ -111,19 +107,19 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
         label(format!("Duration: {duration_value:.0} s"))
             .text_size(16.0)
             .padding(Padding::top(6.0)),
-        slider(1.0, 60.0, duration_value, move |_, val| {
-            emit_ui_action(entity, TimerEvent::SetDurationSecs(val));
-        })
+        ecs_slider(
+            ctx.entity,
+            1.0,
+            60.0,
+            duration_value,
+            TimerEvent::SetDurationSecs,
+        )
         .step(1.0)
         .flex(1.0),
     ))
     .gap(Length::px(8.0));
 
-    let reset_entity = ctx.entity;
-    let reset = text_button("Reset", move |_| {
-        emit_ui_action(reset_entity, TimerEvent::Reset);
-    })
-    .padding(Padding::top(8.0));
+    let reset = ecs_text_button(ctx.entity, TimerEvent::Reset, "Reset").padding(Padding::top(8.0));
 
     Arc::new(
         flex_col((

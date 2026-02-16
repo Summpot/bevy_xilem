@@ -7,7 +7,7 @@ use bevy_ecs::{
 };
 use bevy_xilem::{
     BevyXilemPlugin, ProjectionCtx, UiEventQueue, UiNodeId, UiProjectorRegistry, UiRoot, UiView,
-    emit_ui_action, run_app,
+    ecs_button_with_child, ecs_checkbox, ecs_text_button, ecs_text_input, run_app,
 };
 use xilem::{
     InsertNewline,
@@ -16,10 +16,7 @@ use xilem::{
         theme::{DEFAULT_GAP, ZYNC_800},
     },
     style::Style as _,
-    view::{
-        FlexExt as _, FlexSpacer, MainAxisAlignment, button, checkbox, flex_col, flex_row, label,
-        text_button, text_input,
-    },
+    view::{FlexExt as _, FlexSpacer, MainAxisAlignment, flex_col, flex_row, label},
     winit::error::EventLoopError,
 };
 
@@ -108,25 +105,23 @@ fn project_todo_header(_: &TodoHeader, _: ProjectionCtx<'_>) -> UiView {
 
 fn project_todo_input_area(_: &TodoInputArea, ctx: ProjectionCtx<'_>) -> UiView {
     let draft = ctx.world.resource::<DraftTodo>().0.clone();
-    let entity = ctx.entity;
-    let entity_for_enter = entity;
-    let entity_for_button = entity;
+    let entity_for_enter = ctx.entity;
 
     Arc::new(
         flex_row((
-            text_input(draft, move |_, new_value| {
-                emit_ui_action(entity, TodoEvent::SetDraft(new_value));
-            })
-            .text_size(16.0)
-            .placeholder("What needs to be done?")
-            .insert_newline(InsertNewline::OnShiftEnter)
-            .on_enter(move |_, _| {
-                emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
-            })
-            .flex(1.0),
-            button(label("Add task").text_size(16.0), move |_| {
-                emit_ui_action(entity_for_button, TodoEvent::SubmitDraft);
-            }),
+            ecs_text_input(ctx.entity, draft, TodoEvent::SetDraft)
+                .text_size(16.0)
+                .placeholder("What needs to be done?")
+                .insert_newline(InsertNewline::OnShiftEnter)
+                .on_enter(move |_, _| {
+                    bevy_xilem::emit_ui_action(entity_for_enter, TodoEvent::SubmitDraft);
+                })
+                .flex(1.0),
+            ecs_button_with_child(
+                ctx.entity,
+                TodoEvent::SubmitDraft,
+                label("Add task").text_size(16.0),
+            ),
         ))
         .gap(DEFAULT_GAP),
     )
@@ -154,19 +149,15 @@ fn project_todo_item(item: &TodoItem, ctx: ProjectionCtx<'_>) -> UiView {
     }
 
     let entity = ctx.entity;
-    let entity_for_delete = entity;
 
     Arc::new(
         flex_row((
-            checkbox(item.text.clone(), item.completed, move |_, value| {
-                emit_ui_action(entity, TodoEvent::SetCompleted(entity, value));
+            ecs_checkbox(entity, item.text.clone(), item.completed, move |value| {
+                TodoEvent::SetCompleted(entity, value)
             })
             .text_size(16.0),
             FlexSpacer::Flex(1.0),
-            text_button("Delete", move |_| {
-                emit_ui_action(entity_for_delete, TodoEvent::Delete(entity_for_delete));
-            })
-            .padding(5.0),
+            ecs_text_button(entity, TodoEvent::Delete(entity), "Delete").padding(5.0),
         ))
         .padding(DEFAULT_GAP.get())
         .border(ZYNC_800, 1.0),
@@ -196,11 +187,13 @@ fn project_filter_bar(_: &TodoFilterBar, ctx: ProjectionCtx<'_>) -> UiView {
 fn project_filter_toggle(filter_toggle: &FilterToggle, ctx: ProjectionCtx<'_>) -> UiView {
     let filter = filter_toggle.0;
     let active = ctx.world.resource::<ActiveFilter>().0;
-    let entity = ctx.entity;
 
-    Arc::new(checkbox(filter.as_str(), active == filter, move |_, _| {
-        emit_ui_action(entity, TodoEvent::SetFilter(filter));
-    }))
+    Arc::new(ecs_checkbox(
+        ctx.entity,
+        filter.as_str(),
+        active == filter,
+        move |_| TodoEvent::SetFilter(filter),
+    ))
 }
 
 fn install_projectors(world: &mut World) {
