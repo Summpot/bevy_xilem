@@ -128,6 +128,26 @@ for controls that naturally produce user actions:
 Non-interactive display/layout controls (`label`, `flex`, `grid`, `prose`, `progress_bar`,
 `sized_box`, etc.) are reused directly since they do not require event adaptation.
 
+### 7) Two-level UI componentization policy
+
+Projector organization follows two complementary componentization levels:
+
+- **Micro-componentization (pure Rust view helpers):**
+  Reusable, purely visual fragments (for example tag pills, avatar + name rows,
+  common action button variants) should be extracted into pure helper functions that
+  return `UiView` or `impl View`.
+  Projectors should compose these helpers rather than inlining long builder chains.
+
+- **Macro-componentization (ECS entities + `ChildOf`):**
+  UI regions with independent lifecycle/state, or repeated/list items (for example
+  feed cards, list rows, sidebars, overlays/panels), should be represented as their own
+  ECS entities with dedicated registered projectors.
+  Parent projectors should primarily lay out `ctx.children` rather than iterating data
+  and constructing many heavy subtrees inline.
+
+This policy is applied across examples to keep projector functions small, improve
+incremental ECS updates, and make UI hierarchy ownership explicit.
+
 ## ECS data model
 
 Built-in components:

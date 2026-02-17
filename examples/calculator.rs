@@ -5,7 +5,7 @@ use bevy_xilem::{
     StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
+    bevy_ecs::{hierarchy::ChildOf, prelude::*},
     button, resolve_style, resolve_style_for_classes, run_app_with_window_options,
     xilem::{
         view::{FlexExt as _, flex_col, flex_row, label},
@@ -254,6 +254,15 @@ fn format_number(value: f64) -> String {
 #[derive(Component, Debug, Clone, Copy)]
 struct CalcRoot;
 
+#[derive(Component, Debug, Clone, Copy)]
+struct CalcDisplayPanel;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct CalcKeypad;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct CalcButtonRow;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CalcButtonKind {
     Digit,
@@ -261,7 +270,7 @@ enum CalcButtonKind {
     Operator,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Component, Debug, Clone)]
 struct CalcButtonSpec {
     label: &'static str,
     event: CalcEvent,
@@ -402,39 +411,69 @@ fn project_calc_button(entity: Entity, button_data: &CalcButtonSpec, world: &Wor
 
 fn project_calc_root(_: &CalcRoot, ctx: ProjectionCtx<'_>) -> UiView {
     let root_style = resolve_style(ctx.world, ctx.entity);
+    Arc::new(apply_widget_style(
+        flex_col(
+            ctx.children
+                .into_iter()
+                .map(|child| child.into_any_flex())
+                .collect::<Vec<_>>(),
+        ),
+        &root_style,
+    ))
+}
+
+fn project_calc_display(_: &CalcDisplayPanel, ctx: ProjectionCtx<'_>) -> UiView {
     let display_row_style = resolve_style_for_classes(ctx.world, ["calc.display.row"]);
     let display_text_style = resolve_style_for_classes(ctx.world, ["calc.display.text"]);
-    let row_style = resolve_style_for_classes(ctx.world, ["calc.row"]);
-
     let engine = ctx.world.resource::<CalculatorEngine>();
 
-    let mut children = vec![
-        apply_widget_style(
-            flex_row((
-                apply_label_style(label(engine.display_text()), &display_text_style)
-                    .into_any_flex(),
-            )),
-            &display_row_style,
-        )
-        .into_any_flex(),
-    ];
+    Arc::new(apply_widget_style(
+        flex_row((
+            apply_label_style(label(engine.display_text()), &display_text_style).into_any_flex(),
+        )),
+        &display_row_style,
+    ))
+}
 
-    for row in calc_button_rows() {
-        let row_children = row
-            .iter()
-            .map(|button_data| {
-                project_calc_button(ctx.entity, button_data, ctx.world).into_any_flex()
-            })
-            .collect::<Vec<_>>();
+fn project_calc_keypad(_: &CalcKeypad, ctx: ProjectionCtx<'_>) -> UiView {
+    Arc::new(flex_col(
+        ctx.children
+            .into_iter()
+            .map(|child| child.into_any_flex())
+            .collect::<Vec<_>>(),
+    ))
+}
 
-        children.push(apply_widget_style(flex_row(row_children), &row_style).into_any_flex());
-    }
+fn project_calc_row(_: &CalcButtonRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let row_style = resolve_style_for_classes(ctx.world, ["calc.row"]);
+    Arc::new(apply_widget_style(
+        flex_row(
+            ctx.children
+                .into_iter()
+                .map(|child| child.into_any_flex())
+                .collect::<Vec<_>>(),
+        ),
+        &row_style,
+    ))
+}
 
-    Arc::new(apply_widget_style(flex_col(children), &root_style))
+fn project_calc_button_component(button_data: &CalcButtonSpec, ctx: ProjectionCtx<'_>) -> UiView {
+    project_calc_button(ctx.entity, button_data, ctx.world)
 }
 
 fn setup_calculator_world(mut commands: Commands) {
-    commands.spawn((UiRoot, CalcRoot, StyleClass(vec!["calc.root".to_string()])));
+    let root = commands
+        .spawn((UiRoot, CalcRoot, StyleClass(vec!["calc.root".to_string()])))
+        .id();
+    commands.spawn((CalcDisplayPanel, ChildOf(root)));
+
+    let keypad = commands.spawn((CalcKeypad, ChildOf(root))).id();
+    for row in calc_button_rows() {
+        let row_entity = commands.spawn((CalcButtonRow, ChildOf(keypad))).id();
+        for button_spec in row {
+            commands.spawn((button_spec, ChildOf(row_entity)));
+        }
+    }
 }
 
 fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
@@ -589,6 +628,10 @@ fn build_bevy_calculator_app() -> App {
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(CalculatorEngine::default())
         .register_projector::<CalcRoot>(project_calc_root)
+        .register_projector::<CalcDisplayPanel>(project_calc_display)
+        .register_projector::<CalcKeypad>(project_calc_keypad)
+        .register_projector::<CalcButtonRow>(project_calc_row)
+        .register_projector::<CalcButtonSpec>(project_calc_button_component)
         .add_systems(Startup, (setup_calculator_styles, setup_calculator_world));
 
     app.add_systems(PreUpdate, drain_calc_events);
@@ -600,4 +643,24 @@ fn main() -> Result<(), EventLoopError> {
     run_app_with_window_options(build_bevy_calculator_app(), "Calculator", |options| {
         options.with_initial_inner_size(LogicalSize::new(400.0, 500.0))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy_xilem::bevy_ecs::schedule::Schedule;
+
+    #[test]
+    fn setup_spawns_componentized_keypad_entities() {
+        let mut world = World::new();
+        let mut schedule = Schedule::default();
+        schedule.add_systems(setup_calculator_world);
+        schedule.run(&mut world);
+
+        let mut row_query = world.query::<&CalcButtonRow>();
+        let mut key_query = world.query::<&CalcButtonSpec>();
+
+        assert_eq!(row_query.iter(&world).count(), 5);
+        assert_eq!(key_query.iter(&world).count(), 20);
+    }
 }

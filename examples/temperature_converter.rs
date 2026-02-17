@@ -5,7 +5,7 @@ use bevy_xilem::{
     StyleSetter, StyleSheet, TextStyle, UiEventQueue, UiRoot, UiView, apply_label_style,
     apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
+    bevy_ecs::{hierarchy::ChildOf, prelude::*},
     resolve_style, resolve_style_for_classes, run_app_with_window_options, text_input,
     xilem::{
         view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label},
@@ -40,6 +40,23 @@ enum TemperatureEvent {
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TemperatureRootView;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct TemperatureTitle;
+
+#[derive(Debug, Clone, Copy)]
+enum TempScale {
+    Celsius,
+    Fahrenheit,
+}
+
+#[derive(Component, Debug, Clone, Copy)]
+struct TemperatureInputRow {
+    scale: TempScale,
+}
+
+#[derive(Component, Debug, Clone, Copy)]
+struct TemperatureHint;
 
 fn format_number(value: f64) -> String {
     let mut v = value;
@@ -107,70 +124,113 @@ fn apply_temperature_event(state: &mut TemperatureState, event: TemperatureEvent
     }
 }
 
+fn temperature_input_row_view(
+    entity: Entity,
+    input_text: String,
+    map_event: impl Fn(String) -> TemperatureEvent + Send + Sync + 'static,
+    placeholder: &'static str,
+    unit_label: &'static str,
+    row_style: &bevy_xilem::ResolvedStyle,
+    input_style: &bevy_xilem::ResolvedStyle,
+    unit_label_style: &bevy_xilem::ResolvedStyle,
+) -> UiView {
+    Arc::new(apply_widget_style(
+        flex_row((
+            apply_text_input_style(
+                text_input(entity, input_text, map_event).placeholder(placeholder),
+                input_style,
+            )
+            .flex(1.0),
+            apply_label_style(label(unit_label), unit_label_style),
+        )),
+        row_style,
+    ))
+}
+
 fn project_temperature_root(_: &TemperatureRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let root_style = resolve_style(ctx.world, ctx.entity);
-    let title_style = resolve_style_for_classes(ctx.world, ["temp.title"]);
-    let row_style = resolve_style_for_classes(ctx.world, ["temp.row"]);
-    let unit_label_style = resolve_style_for_classes(ctx.world, ["temp.unit-label"]);
-    let input_style = resolve_style_for_classes(ctx.world, ["temp.input"]);
-    let hint_style = resolve_style_for_classes(ctx.world, ["temp.hint"]);
-
-    let state = ctx.world.resource::<TemperatureState>().clone();
-
-    let title = apply_label_style(label("Temperature Converter"), &title_style);
-
-    let celsius_row = apply_widget_style(
-        flex_row((
-            apply_text_input_style(
-                text_input(
-                    ctx.entity,
-                    state.celsius_text,
-                    TemperatureEvent::SetCelsiusText,
-                )
-                .placeholder("0"),
-                &input_style,
-            )
-            .flex(1.0),
-            apply_label_style(label("Celsius"), &unit_label_style),
-        )),
-        &row_style,
-    );
-
-    let fahrenheit_row = apply_widget_style(
-        flex_row((
-            apply_text_input_style(
-                text_input(
-                    ctx.entity,
-                    state.fahrenheit_text,
-                    TemperatureEvent::SetFahrenheitText,
-                )
-                .placeholder("32"),
-                &input_style,
-            )
-            .flex(1.0),
-            apply_label_style(label("Fahrenheit"), &unit_label_style),
-        )),
-        &row_style,
-    );
-
-    let hint = apply_label_style(
-        label("Tip: invalid numeric input will not overwrite the other field."),
-        &hint_style,
-    );
 
     Arc::new(apply_widget_style(
-        flex_col((title, celsius_row, fahrenheit_row, hint))
-            .cross_axis_alignment(CrossAxisAlignment::Start),
+        flex_col(
+            ctx.children
+                .into_iter()
+                .map(|child| child.into_any_flex())
+                .collect::<Vec<_>>(),
+        )
+        .cross_axis_alignment(CrossAxisAlignment::Start),
         &root_style,
     ))
 }
 
+fn project_temperature_title(_: &TemperatureTitle, ctx: ProjectionCtx<'_>) -> UiView {
+    let title_style = resolve_style_for_classes(ctx.world, ["temp.title"]);
+    Arc::new(apply_label_style(
+        label("Temperature Converter"),
+        &title_style,
+    ))
+}
+
+fn project_temperature_input_row(row: &TemperatureInputRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let row_style = resolve_style_for_classes(ctx.world, ["temp.row"]);
+    let unit_label_style = resolve_style_for_classes(ctx.world, ["temp.unit-label"]);
+    let input_style = resolve_style_for_classes(ctx.world, ["temp.input"]);
+    let state = ctx.world.resource::<TemperatureState>();
+
+    match row.scale {
+        TempScale::Celsius => temperature_input_row_view(
+            ctx.entity,
+            state.celsius_text.clone(),
+            TemperatureEvent::SetCelsiusText,
+            "0",
+            "Celsius",
+            &row_style,
+            &input_style,
+            &unit_label_style,
+        ),
+        TempScale::Fahrenheit => temperature_input_row_view(
+            ctx.entity,
+            state.fahrenheit_text.clone(),
+            TemperatureEvent::SetFahrenheitText,
+            "32",
+            "Fahrenheit",
+            &row_style,
+            &input_style,
+            &unit_label_style,
+        ),
+    }
+}
+
+fn project_temperature_hint(_: &TemperatureHint, ctx: ProjectionCtx<'_>) -> UiView {
+    let hint_style = resolve_style_for_classes(ctx.world, ["temp.hint"]);
+    Arc::new(apply_label_style(
+        label("Tip: invalid numeric input will not overwrite the other field."),
+        &hint_style,
+    ))
+}
+
 fn setup_temperature_world(mut commands: Commands) {
+    let root = commands
+        .spawn((
+            UiRoot,
+            TemperatureRootView,
+            StyleClass(vec!["temp.root".to_string()]),
+        ))
+        .id();
+
+    commands.spawn((TemperatureTitle, ChildOf(root)));
     commands.spawn((
-        UiRoot,
-        TemperatureRootView,
-        StyleClass(vec!["temp.root".to_string()]),
+        TemperatureInputRow {
+            scale: TempScale::Celsius,
+        },
+        ChildOf(root),
     ));
+    commands.spawn((
+        TemperatureInputRow {
+            scale: TempScale::Fahrenheit,
+        },
+        ChildOf(root),
+    ));
+    commands.spawn((TemperatureHint, ChildOf(root)));
 }
 
 fn setup_temperature_styles(mut style_sheet: ResMut<StyleSheet>) {
@@ -271,6 +331,9 @@ fn build_bevy_temperature_app() -> App {
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(TemperatureState::default())
         .register_projector::<TemperatureRootView>(project_temperature_root)
+        .register_projector::<TemperatureTitle>(project_temperature_title)
+        .register_projector::<TemperatureInputRow>(project_temperature_input_row)
+        .register_projector::<TemperatureHint>(project_temperature_hint)
         .add_systems(Startup, (setup_temperature_styles, setup_temperature_world));
 
     app.add_systems(PreUpdate, drain_temperature_events);

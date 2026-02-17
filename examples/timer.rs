@@ -10,7 +10,7 @@ use bevy_xilem::{
     StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
+    bevy_ecs::{hierarchy::ChildOf, prelude::*},
     button, emit_ui_action, resolve_style, resolve_style_for_classes,
     resolve_style_for_entity_classes, run_app_with_window_options, slider,
     xilem::{
@@ -68,6 +68,24 @@ enum TimerEvent {
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TimerRootView;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct TimerTitle;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct TimerDialView;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct TimerElapsedRow;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct TimerProgressRow;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct TimerDurationRow;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct TimerControlsRow;
 
 fn clamp01(v: f64) -> f64 {
     v.clamp(0.0, 1.0)
@@ -207,93 +225,13 @@ fn draw_timer_dial(scene: &mut Scene, size: Size, progress: f64, running: bool) 
 
 fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let root_style = resolve_style(ctx.world, ctx.entity);
-    let title_style = resolve_style_for_classes(ctx.world, ["timer.title"]);
-    let dial_shell_style = resolve_style_for_classes(ctx.world, ["timer.dial-shell"]);
-    let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
-    let body_text_style = resolve_style_for_classes(ctx.world, ["timer.body-text"]);
-    let pause_button_style =
-        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["timer.pause-button"]);
-    let reset_button_style =
-        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["timer.reset-button"]);
-
-    let state = ctx.world.resource::<TimerState>().clone();
-
-    let progress = if state.duration_secs > 0.0 {
-        Some(clamp01(state.elapsed_secs / state.duration_secs))
-    } else {
-        Some(1.0)
-    };
-    let progress_value = progress.unwrap_or(1.0);
-
-    let pause_label = if state.running { "Pause" } else { "Resume" };
-
-    let title = apply_label_style(label("Timer"), &title_style);
-
-    let elapsed_row = apply_widget_style(
-        flex_row((
-            apply_label_style(label("Elapsed Time:"), &body_text_style),
-            apply_label_style(label(format_secs(state.elapsed_secs)), &body_text_style),
-        )),
-        &row_style,
-    );
-
-    let duration_value = state.duration_secs;
-    let duration_row = apply_widget_style(
-        flex_row((
-            apply_label_style(
-                label(format!("Duration: {duration_value:.0} s")),
-                &body_text_style,
-            ),
-            slider(
-                ctx.entity,
-                1.0,
-                60.0,
-                duration_value,
-                TimerEvent::SetDurationSecs,
-            )
-            .step(1.0)
-            .flex(1.0),
-        )),
-        &row_style,
-    );
-
-    let controls = apply_widget_style(
-        flex_row((
-            apply_widget_style(
-                button(ctx.entity, TimerEvent::ToggleRunning, pause_label),
-                &pause_button_style,
-            ),
-            apply_widget_style(
-                button(ctx.entity, TimerEvent::Reset, "Reset"),
-                &reset_button_style,
-            ),
-        )),
-        &row_style,
-    );
-
     let content = apply_widget_style(
-        flex_col((
-            title,
-            sized_box(
-                canvas(move |_: (), _ctx, scene: &mut Scene, size: Size| {
-                    draw_timer_dial(scene, size, progress_value, state.running);
-                })
-                .alt_text("Timer dial"),
-            )
-            .fixed_width(Length::px(DIAL_SIZE))
-            .fixed_height(Length::px(DIAL_SIZE))
-            .padding(dial_shell_style.layout.padding)
-            .corner_radius(dial_shell_style.layout.corner_radius)
-            .border(
-                dial_shell_style.colors.border.unwrap_or(Color::TRANSPARENT),
-                dial_shell_style.layout.border_width,
-            )
-            .background_color(dial_shell_style.colors.bg.unwrap_or(Color::TRANSPARENT)),
-            elapsed_row,
-            progress_bar(progress),
-            duration_row,
-            controls,
-        ))
+        flex_col(
+            ctx.children
+                .into_iter()
+                .map(|child| child.into_any_flex())
+                .collect::<Vec<_>>(),
+        )
         .cross_axis_alignment(CrossAxisAlignment::Start),
         &root_style,
     );
@@ -317,12 +255,129 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(fork(content, Some(heartbeat)))
 }
 
+fn project_timer_title(_: &TimerTitle, ctx: ProjectionCtx<'_>) -> UiView {
+    let title_style = resolve_style_for_classes(ctx.world, ["timer.title"]);
+    Arc::new(apply_label_style(label("Timer"), &title_style))
+}
+
+fn project_timer_dial(_: &TimerDialView, ctx: ProjectionCtx<'_>) -> UiView {
+    let dial_shell_style = resolve_style_for_classes(ctx.world, ["timer.dial-shell"]);
+    let state = ctx.world.resource::<TimerState>().clone();
+    let progress = if state.duration_secs > 0.0 {
+        Some(clamp01(state.elapsed_secs / state.duration_secs))
+    } else {
+        Some(1.0)
+    };
+    let progress_value = progress.unwrap_or(1.0);
+
+    Arc::new(
+        sized_box(
+            canvas(move |_: (), _ctx, scene: &mut Scene, size: Size| {
+                draw_timer_dial(scene, size, progress_value, state.running);
+            })
+            .alt_text("Timer dial"),
+        )
+        .fixed_width(Length::px(DIAL_SIZE))
+        .fixed_height(Length::px(DIAL_SIZE))
+        .padding(dial_shell_style.layout.padding)
+        .corner_radius(dial_shell_style.layout.corner_radius)
+        .border(
+            dial_shell_style.colors.border.unwrap_or(Color::TRANSPARENT),
+            dial_shell_style.layout.border_width,
+        )
+        .background_color(dial_shell_style.colors.bg.unwrap_or(Color::TRANSPARENT)),
+    )
+}
+
+fn project_timer_elapsed_row(_: &TimerElapsedRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
+    let body_text_style = resolve_style_for_classes(ctx.world, ["timer.body-text"]);
+    let state = ctx.world.resource::<TimerState>();
+
+    Arc::new(apply_widget_style(
+        flex_row((
+            apply_label_style(label("Elapsed Time:"), &body_text_style),
+            apply_label_style(label(format_secs(state.elapsed_secs)), &body_text_style),
+        )),
+        &row_style,
+    ))
+}
+
+fn project_timer_progress_row(_: &TimerProgressRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let state = ctx.world.resource::<TimerState>();
+    let progress = if state.duration_secs > 0.0 {
+        Some(clamp01(state.elapsed_secs / state.duration_secs))
+    } else {
+        Some(1.0)
+    };
+    Arc::new(progress_bar(progress))
+}
+
+fn project_timer_duration_row(_: &TimerDurationRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
+    let body_text_style = resolve_style_for_classes(ctx.world, ["timer.body-text"]);
+    let state = ctx.world.resource::<TimerState>();
+    let duration_value = state.duration_secs;
+
+    Arc::new(apply_widget_style(
+        flex_row((
+            apply_label_style(
+                label(format!("Duration: {duration_value:.0} s")),
+                &body_text_style,
+            ),
+            slider(
+                ctx.entity,
+                1.0,
+                60.0,
+                duration_value,
+                TimerEvent::SetDurationSecs,
+            )
+            .step(1.0)
+            .flex(1.0),
+        )),
+        &row_style,
+    ))
+}
+
+fn project_timer_controls_row(_: &TimerControlsRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
+    let pause_button_style =
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["timer.pause-button"]);
+    let reset_button_style =
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["timer.reset-button"]);
+    let state = ctx.world.resource::<TimerState>();
+    let pause_label = if state.running { "Pause" } else { "Resume" };
+
+    Arc::new(apply_widget_style(
+        flex_row((
+            apply_widget_style(
+                button(ctx.entity, TimerEvent::ToggleRunning, pause_label),
+                &pause_button_style,
+            ),
+            apply_widget_style(
+                button(ctx.entity, TimerEvent::Reset, "Reset"),
+                &reset_button_style,
+            ),
+        )),
+        &row_style,
+    ))
+}
+
 fn setup_timer_world(mut commands: Commands) {
-    commands.spawn((
-        UiRoot,
-        TimerRootView,
-        StyleClass(vec!["timer.root".to_string()]),
-    ));
+    let root = commands
+        .spawn((
+            UiRoot,
+            TimerRootView,
+            StyleClass(vec!["timer.root".to_string()]),
+        ))
+        .id();
+
+    commands.spawn((TimerTitle, ChildOf(root)));
+    commands.spawn((TimerDialView, ChildOf(root)));
+    commands.spawn((TimerElapsedRow, ChildOf(root)));
+    commands.spawn((TimerProgressRow, ChildOf(root)));
+    commands.spawn((TimerDurationRow, ChildOf(root)));
+    commands.spawn((TimerControlsRow, ChildOf(root)));
 }
 
 fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
@@ -467,6 +522,12 @@ fn build_bevy_timer_app() -> App {
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(TimerState::default())
         .register_projector::<TimerRootView>(project_timer_root)
+        .register_projector::<TimerTitle>(project_timer_title)
+        .register_projector::<TimerDialView>(project_timer_dial)
+        .register_projector::<TimerElapsedRow>(project_timer_elapsed_row)
+        .register_projector::<TimerProgressRow>(project_timer_progress_row)
+        .register_projector::<TimerDurationRow>(project_timer_duration_row)
+        .register_projector::<TimerControlsRow>(project_timer_controls_row)
         .add_systems(Startup, (setup_timer_styles, setup_timer_world));
 
     app.add_systems(PreUpdate, drain_timer_events_and_tick);

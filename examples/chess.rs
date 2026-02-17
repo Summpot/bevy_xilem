@@ -9,7 +9,7 @@ use bevy_xilem::{
     StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
+    bevy_ecs::{hierarchy::ChildOf, prelude::*},
     button, button_with_child, checkbox, resolve_style, resolve_style_for_classes,
     run_app_with_window_options, slider,
     xilem::{
@@ -420,6 +420,12 @@ fn tick_once(
 #[derive(Component, Debug, Clone, Copy)]
 struct ChessRootView;
 
+#[derive(Component, Debug, Clone, Copy)]
+struct ChessControlsPanel;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct ChessBoardPanel;
+
 fn build_chess_board_view(world: &World, ui: &ChessUiResource, action_entity: Entity) -> UiView {
     let board_style = resolve_style_for_classes(world, ["chess.board"]);
     let cell_style = resolve_style_for_classes(world, ["chess.cell"]);
@@ -582,24 +588,41 @@ fn build_chess_controls_view(
 
 fn project_chess_root(_: &ChessRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let game_res = ctx.world.resource::<ChessGameResource>();
-    let ui = ctx.world.resource::<ChessUiResource>();
-    let flow = ctx.world.resource::<ChessFlowResource>();
-    let controls = build_chess_controls_view(ctx.world, &game_res, &ui, &flow, ctx.entity);
-    let board = build_chess_board_view(ctx.world, &ui, ctx.entity);
-
     Arc::new(apply_widget_style(
-        flex_row((controls, board.flex(1.0))).cross_axis_alignment(CrossAxisAlignment::Start),
+        flex_row(
+            ctx.children
+                .into_iter()
+                .map(|child| child.into_any_flex())
+                .collect::<Vec<_>>(),
+        )
+        .cross_axis_alignment(CrossAxisAlignment::Start),
         &style,
     ))
 }
 
+fn project_chess_controls_panel(_: &ChessControlsPanel, ctx: ProjectionCtx<'_>) -> UiView {
+    let game_res = ctx.world.resource::<ChessGameResource>();
+    let ui = ctx.world.resource::<ChessUiResource>();
+    let flow = ctx.world.resource::<ChessFlowResource>();
+    build_chess_controls_view(ctx.world, &game_res, &ui, &flow, ctx.entity)
+}
+
+fn project_chess_board_panel(_: &ChessBoardPanel, ctx: ProjectionCtx<'_>) -> UiView {
+    let ui = ctx.world.resource::<ChessUiResource>();
+    build_chess_board_view(ctx.world, &ui, ctx.entity)
+}
+
 fn setup_chess_world(mut commands: Commands) {
-    commands.spawn((
-        UiRoot,
-        ChessRootView,
-        StyleClass(vec!["chess.root".to_string()]),
-    ));
+    let root = commands
+        .spawn((
+            UiRoot,
+            ChessRootView,
+            StyleClass(vec!["chess.root".to_string()]),
+        ))
+        .id();
+
+    commands.spawn((ChessControlsPanel, ChildOf(root)));
+    commands.spawn((ChessBoardPanel, ChildOf(root)));
 }
 
 fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
@@ -830,6 +853,8 @@ fn build_bevy_chess_app() -> App {
         .insert_resource(ui)
         .insert_resource(ChessFlowResource::default())
         .register_projector::<ChessRootView>(project_chess_root)
+        .register_projector::<ChessControlsPanel>(project_chess_controls_panel)
+        .register_projector::<ChessBoardPanel>(project_chess_board_panel)
         .add_systems(Startup, (setup_chess_styles, setup_chess_world));
 
     app.add_systems(PreUpdate, drain_events_and_tick);

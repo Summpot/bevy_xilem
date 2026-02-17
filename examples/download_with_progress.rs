@@ -10,7 +10,7 @@ use bevy_xilem::{
     StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_ecs::prelude::*,
+    bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPoolBuilder},
     button, emit_ui_action, resolve_style, resolve_style_for_classes, rfd,
     run_app_with_window_options, switch, text_input,
@@ -82,6 +82,24 @@ enum DownloadEvent {
 
 #[derive(Component, Debug, Clone, Copy)]
 struct DownloadRootView;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct DownloadTitle;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct DownloadUrlRow;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct DownloadActionRow;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct DownloadDialogModeRow;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct DownloadProgressPanel;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct DownloadCompletionDialog;
 
 fn ensure_io_task_pool() {
     IoTaskPool::get_or_init(|| {
@@ -244,113 +262,14 @@ fn progress_value(state: &DownloadState) -> Option<f64> {
 
 fn project_download_root(_: &DownloadRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let root_style = resolve_style(ctx.world, ctx.entity);
-    let title_style = resolve_style_for_classes(ctx.world, ["download.title"]);
-    let row_style = resolve_style_for_classes(ctx.world, ["download.row"]);
-    let input_style = resolve_style_for_classes(ctx.world, ["download.url-input"]);
-    let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
-    let button_style = resolve_style_for_classes(ctx.world, ["download.button"]);
-    let dialog_style = resolve_style_for_classes(ctx.world, ["download.dialog"]);
-
-    let state = ctx.world.resource::<DownloadState>().clone();
-
-    let title = apply_label_style(label("Remote File Downloader"), &title_style);
-
-    let url_row = apply_widget_style(
-        flex_row((
-            apply_label_style(label("URL:"), &status_style),
-            apply_text_input_style(
-                text_input(ctx.entity, state.url.clone(), DownloadEvent::SetUrl)
-                    .placeholder(DEFAULT_URL),
-                &input_style,
-            )
-            .flex(1.0),
-        )),
-        &row_style,
-    );
-
-    let button_text = if state.in_progress {
-        "Downloading..."
-    } else {
-        "Download"
-    };
-
-    let action_row = apply_widget_style(
-        flex_row((apply_widget_style(
-            button(ctx.entity, DownloadEvent::StartDownload, button_text),
-            &button_style,
-        ),))
-        .main_axis_alignment(MainAxisAlignment::Start),
-        &row_style,
-    );
-
-    let dialog_mode_row = apply_widget_style(
-        flex_row((
-            apply_label_style(label("Completion dialog:"), &status_style),
-            switch(
-                ctx.entity,
-                state.use_system_dialog,
-                DownloadEvent::SetUseSystemDialog,
-            ),
-            apply_label_style(
-                label(if state.use_system_dialog {
-                    "System"
-                } else {
-                    "Modal"
-                }),
-                &status_style,
-            ),
-        ))
-        .main_axis_alignment(MainAxisAlignment::Start),
-        &row_style,
-    );
-
-    let progress_text = match state.total_bytes {
-        Some(total) if total > 0 => format!(
-            "{} / {} ({:.1}%)",
-            format_bytes(state.downloaded_bytes),
-            format_bytes(total),
-            (state.downloaded_bytes as f64 / total as f64) * 100.0
-        ),
-        _ => format!("{} downloaded", format_bytes(state.downloaded_bytes)),
-    };
-
-    let target_text = state
-        .active_target
-        .as_deref()
-        .map(|target| format!("Target: {target}"))
-        .unwrap_or_else(|| "Target: (not started)".to_string());
-
-    let mut children = vec![
-        title.into_any_flex(),
-        url_row.into_any_flex(),
-        action_row.into_any_flex(),
-        dialog_mode_row.into_any_flex(),
-        progress_bar(progress_value(&state)).into_any_flex(),
-        apply_label_style(label(progress_text), &status_style).into_any_flex(),
-        apply_label_style(label(target_text), &status_style).into_any_flex(),
-        apply_label_style(label(state.status), &status_style).into_any_flex(),
-    ];
-
-    if let Some(message) = state.completed_dialog {
-        children.push(
-            apply_widget_style(
-                flex_col((
-                    apply_label_style(label("Download finished"), &title_style),
-                    apply_label_style(label(message), &status_style),
-                    apply_widget_style(
-                        button(ctx.entity, DownloadEvent::DismissDialog, "OK"),
-                        &button_style,
-                    ),
-                ))
-                .cross_axis_alignment(CrossAxisAlignment::Start),
-                &dialog_style,
-            )
-            .into_any_flex(),
-        );
-    }
-
     let content = apply_widget_style(
-        flex_col(children).cross_axis_alignment(CrossAxisAlignment::Start),
+        flex_col(
+            ctx.children
+                .into_iter()
+                .map(|child| child.into_any_flex())
+                .collect::<Vec<_>>(),
+        )
+        .cross_axis_alignment(CrossAxisAlignment::Start),
         &root_style,
     );
 
@@ -370,16 +289,156 @@ fn project_download_root(_: &DownloadRootView, ctx: ProjectionCtx<'_>) -> UiView
         },
     );
 
-    let with_heartbeat = fork(content, Some(heartbeat));
-    Arc::new(with_heartbeat)
+    Arc::new(fork(content, Some(heartbeat)))
+}
+
+fn project_download_title(_: &DownloadTitle, ctx: ProjectionCtx<'_>) -> UiView {
+    let title_style = resolve_style_for_classes(ctx.world, ["download.title"]);
+    Arc::new(apply_label_style(
+        label("Remote File Downloader"),
+        &title_style,
+    ))
+}
+
+fn project_download_url_row(_: &DownloadUrlRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let row_style = resolve_style_for_classes(ctx.world, ["download.row"]);
+    let input_style = resolve_style_for_classes(ctx.world, ["download.url-input"]);
+    let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
+    let state = ctx.world.resource::<DownloadState>();
+
+    Arc::new(apply_widget_style(
+        flex_row((
+            apply_label_style(label("URL:"), &status_style),
+            apply_text_input_style(
+                text_input(ctx.entity, state.url.clone(), DownloadEvent::SetUrl)
+                    .placeholder(DEFAULT_URL),
+                &input_style,
+            )
+            .flex(1.0),
+        )),
+        &row_style,
+    ))
+}
+
+fn project_download_action_row(_: &DownloadActionRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let row_style = resolve_style_for_classes(ctx.world, ["download.row"]);
+    let button_style = resolve_style_for_classes(ctx.world, ["download.button"]);
+    let state = ctx.world.resource::<DownloadState>();
+
+    let button_text = if state.in_progress {
+        "Downloading..."
+    } else {
+        "Download"
+    };
+
+    Arc::new(apply_widget_style(
+        flex_row((apply_widget_style(
+            button(ctx.entity, DownloadEvent::StartDownload, button_text),
+            &button_style,
+        ),))
+        .main_axis_alignment(MainAxisAlignment::Start),
+        &row_style,
+    ))
+}
+
+fn project_download_dialog_mode_row(_: &DownloadDialogModeRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let row_style = resolve_style_for_classes(ctx.world, ["download.row"]);
+    let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
+    let state = ctx.world.resource::<DownloadState>();
+
+    Arc::new(apply_widget_style(
+        flex_row((
+            apply_label_style(label("Completion dialog:"), &status_style),
+            switch(
+                ctx.entity,
+                state.use_system_dialog,
+                DownloadEvent::SetUseSystemDialog,
+            ),
+            apply_label_style(
+                label(if state.use_system_dialog {
+                    "System"
+                } else {
+                    "Modal"
+                }),
+                &status_style,
+            ),
+        ))
+        .main_axis_alignment(MainAxisAlignment::Start),
+        &row_style,
+    ))
+}
+
+fn project_download_progress_panel(_: &DownloadProgressPanel, ctx: ProjectionCtx<'_>) -> UiView {
+    let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
+    let state = ctx.world.resource::<DownloadState>();
+
+    let progress_text = match state.total_bytes {
+        Some(total) if total > 0 => format!(
+            "{} / {} ({:.1}%)",
+            format_bytes(state.downloaded_bytes),
+            format_bytes(total),
+            (state.downloaded_bytes as f64 / total as f64) * 100.0
+        ),
+        _ => format!("{} downloaded", format_bytes(state.downloaded_bytes)),
+    };
+
+    let target_text = state
+        .active_target
+        .as_deref()
+        .map(|target| format!("Target: {target}"))
+        .unwrap_or_else(|| "Target: (not started)".to_string());
+
+    Arc::new(flex_col((
+        progress_bar(progress_value(&state)).into_any_flex(),
+        apply_label_style(label(progress_text), &status_style).into_any_flex(),
+        apply_label_style(label(target_text), &status_style).into_any_flex(),
+        apply_label_style(label(state.status.clone()), &status_style).into_any_flex(),
+    )))
+}
+
+fn project_download_completion_dialog(
+    _: &DownloadCompletionDialog,
+    ctx: ProjectionCtx<'_>,
+) -> UiView {
+    let title_style = resolve_style_for_classes(ctx.world, ["download.title"]);
+    let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
+    let button_style = resolve_style_for_classes(ctx.world, ["download.button"]);
+    let dialog_style = resolve_style_for_classes(ctx.world, ["download.dialog"]);
+    let state = ctx.world.resource::<DownloadState>();
+
+    let Some(message) = state.completed_dialog.clone() else {
+        return Arc::new(label(""));
+    };
+
+    Arc::new(apply_widget_style(
+        flex_col((
+            apply_label_style(label("Download finished"), &title_style),
+            apply_label_style(label(message), &status_style),
+            apply_widget_style(
+                button(ctx.entity, DownloadEvent::DismissDialog, "OK"),
+                &button_style,
+            ),
+        ))
+        .cross_axis_alignment(CrossAxisAlignment::Start),
+        &dialog_style,
+    ))
 }
 
 fn setup_download_world(mut commands: Commands) {
-    commands.spawn((
-        UiRoot,
-        DownloadRootView,
-        StyleClass(vec!["download.root".to_string()]),
-    ));
+    let root = commands
+        .spawn((
+            UiRoot,
+            DownloadRootView,
+            StyleClass(vec!["download.root".to_string()]),
+        ))
+        .id();
+
+    commands.spawn((DownloadTitle, ChildOf(root)));
+    commands.spawn((DownloadUrlRow, ChildOf(root)));
+    commands.spawn((DownloadActionRow, ChildOf(root)));
+    commands.spawn((DownloadDialogModeRow, ChildOf(root)));
+    commands.spawn((DownloadProgressPanel, ChildOf(root)));
+    commands.spawn((DownloadCompletionDialog, ChildOf(root)));
 }
 
 fn setup_download_styles(mut style_sheet: ResMut<StyleSheet>) {
@@ -612,6 +671,12 @@ fn build_download_app() -> App {
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(DownloadState::default())
         .register_projector::<DownloadRootView>(project_download_root)
+        .register_projector::<DownloadTitle>(project_download_title)
+        .register_projector::<DownloadUrlRow>(project_download_url_row)
+        .register_projector::<DownloadActionRow>(project_download_action_row)
+        .register_projector::<DownloadDialogModeRow>(project_download_dialog_mode_row)
+        .register_projector::<DownloadProgressPanel>(project_download_progress_panel)
+        .register_projector::<DownloadCompletionDialog>(project_download_completion_dialog)
         .add_systems(Startup, (setup_download_styles, setup_download_world))
         .add_systems(PreUpdate, drain_download_events);
 
