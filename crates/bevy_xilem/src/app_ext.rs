@@ -1,7 +1,8 @@
 use bevy_app::App;
 use bevy_ecs::prelude::Component;
+use std::{io, path::Path};
 
-use crate::{ProjectionCtx, UiProjector, UiProjectorRegistry, UiView};
+use crate::{ProjectionCtx, UiProjector, UiProjectorRegistry, UiView, XilemFontBridge};
 
 /// Fluent extension methods for registering bevy_xilem projectors on a Bevy [`App`].
 ///
@@ -51,6 +52,16 @@ pub trait AppBevyXilemExt {
     ///
     /// Use this when component-based registration is insufficient.
     fn register_raw_projector<P: UiProjector>(&mut self, projector: P) -> &mut Self;
+
+    /// Queue raw font bytes for registration in Xilem/Masonry text shaping.
+    ///
+    /// This bridges app-provided fonts into Xilem's font database.
+    fn register_xilem_font_bytes(&mut self, bytes: &[u8]) -> &mut Self;
+
+    /// Read and queue a font file for registration in Xilem/Masonry text shaping.
+    ///
+    /// Typical path for Bevy projects: `assets/fonts/<font-file>.ttf|otf`.
+    fn register_xilem_font_path(&mut self, path: impl AsRef<Path>) -> io::Result<&mut Self>;
 }
 
 impl AppBevyXilemExt for App {
@@ -71,5 +82,21 @@ impl AppBevyXilemExt for App {
             .resource_mut::<UiProjectorRegistry>()
             .register_projector(projector);
         self
+    }
+
+    fn register_xilem_font_bytes(&mut self, bytes: &[u8]) -> &mut Self {
+        self.init_resource::<XilemFontBridge>();
+        self.world_mut()
+            .resource_mut::<XilemFontBridge>()
+            .register_font_bytes(bytes);
+        self
+    }
+
+    fn register_xilem_font_path(&mut self, path: impl AsRef<Path>) -> io::Result<&mut Self> {
+        self.init_resource::<XilemFontBridge>();
+        self.world_mut()
+            .resource_mut::<XilemFontBridge>()
+            .register_font_path(path)?;
+        Ok(self)
     }
 }

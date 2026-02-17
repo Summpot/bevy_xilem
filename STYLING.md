@@ -49,7 +49,7 @@ All style primitives live in `crates/bevy_xilem/src/styling.rs`.
 
 - `StyleClass(pub Vec<String>)` (component on entities)
 - `Selector::{Type, Class, PseudoClass, And, Descendant}`
-- `StyleSetter { layout, colors, text, transition }`
+- `StyleSetter { layout, colors, text, font_family, transition }`
 - `StyleRule { selector, setter }`
 - `StyleSheet { rules: Vec<StyleRule> }` (resource)
 
@@ -67,6 +67,9 @@ Convenience APIs still exist for class-only rules:
 
 - `StyleDirty` (marks entities requiring recomputation)
 - `ComputedStyle` (cached resolved style read by projectors)
+
+`ComputedStyle` now includes `font_family: Option<Vec<String>>` so projectors can apply
+font-family from stylesheet resolution without re-running cascade logic each frame.
 
 When descendant selectors are present, invalidation propagates from changed ancestors to
 their descendants so `A B`-style rules stay correct after ancestor class/pseudo changes.
@@ -89,6 +92,9 @@ their descendants so `A B`-style rules stay correct after ancestor class/pseudo 
 3. compatibility pseudo color overrides (`hover_*`, `pressed_*`) from `ColorStyle`
 4. animated override from `CurrentColorStyle` if present
 
+Font family is resolved through the same class/selector cascade (`StyleSetter.font_family`) as a
+font stack (`Vec<String>`) and applied as a discrete value (non-interpolated).
+
 In short: class + inline define intent, pseudo state chooses target, animator provides smooth in-between values.
 
 ---
@@ -98,7 +104,7 @@ In short: class + inline define intent, pseudo state chooses target, animator pr
 `BevyXilemPlugin` automatically wires the style stack:
 
 - initializes `StyleSheet`
-- `PreUpdate`: `sync_ui_interaction_markers`
+- `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> sync_ui_interaction_markers`
 - `Update`: `mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - registers `TweeningPlugin` (from crates.io `bevy_tweening`)
 
@@ -192,6 +198,9 @@ It linearly interpolates each RGBA channel for:
 - border color
 
 while easing is applied by tween sampling (`QuadraticInOut` by default for interaction transitions).
+
+For full computed-style tweening, `ComputedStyleLens` is also available. It deliberately treats
+`font_family` as **non-interpolable** and only switches on tween completion.
 
 ### 8.3 State-change behavior
 

@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::HashSet, time::Duration};
+use std::{any::TypeId, borrow::Cow, collections::HashSet, time::Duration};
 
 use bevy_ecs::{
     change_detection::Mut,
@@ -10,6 +10,7 @@ use bevy_ecs::{
 use bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim};
 use masonry::theme;
 use xilem::{Color, style::Style as _};
+use xilem_masonry::masonry::parley::{FontFamily, GenericFamily, style::FontStack};
 use xilem_masonry::{
     WidgetView,
     view::{Label, TextInput, sized_box},
@@ -70,11 +71,12 @@ pub struct StyleTransition {
 }
 
 /// Cached resolved style used by projectors.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Component, Debug, Clone, Default, PartialEq)]
 pub struct ComputedStyle {
     pub layout: ResolvedLayoutStyle,
     pub colors: ResolvedColorStyle,
     pub text: ResolvedTextStyle,
+    pub font_family: Option<Vec<String>>,
     pub transition: Option<StyleTransition>,
 }
 
@@ -171,11 +173,12 @@ impl Selector {
 }
 
 /// Style payload set by a matching rule.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct StyleSetter {
     pub layout: LayoutStyle,
     pub colors: ColorStyle,
     pub text: TextStyle,
+    pub font_family: Option<Vec<String>>,
     pub transition: Option<StyleTransition>,
 }
 
@@ -285,11 +288,12 @@ impl Default for ResolvedTextStyle {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct ResolvedStyle {
     pub layout: ResolvedLayoutStyle,
     pub colors: ResolvedColorStyle,
     pub text: ResolvedTextStyle,
+    pub font_family: Option<Vec<String>>,
     pub transition: Option<StyleTransition>,
 }
 
@@ -357,6 +361,9 @@ fn merge_setter(dst: &mut StyleSetter, setter: &StyleSetter) {
     merge_layout(&mut dst.layout, &setter.layout);
     merge_colors(&mut dst.colors, &setter.colors);
     merge_text(&mut dst.text, &setter.text);
+    if setter.font_family.is_some() {
+        dst.font_family = setter.font_family.clone();
+    }
     if setter.transition.is_some() {
         dst.transition = setter.transition;
     }
@@ -578,6 +585,7 @@ fn resolved_from_merged(
         layout: to_resolved_layout(&merged.layout),
         colors,
         text: to_resolved_text(&merged.text),
+        font_family: merged.font_family.clone(),
         transition: merged.transition,
     }
 }
@@ -605,6 +613,7 @@ pub fn resolve_style(world: &World, entity: Entity) -> ResolvedStyle {
             layout: computed.layout,
             colors: computed.colors,
             text: computed.text,
+            font_family: computed.font_family.clone(),
             transition: computed.transition,
         };
 
@@ -642,6 +651,7 @@ pub fn resolve_style_for_classes<'a>(
             border: merged.colors.border,
         },
         text: to_resolved_text(&merged.text),
+        font_family: merged.font_family,
         transition: merged.transition,
     }
 }
@@ -883,12 +893,14 @@ pub fn sync_style_targets(world: &mut World) {
                     computed.layout = resolved.layout;
                     computed.colors = resolved.colors;
                     computed.text = resolved.text;
+                    computed.font_family = resolved.font_family.clone();
                     computed.transition = resolved.transition;
                 } else {
                     world.entity_mut(entity).insert(ComputedStyle {
                         layout: resolved.layout,
                         colors: resolved.colors,
                         text: resolved.text,
+                        font_family: resolved.font_family.clone(),
                         transition: resolved.transition,
                     });
                 }
@@ -995,6 +1007,90 @@ fn lerp_optional_color(start: Option<Color>, end: Option<Color>, t: f32) -> Opti
     }
 }
 
+fn lerp_f32(start: f32, end: f32, t: f32) -> f32 {
+    start + ((end - start) * t)
+}
+
+fn lerp_f64(start: f64, end: f64, t: f32) -> f64 {
+    start + ((end - start) * t as f64)
+}
+
+fn map_font_family_name(name: &str) -> FontFamily<'static> {
+    let trimmed = name.trim();
+    match trimmed.to_ascii_lowercase().as_str() {
+        "sans-serif" | "system-ui" => FontFamily::Generic(GenericFamily::SystemUi),
+        "serif" => FontFamily::Generic(GenericFamily::Serif),
+        "monospace" => FontFamily::Generic(GenericFamily::Monospace),
+        _ => FontFamily::Named(trimmed.to_string().into()),
+    }
+}
+
+fn font_stack_from_style(style: &ResolvedStyle) -> Option<FontStack<'static>> {
+    let families = style.font_family.as_ref()?;
+    if families.is_empty() {
+        return None;
+    }
+
+    let mapped = families
+        .iter()
+        .map(|name| map_font_family_name(name))
+        .collect::<Vec<_>>();
+
+    if mapped.len() == 1 {
+        Some(FontStack::Single(mapped.into_iter().next().unwrap()))
+    } else {
+        Some(FontStack::List(Cow::Owned(mapped)))
+    }
+}
+
+/// Tween lens for animating computed style fields.
+///
+/// `font_family` is intentionally non-interpolated and only switches at the
+/// end of the tween.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ComputedStyleLens {
+    pub start: ComputedStyle,
+    pub end: ComputedStyle,
+}
+
+impl Lens<ComputedStyle> for ComputedStyleLens {
+    fn lerp(&mut self, mut target: Mut<'_, ComputedStyle>, ratio: f32) {
+        let t = ratio.clamp(0.0, 1.0);
+
+        target.layout.padding = lerp_f64(self.start.layout.padding, self.end.layout.padding, t);
+        target.layout.gap = lerp_f64(self.start.layout.gap, self.end.layout.gap, t);
+        target.layout.corner_radius = lerp_f64(
+            self.start.layout.corner_radius,
+            self.end.layout.corner_radius,
+            t,
+        );
+        target.layout.border_width = lerp_f64(
+            self.start.layout.border_width,
+            self.end.layout.border_width,
+            t,
+        );
+
+        target.colors.bg = lerp_optional_color(self.start.colors.bg, self.end.colors.bg, t);
+        target.colors.text = lerp_optional_color(self.start.colors.text, self.end.colors.text, t);
+        target.colors.border =
+            lerp_optional_color(self.start.colors.border, self.end.colors.border, t);
+
+        target.text.size = lerp_f32(self.start.text.size, self.end.text.size, t);
+        target.transition = if t < 1.0 {
+            self.start.transition
+        } else {
+            self.end.transition
+        };
+
+        // font family changes are discrete (non-interpolable)
+        target.font_family = if t < 1.0 {
+            self.start.font_family.clone()
+        } else {
+            self.end.font_family.clone()
+        };
+    }
+}
+
 /// Tween lens for animating [`CurrentColorStyle`] with CSS-like smooth transitions.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ColorStyleLens {
@@ -1020,8 +1116,12 @@ pub fn animate_style_transitions(world: &mut World) {
 
 /// Apply text + box styling to a label view.
 pub fn apply_label_style(view: Label, style: &ResolvedStyle) -> impl WidgetView<(), ()> {
-    view.text_size(style.text.size)
-        .color(style.colors.text.unwrap_or(Color::WHITE))
+    let mut styled = view.text_size(style.text.size);
+    if let Some(font_stack) = font_stack_from_style(style) {
+        styled = styled.font(font_stack);
+    }
+
+    styled.color(style.colors.text.unwrap_or(Color::WHITE))
 }
 
 /// Apply text + box styling to a text input view.
@@ -1030,6 +1130,9 @@ pub fn apply_text_input_style(
     style: &ResolvedStyle,
 ) -> impl WidgetView<(), ()> {
     let mut styled = view.text_size(style.text.size);
+    if let Some(font_stack) = font_stack_from_style(style) {
+        styled = styled.font(font_stack);
+    }
     if let Some(text_color) = style.colors.text {
         styled = styled.text_color(text_color);
     }

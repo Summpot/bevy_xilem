@@ -11,6 +11,7 @@ base64 = "0.22"
 bevy_asset = { version = "0.18", default-features = false }
 bevy_ecs = { version = "0.18", default-features = false, features = ["std"] }
 bevy_image = { version = "0.18", default-features = false }
+bevy_text = { version = "0.18", default-features = false }
 bevy_xilem = { path = "../../crates/bevy_xilem" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 crossbeam-channel = "0.5"

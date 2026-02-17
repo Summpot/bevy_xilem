@@ -1,15 +1,16 @@
 use std::{f32::consts::PI, process::Command, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
-use bevy_asset::{Assets, Handle, RenderAssetUsages};
+use bevy_asset::{AssetPlugin, AssetServer, Assets, Handle, RenderAssetUsages};
 use bevy_image::Image as BevyImage;
+use bevy_text::{Font, TextPlugin};
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, ResolvedStyle,
     StyleClass, StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    bevy_tasks::{AsyncComputeTaskPool, TaskPool},
+    bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
     bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim},
     bevy_window::WindowResized,
     button, resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
@@ -44,6 +45,17 @@ const RESPONSE_PANEL_HEIGHT: f64 = 180.0;
 const PIXIV_AUTH_TOKEN_FALLBACK: &str = "https://oauth.secure.pixiv.net/auth/token";
 const PIXIV_WEB_REDIRECT_FALLBACK: &str =
     "https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback";
+
+fn default_font_stack() -> Vec<String> {
+    vec![
+        "Inter".into(),
+        "Noto Sans CJK SC".into(),
+        "Noto Sans CJK JP".into(),
+        "Noto Sans CJK TC".into(),
+        "Noto Sans CJK KR".into(),
+        "sans-serif".into(),
+    ]
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NavTab {
@@ -296,6 +308,11 @@ struct ImageBridge {
     result_rx: Receiver<ImageResult>,
 }
 
+#[derive(Resource, Default)]
+struct PixivFontHandles {
+    handles: Vec<Handle<Font>>,
+}
+
 #[derive(Clone, Copy)]
 struct CardAnimLens {
     start: CardAnimState,
@@ -330,6 +347,7 @@ fn spawn_card_tween(
 }
 
 fn ensure_task_pool_initialized() {
+    let _ = IoTaskPool::get_or_init(TaskPool::new);
     let _ = AsyncComputeTaskPool::get_or_init(TaskPool::new);
 }
 
@@ -619,6 +637,28 @@ fn setup(mut commands: Commands) {
     let _ = cmd_tx.send(NetworkCommand::DiscoverIdp);
 }
 
+fn load_pixiv_fonts(asset_server: Res<AssetServer>, mut font_handles: ResMut<PixivFontHandles>) {
+    if !font_handles.handles.is_empty() {
+        return;
+    }
+
+    font_handles
+        .handles
+        .push(asset_server.load("fonts/Inter-Regular.otf"));
+    font_handles
+        .handles
+        .push(asset_server.load("fonts/NotoSansCJKsc-Regular.otf"));
+    font_handles
+        .handles
+        .push(asset_server.load("fonts/NotoSansCJKjp-Regular.otf"));
+    font_handles
+        .handles
+        .push(asset_server.load("fonts/NotoSansCJKtc-Regular.otf"));
+    font_handles
+        .handles
+        .push(asset_server.load("fonts/NotoSansCJKkr-Regular.otf"));
+}
+
 fn setup_styles(mut sheet: ResMut<StyleSheet>) {
     sheet.set_class(
         "pixiv.root",
@@ -633,6 +673,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
                 text: Some(Color::from_rgb8(0xEE, 0xEE, 0xEE)),
                 ..ColorStyle::default()
             },
+            font_family: Some(default_font_stack()),
             ..StyleSetter::default()
         },
     );
@@ -685,6 +726,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
                 ..LayoutStyle::default()
             },
             text: TextStyle { size: Some(14.0) },
+            font_family: Some(default_font_stack()),
             transition: Some(StyleTransition { duration: 0.14 }),
             ..StyleSetter::default()
         },
@@ -767,6 +809,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
                 text: Some(Color::from_rgb8(0xE7, 0xE7, 0xE7)),
                 ..ColorStyle::default()
             },
+            font_family: Some(default_font_stack()),
             transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleSetter::default()
         },
@@ -789,6 +832,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
                 ..ColorStyle::default()
             },
             text: TextStyle { size: Some(14.0) },
+            font_family: Some(default_font_stack()),
             ..StyleSetter::default()
         },
     );
@@ -809,6 +853,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
                 text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE4)),
                 ..ColorStyle::default()
             },
+            font_family: Some(default_font_stack()),
             transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleSetter::default()
         },
@@ -829,6 +874,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
                 border: Some(Color::from_rgb8(0x3A, 0x3A, 0x3A)),
                 ..ColorStyle::default()
             },
+            font_family: Some(default_font_stack()),
             ..StyleSetter::default()
         },
     );
@@ -1967,32 +2013,39 @@ fn apply_image_results(world: &mut World) {
 }
 
 fn build_app() -> App {
+    ensure_task_pool_initialized();
+
     let mut app = App::new();
-    app.add_plugins(BevyXilemPlugin)
-        .register_projector::<PixivRoot>(project_root)
-        .register_projector::<PixivSidebar>(project_sidebar)
-        .register_projector::<PixivMainColumn>(project_main_column)
-        .register_projector::<PixivAuthPanel>(project_auth_panel)
-        .register_projector::<PixivResponsePanel>(project_response_panel)
-        .register_projector::<PixivSearchPanel>(project_search_panel)
-        .register_projector::<PixivHomeFeed>(project_home_feed)
-        .register_projector::<PixivIllustCard>(project_illust_card)
-        .register_projector::<PixivDetailOverlay>(project_detail_overlay)
-        .register_projector::<PixivOverlayTags>(project_overlay_tags)
-        .register_projector::<OverlayTag>(project_overlay_tag)
-        .add_systems(Startup, (setup_styles, setup))
-        .add_systems(PreUpdate, drain_ui_actions_and_dispatch)
-        .add_systems(
-            Update,
-            (
-                track_viewport_metrics,
-                spawn_network_tasks,
-                apply_network_results,
-                spawn_image_tasks,
-                apply_image_results,
-                animate_card_hover,
-            ),
-        );
+    app.add_plugins((
+        AssetPlugin::default(),
+        TextPlugin::default(),
+        BevyXilemPlugin,
+    ))
+    .init_resource::<PixivFontHandles>()
+    .register_projector::<PixivRoot>(project_root)
+    .register_projector::<PixivSidebar>(project_sidebar)
+    .register_projector::<PixivMainColumn>(project_main_column)
+    .register_projector::<PixivAuthPanel>(project_auth_panel)
+    .register_projector::<PixivResponsePanel>(project_response_panel)
+    .register_projector::<PixivSearchPanel>(project_search_panel)
+    .register_projector::<PixivHomeFeed>(project_home_feed)
+    .register_projector::<PixivIllustCard>(project_illust_card)
+    .register_projector::<PixivDetailOverlay>(project_detail_overlay)
+    .register_projector::<PixivOverlayTags>(project_overlay_tags)
+    .register_projector::<OverlayTag>(project_overlay_tag)
+    .add_systems(Startup, (setup_styles, load_pixiv_fonts, setup))
+    .add_systems(PreUpdate, drain_ui_actions_and_dispatch)
+    .add_systems(
+        Update,
+        (
+            track_viewport_metrics,
+            spawn_network_tasks,
+            apply_network_results,
+            spawn_image_tasks,
+            apply_image_results,
+            animate_card_hover,
+        ),
+    );
     app
 }
 
@@ -2044,5 +2097,11 @@ mod tests {
         let tree = *world.resource::<PixivUiTree>();
         assert!(world.get::<PixivHomeFeed>(tree.home_feed).is_some());
         assert!(world.get::<PixivOverlayTags>(tree.overlay_tags).is_some());
+    }
+
+    #[test]
+    fn ensure_task_pool_initializes_io_pool() {
+        ensure_task_pool_initialized();
+        let _ = IoTaskPool::get();
     }
 }

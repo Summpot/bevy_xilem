@@ -8,6 +8,7 @@ use crate::{
 };
 use bevy_app::App;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
+use bevy_tweening::Lens;
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TestRoot;
@@ -370,4 +371,80 @@ fn sync_style_targets_keeps_unmanaged_tween_anim() {
     crate::sync_style_targets(&mut world);
 
     assert!(world.get::<bevy_tweening::TweenAnim>(entity).is_some());
+}
+
+#[test]
+fn resolve_style_for_classes_applies_font_family() {
+    let mut world = World::new();
+    let mut sheet = StyleSheet::default();
+
+    sheet.set_class(
+        "cjk-text",
+        StyleSetter {
+            font_family: Some(vec!["Inter".to_string(), "Noto Sans CJK SC".to_string()]),
+            ..StyleSetter::default()
+        },
+    );
+    world.insert_resource(sheet);
+
+    let resolved = crate::resolve_style_for_classes(&world, ["cjk-text"]);
+    assert_eq!(
+        resolved.font_family,
+        Some(vec!["Inter".to_string(), "Noto Sans CJK SC".to_string()])
+    );
+}
+
+#[test]
+fn computed_style_lens_keeps_font_family_until_completion() {
+    let mut world = World::new();
+
+    let start = crate::ComputedStyle {
+        font_family: Some(vec!["Family A".to_string()]),
+        ..crate::ComputedStyle::default()
+    };
+    let end = crate::ComputedStyle {
+        font_family: Some(vec!["Family B".to_string()]),
+        ..crate::ComputedStyle::default()
+    };
+
+    let entity = world.spawn((start.clone(),)).id();
+    let mut lens = crate::ComputedStyleLens {
+        start: start.clone(),
+        end: end.clone(),
+    };
+
+    {
+        let target = world
+            .get_mut::<crate::ComputedStyle>(entity)
+            .expect("computed style should exist");
+        lens.lerp(target, 0.5);
+    }
+
+    assert_eq!(
+        world
+            .get::<crate::ComputedStyle>(entity)
+            .and_then(|style| style.font_family.clone()),
+        Some(vec!["Family A".to_string()])
+    );
+
+    {
+        let target = world
+            .get_mut::<crate::ComputedStyle>(entity)
+            .expect("computed style should exist");
+        lens.lerp(target, 1.0);
+    }
+
+    assert_eq!(
+        world
+            .get::<crate::ComputedStyle>(entity)
+            .and_then(|style| style.font_family.clone()),
+        Some(vec!["Family B".to_string()])
+    );
+}
+
+#[test]
+fn xilem_font_bridge_deduplicates_same_font_bytes() {
+    let mut bridge = crate::XilemFontBridge::default();
+    assert!(bridge.register_font_bytes(b"font-data"));
+    assert!(!bridge.register_font_bytes(b"font-data"));
 }

@@ -7,8 +7,10 @@ readme = "../../README.md"
 
 [dependencies]
 bevy_app.workspace = true
+bevy_asset.workspace = true
 bevy_ecs.workspace = true
 bevy_input.workspace = true
+bevy_text.workspace = true
 bevy_tasks.workspace = true
 bevy_time.workspace = true
 bevy_tweening.workspace = true
@@ -57,3 +59,7 @@ path = "../../examples/theme_gallery.rs"
 [[example]]
 name = "game_2048"
 path = "../../examples/game_2048.rs"
+
+[[example]]
+name = "cjk_text_example"
+path = "../../examples/cjk_text_example.rs"

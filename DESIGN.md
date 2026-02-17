@@ -102,7 +102,8 @@ The runtime now supports a data-driven style pipeline with four phases:
   `Hovered` / `Pressed` marker components synchronized from interaction events
 - **Computed-style cache + incremental invalidation:**
   `StyleDirty` marks entities requiring recomputation; `ComputedStyle` stores
-  cached resolved layout/text/color/transition for projector reads
+  cached resolved layout/text/color/transition plus `font_family: Option<Vec<String>>`
+  for projector reads
 - **Smooth transitions:**
   `TargetColorStyle` + `CurrentColorStyle` driven by
   `bevy_tweening::TweenAnim` tween instances targeting
@@ -113,6 +114,25 @@ Style resolution helpers (`resolve_style`, `resolve_style_for_classes`) and appl
 (`apply_widget_style`, `apply_label_style`, `apply_text_input_style`) are provided for projectors.
 Projectors now primarily consume `ComputedStyle` (through `resolve_style`) rather than
 re-running a full cascade per frame.
+
+### 5.6) Font Bridge (Bevy assets/fonts → Masonry/Parley)
+
+`bevy_xilem` now includes an internal font bridge resource (`XilemFontBridge`) and
+two-stage sync pipeline to register custom font bytes into Masonry's font database
+(`RenderRoot::register_fonts`).
+
+- **Option A (dynamic):** `collect_bevy_font_assets` listens to `AssetEvent<Font>` and
+  queues bytes from Bevy's `Assets<Font>`.
+- **Bridge flush:** `sync_fonts_to_xilem` registers queued bytes into Masonry/Parley.
+
+- App-level API is exposed through `AppBevyXilemExt`:
+  - `.register_xilem_font_bytes(&[u8])`
+  - `.register_xilem_font_path("assets/fonts/<font>.ttf|otf")`
+- Registered fonts are deduplicated and flushed during `PreUpdate`.
+- Styles can provide a per-node font stack (`Vec<String>`), which is mapped to
+  Parley `FontStack` fallback order.
+- This enables stylesheet-level `font_family` usage for custom CJK fonts without
+  requiring projector-level ad-hoc font wiring.
 
 ### 6) ECS control adapter coverage
 
@@ -181,6 +201,7 @@ so user code no longer needs to allocate/store a dedicated node-id component.
 - `UiSynthesisStats`
 - `UiEventQueue`
 - `StyleSheet`
+- `XilemFontBridge`
 - `MasonryRuntime`
 
 and registers tweening support with:
@@ -189,7 +210,7 @@ and registers tweening support with:
 
 and registers systems:
 
-- `PreUpdate`: `inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
+- `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
 - `Update`: `mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime` (chained)
 

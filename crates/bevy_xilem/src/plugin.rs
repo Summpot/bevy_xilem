@@ -1,12 +1,15 @@
 use bevy_app::{App, Plugin, PostUpdate, PreUpdate, Update};
+use bevy_asset::AssetEvent;
 use bevy_ecs::schedule::IntoScheduleConfigs;
 use bevy_input::mouse::{MouseButtonInput, MouseWheel};
+use bevy_text::Font;
 use bevy_time::TimePlugin;
 use bevy_tweening::{AnimationSystem, TweeningPlugin};
 use bevy_window::{CursorLeft, CursorMoved, WindowResized};
 
 use crate::{
     events::UiEventQueue,
+    fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
     projection::{UiProjectorRegistry, register_builtin_projectors},
     runtime::{MasonryRuntime, inject_bevy_input_into_masonry, rebuild_masonry_runtime},
     styling::{
@@ -28,15 +31,23 @@ impl Plugin for BevyXilemPlugin {
             .init_resource::<UiSynthesisStats>()
             .init_resource::<UiEventQueue>()
             .init_resource::<StyleSheet>()
+            .init_resource::<XilemFontBridge>()
             .init_non_send_resource::<MasonryRuntime>()
             .add_message::<CursorMoved>()
             .add_message::<CursorLeft>()
             .add_message::<MouseButtonInput>()
             .add_message::<MouseWheel>()
             .add_message::<WindowResized>()
+            .add_message::<AssetEvent<Font>>()
             .add_systems(
                 PreUpdate,
-                (inject_bevy_input_into_masonry, sync_ui_interaction_markers).chain(),
+                (
+                    collect_bevy_font_assets,
+                    sync_fonts_to_xilem,
+                    inject_bevy_input_into_masonry,
+                    sync_ui_interaction_markers,
+                )
+                    .chain(),
             )
             .add_systems(
                 Update,
