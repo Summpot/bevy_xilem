@@ -25,6 +25,19 @@ impl UiLabel {
     }
 }
 
+/// Translation key marker for localized text projection.
+#[derive(Component, Debug, Clone, PartialEq, Eq)]
+pub struct LocalizeText {
+    pub key: String,
+}
+
+impl LocalizeText {
+    #[must_use]
+    pub fn new(key: impl Into<String>) -> Self {
+        Self { key: key.into() }
+    }
+}
+
 /// Built-in button component.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct UiButton {

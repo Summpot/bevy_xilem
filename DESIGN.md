@@ -134,6 +134,37 @@ two-stage sync pipeline to register custom font bytes into Masonry's font databa
 - This enables stylesheet-level `font_family` usage for custom CJK fonts without
   requiring projector-level ad-hoc font wiring.
 
+### 5.7) i18n/l10n bridge (`bevy_fluent`) + locale-aware CJK fallback
+
+`bevy_xilem` now integrates `bevy_fluent` for ECS-side text localization and ties
+locale state into projector text/font resolution.
+
+- `BevyXilemPlugin` initializes i18n resources and, when Bevy's asset plugins
+  are available in the app, also installs `FluentPlugin`:
+  - `ActiveLocale(LanguageIdentifier)` — app-selected locale source of truth
+  - `LocalizationAssetRoot` (default `"locales"`)
+  - `LocalizationFolderHandle`
+  - `LocalizationCache`
+- `Update` stage now runs i18n systems:
+  - `load_localization_assets`
+  - `sync_fluent_locale_from_active_locale`
+  - `refresh_localization_cache`
+- New ECS component `LocalizeText { key }` marks entities whose text should be looked up
+  from Fluent bundles.
+- Built-in `UiLabel`/`UiButton` projectors resolve text through cache-backed Fluent lookup,
+  with fallback to original hardcoded text.
+
+To address Han Unification variant rendering issues (same Unicode codepoints in JP/SC),
+label projector styling now injects locale-aware default font fallback stacks when no
+explicit `font_family` is provided:
+
+- `ja`: `Inter -> Noto Sans JP -> Noto Sans CJK JP -> Noto Sans SC -> Noto Sans CJK SC`
+- `zh-CN`: `Inter -> Noto Sans SC -> Noto Sans CJK SC -> Noto Sans JP -> Noto Sans CJK JP`
+
+Because synthesis runs each frame and projectors read `ActiveLocale` dynamically,
+mutating `ActiveLocale` in systems updates both translated content and font fallback
+priority immediately on next frame.
+
 ### 6) ECS control adapter coverage
 
 `bevy_xilem` scanned `xilem_masonry::view::*` controls and currently provides ECS adapters
@@ -177,6 +208,7 @@ Built-in components:
 - `UiFlexRow`
 - `UiLabel { text }`
 - `UiButton { label }`
+- `LocalizeText { key }`
 
 Node identity for projection context is derived from ECS entities (`entity.to_bits()`),
 so user code no longer needs to allocate/store a dedicated node-id component.
@@ -202,15 +234,24 @@ so user code no longer needs to allocate/store a dedicated node-id component.
 - `UiEventQueue`
 - `StyleSheet`
 - `XilemFontBridge`
+- `ActiveLocale`
+- `LocalizationAssetRoot`
+- `LocalizationFolderHandle`
+- `LocalizationCache`
 - `MasonryRuntime`
 
 and registers tweening support with:
 
 - `TweeningPlugin` (from crates.io `bevy_tweening` crate)
 
+and conditional localization asset support with:
+
+- `FluentPlugin` (from `bevy_fluent`, auto-added when Bevy asset plugins are present)
+
 and registers systems:
 
 - `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
+- `Update` (i18n): `load_localization_assets -> sync_fluent_locale_from_active_locale -> refresh_localization_cache`
 - `Update`: `mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime` (chained)
 

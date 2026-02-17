@@ -12,6 +12,7 @@ You describe UI from ECS components (via projectors), handle user interactions t
 - ECS-driven UI projection (`Component -> UiView`)
 - Typed UI action queue (`UiEventQueue`) for interaction handling
 - Ergonomic ECS control helpers (`button`, `checkbox`, `slider`, `text_input`, ...)
+- Built-in i18n/l10n bridge via `bevy_fluent` (`ActiveLocale` + `LocalizeText`)
 - Windowed runner helpers for apps/examples
 
 ---
@@ -231,6 +232,7 @@ This keeps interaction handling explicit and ECS-friendly.
 - `chess`
 - `theme_gallery`
 - `game_2048`
+- `i18n_showcase`
 
 Run an example from repository root:
 

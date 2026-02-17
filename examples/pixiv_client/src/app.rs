@@ -2,19 +2,20 @@ use std::{f32::consts::PI, process::Command, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
 use bevy_asset::{AssetPlugin, AssetServer, Assets, Handle, RenderAssetUsages};
+use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_image::Image as BevyImage;
 use bevy_text::{Font, TextPlugin};
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, ResolvedStyle,
-    StyleClass, StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
-    apply_label_style, apply_text_input_style, apply_widget_style,
+    ActiveLocale, AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, LocalizationCache,
+    ProjectionCtx, ResolvedStyle, StyleClass, StyleSetter, StyleSheet, StyleTransition, TextStyle,
+    UiEventQueue, UiRoot, UiView, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
     bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim},
     bevy_window::WindowResized,
-    button, resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
-    run_app_with_window_options, text_input,
+    button, locale_font_family_stack, resolve_style, resolve_style_for_classes,
+    resolve_style_for_entity_classes, run_app_with_window_options, text_input,
     xilem::{
         Color,
         masonry::layout::{Dim, Length},
@@ -32,6 +33,7 @@ use pixiv_client::{
     build_browser_login_url, generate_pkce_code_verifier, pkce_s256_challenge,
 };
 use reqwest::Url;
+use unic_langid::LanguageIdentifier;
 use vello::peniko::{Blob, ImageAlphaType, ImageData, ImageFormat};
 
 const CARD_BASE_WIDTH: f64 = 270.0;
@@ -46,22 +48,100 @@ const PIXIV_AUTH_TOKEN_FALLBACK: &str = "https://oauth.secure.pixiv.net/auth/tok
 const PIXIV_WEB_REDIRECT_FALLBACK: &str =
     "https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback";
 
-fn default_font_stack() -> Vec<String> {
-    vec![
-        "Inter".into(),
-        "Noto Sans CJK SC".into(),
-        "NotoSansCJKsc".into(),
-        "Noto Sans CJK JP".into(),
-        "NotoSansCJKjp".into(),
-        "Noto Sans CJK TC".into(),
-        "NotoSansCJKtc".into(),
-        "Noto Sans CJK KR".into(),
-        "NotoSansCJKkr".into(),
-        "PingFang SC".into(),
-        "Hiragino Sans".into(),
-        "Apple SD Gothic Neo".into(),
-        "sans-serif".into(),
-    ]
+fn parse_locale(tag: &str) -> LanguageIdentifier {
+    tag.parse()
+        .unwrap_or_else(|_| panic!("locale `{tag}` should parse"))
+}
+
+fn next_locale(current: &LanguageIdentifier) -> LanguageIdentifier {
+    if current.language.as_str() == "ja" {
+        parse_locale("en-US")
+    } else if current.language.as_str() == "zh"
+        && current
+            .region
+            .is_some_and(|region| region.as_str().eq_ignore_ascii_case("CN"))
+    {
+        parse_locale("ja-JP")
+    } else {
+        parse_locale("zh-CN")
+    }
+}
+
+fn locale_badge(locale: &LanguageIdentifier) -> &'static str {
+    if locale.language.as_str() == "ja" {
+        "日本語"
+    } else if locale.language.as_str() == "zh"
+        && locale
+            .region
+            .is_some_and(|region| region.as_str().eq_ignore_ascii_case("CN"))
+    {
+        "简体中文"
+    } else {
+        "English"
+    }
+}
+
+fn tr(world: &World, key: &str, fallback: &str) -> String {
+    let translated = world.get_resource::<LocalizationCache>().and_then(|cache| {
+        cache.content(key).or_else(|| {
+            if key.contains('.') {
+                let normalized = key.replace('.', "-");
+                cache.content(normalized.as_str())
+            } else {
+                None
+            }
+        })
+    });
+
+    translated.unwrap_or_else(|| fallback.to_string())
+}
+
+fn set_status(world: &mut World, message: impl Into<String>) {
+    world.resource_mut::<UiState>().status_line = message.into();
+}
+
+fn set_status_key(world: &mut World, key: &str, fallback: &str) {
+    let message = {
+        let world_ref: &World = world;
+        tr(world_ref, key, fallback)
+    };
+    set_status(world, message);
+}
+
+fn localized_font_stack(locale: &LanguageIdentifier) -> Vec<String> {
+    let mut stack = locale_font_family_stack(locale);
+    for family in [
+        "Noto Sans CJK TC",
+        "NotoSansCJKtc",
+        "Noto Sans CJK KR",
+        "NotoSansCJKkr",
+        "PingFang SC",
+        "Hiragino Sans",
+        "Apple SD Gothic Neo",
+    ] {
+        if !stack.iter().any(|item| item == family) {
+            stack.push(family.to_string());
+        }
+    }
+    stack
+}
+
+fn sync_font_stack_for_locale(sheet: &mut StyleSheet, locale: &LanguageIdentifier) {
+    let stack = localized_font_stack(locale);
+    for class_name in [
+        "pixiv.root",
+        "pixiv.button",
+        "pixiv.primary-btn",
+        "pixiv.card",
+        "pixiv.tag",
+        "pixiv.overlay",
+    ] {
+        if let Some(existing) = sheet.get_class(class_name).cloned() {
+            let mut updated = existing;
+            updated.font_family = Some(stack.clone());
+            sheet.set_class(class_name, updated);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,6 +205,7 @@ impl Default for ViewportMetrics {
 #[derive(Resource, Debug, Clone, Copy)]
 struct PixivControls {
     toggle_sidebar: Entity,
+    toggle_locale: Entity,
     home_tab: Entity,
     rankings_tab: Entity,
     search_tab: Entity,
@@ -231,6 +312,7 @@ enum ImageKind {
 #[derive(Debug, Clone)]
 enum AppAction {
     ToggleSidebar,
+    CycleLocale,
     SetTab(NavTab),
     SetSearchText(String),
     SubmitSearch,
@@ -359,16 +441,19 @@ fn ensure_task_pool_initialized() {
 }
 
 fn register_bridge_fonts(app: &mut App) {
-    app.register_xilem_font_path("assets/fonts/Inter-Regular.otf")
-        .expect("failed to register Inter-Regular.otf into Xilem font bridge");
-    app.register_xilem_font_path("assets/fonts/NotoSansCJKsc-Regular.otf")
-        .expect("failed to register NotoSansCJKsc-Regular.otf into Xilem font bridge");
-    app.register_xilem_font_path("assets/fonts/NotoSansCJKjp-Regular.otf")
-        .expect("failed to register NotoSansCJKjp-Regular.otf into Xilem font bridge");
-    app.register_xilem_font_path("assets/fonts/NotoSansCJKtc-Regular.otf")
-        .expect("failed to register NotoSansCJKtc-Regular.otf into Xilem font bridge");
-    app.register_xilem_font_path("assets/fonts/NotoSansCJKkr-Regular.otf")
-        .expect("failed to register NotoSansCJKkr-Regular.otf into Xilem font bridge");
+    app.register_xilem_font_bytes(include_bytes!("../../../assets/fonts/Inter-Regular.otf"));
+    app.register_xilem_font_bytes(include_bytes!(
+        "../../../assets/fonts/NotoSansCJKsc-Regular.otf"
+    ));
+    app.register_xilem_font_bytes(include_bytes!(
+        "../../../assets/fonts/NotoSansCJKjp-Regular.otf"
+    ));
+    app.register_xilem_font_bytes(include_bytes!(
+        "../../../assets/fonts/NotoSansCJKtc-Regular.otf"
+    ));
+    app.register_xilem_font_bytes(include_bytes!(
+        "../../../assets/fonts/NotoSansCJKkr-Regular.otf"
+    ));
 }
 
 fn ease_quadratic_in_out(t: f32) -> f32 {
@@ -584,6 +669,10 @@ fn setup(mut commands: Commands) {
             &mut commands,
             &["pixiv.button", "pixiv.button.sidebar"],
         ),
+        toggle_locale: spawn_control_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.sidebar"],
+        ),
         home_tab: spawn_control_entity(&mut commands, &["pixiv.button", "pixiv.button.subtle"]),
         rankings_tab: spawn_control_entity(&mut commands, &["pixiv.button", "pixiv.button.subtle"]),
         search_tab: spawn_control_entity(&mut commands, &["pixiv.button", "pixiv.button.subtle"]),
@@ -679,7 +768,12 @@ fn load_pixiv_fonts(asset_server: Res<AssetServer>, mut font_handles: ResMut<Pix
         .push(asset_server.load("fonts/NotoSansCJKkr-Regular.otf"));
 }
 
-fn setup_styles(mut sheet: ResMut<StyleSheet>) {
+fn setup_styles(mut sheet: ResMut<StyleSheet>, active_locale: Option<Res<ActiveLocale>>) {
+    let locale = active_locale
+        .as_ref()
+        .map_or_else(|| parse_locale("en-US"), |current| current.0.clone());
+    let default_fonts = localized_font_stack(&locale);
+
     sheet.set_class(
         "pixiv.root",
         StyleSetter {
@@ -693,7 +787,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
                 text: Some(Color::from_rgb8(0xEE, 0xEE, 0xEE)),
                 ..ColorStyle::default()
             },
-            font_family: Some(default_font_stack()),
+            font_family: Some(default_fonts.clone()),
             ..StyleSetter::default()
         },
     );
@@ -746,7 +840,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
                 ..LayoutStyle::default()
             },
             text: TextStyle { size: Some(14.0) },
-            font_family: Some(default_font_stack()),
+            font_family: Some(default_fonts.clone()),
             transition: Some(StyleTransition { duration: 0.14 }),
             ..StyleSetter::default()
         },
@@ -829,7 +923,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
                 text: Some(Color::from_rgb8(0xE7, 0xE7, 0xE7)),
                 ..ColorStyle::default()
             },
-            font_family: Some(default_font_stack()),
+            font_family: Some(default_fonts.clone()),
             transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleSetter::default()
         },
@@ -852,7 +946,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
                 ..ColorStyle::default()
             },
             text: TextStyle { size: Some(14.0) },
-            font_family: Some(default_font_stack()),
+            font_family: Some(default_fonts.clone()),
             ..StyleSetter::default()
         },
     );
@@ -873,7 +967,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
                 text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE4)),
                 ..ColorStyle::default()
             },
-            font_family: Some(default_font_stack()),
+            font_family: Some(default_fonts.clone()),
             transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleSetter::default()
         },
@@ -894,7 +988,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
                 border: Some(Color::from_rgb8(0x3A, 0x3A, 0x3A)),
                 ..ColorStyle::default()
             },
-            font_family: Some(default_font_stack()),
+            font_family: Some(default_fonts),
             ..StyleSetter::default()
         },
     );
@@ -935,6 +1029,10 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let ui = ctx.world.resource::<UiState>();
     let controls = *ctx.world.resource::<PixivControls>();
+    let current_locale = ctx
+        .world
+        .get_resource::<ActiveLocale>()
+        .map_or_else(|| parse_locale("en-US"), |locale| locale.0.clone());
 
     let mut items = Vec::new();
     items.push(
@@ -943,10 +1041,24 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
             controls.toggle_sidebar,
             AppAction::ToggleSidebar,
             if ui.sidebar_collapsed {
-                "Expand ▶"
+                format!("{} ▶", tr(ctx.world, "pixiv.sidebar.expand", "Expand"))
             } else {
-                "◀ Collapse"
+                format!("◀ {}", tr(ctx.world, "pixiv.sidebar.collapse", "Collapse"))
             },
+        )
+        .into_any_flex(),
+    );
+
+    items.push(
+        action_button(
+            ctx.world,
+            controls.toggle_locale,
+            AppAction::CycleLocale,
+            format!(
+                "{}: {}",
+                tr(ctx.world, "pixiv.sidebar.language", "Language"),
+                locale_badge(&current_locale)
+            ),
         )
         .into_any_flex(),
     );
@@ -958,9 +1070,9 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
                 controls.home_tab,
                 AppAction::SetTab(NavTab::Home),
                 if ui.active_tab == NavTab::Home {
-                    "● Home"
+                    format!("● {}", tr(ctx.world, "pixiv.sidebar.home", "Home"))
                 } else {
-                    "Home"
+                    tr(ctx.world, "pixiv.sidebar.home", "Home")
                 },
             )
             .into_any_flex(),
@@ -971,9 +1083,9 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
                 controls.rankings_tab,
                 AppAction::SetTab(NavTab::Rankings),
                 if ui.active_tab == NavTab::Rankings {
-                    "● Rankings"
+                    format!("● {}", tr(ctx.world, "pixiv.sidebar.rankings", "Rankings"))
                 } else {
-                    "Rankings"
+                    tr(ctx.world, "pixiv.sidebar.rankings", "Rankings")
                 },
             )
             .into_any_flex(),
@@ -984,9 +1096,9 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
                 controls.search_tab,
                 AppAction::SetTab(NavTab::Search),
                 if ui.active_tab == NavTab::Search {
-                    "● Search"
+                    format!("● {}", tr(ctx.world, "pixiv.sidebar.search", "Search"))
                 } else {
-                    "Search"
+                    tr(ctx.world, "pixiv.sidebar.search", "Search")
                 },
             )
             .into_any_flex(),
@@ -1024,15 +1136,19 @@ fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
     let input_style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
     let auth = ctx.world.resource::<AuthState>();
     let controls = *ctx.world.resource::<PixivControls>();
+    let auth_endpoint = auth
+        .idp_urls
+        .as_ref()
+        .map(|i| i.auth_token_url.as_str())
+        .map(std::borrow::ToOwned::to_owned)
+        .unwrap_or_else(|| tr(ctx.world, "pixiv.auth.loading", "loading…"));
 
     let rows = vec![
         apply_label_style(
             label(format!(
-                "Auth endpoint: {}",
-                auth.idp_urls
-                    .as_ref()
-                    .map(|i| i.auth_token_url.as_str())
-                    .unwrap_or("loading…")
+                "{} {}",
+                tr(ctx.world, "pixiv.auth.endpoint", "Auth endpoint:"),
+                auth_endpoint
             )),
             &input_style,
         )
@@ -1043,7 +1159,11 @@ fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
                 auth.code_verifier_input.clone(),
                 AppAction::SetCodeVerifier,
             )
-            .placeholder("PKCE code_verifier"),
+            .placeholder(tr(
+                ctx.world,
+                "pixiv.auth.placeholder.pkce",
+                "PKCE code_verifier",
+            )),
             &input_style,
         ))
         .width(Dim::Stretch)
@@ -1054,7 +1174,7 @@ fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
                 auth.auth_code_input.clone(),
                 AppAction::SetAuthCode,
             )
-            .placeholder("Auth code"),
+            .placeholder(tr(ctx.world, "pixiv.auth.placeholder.code", "Auth code")),
             &input_style,
         ))
         .width(Dim::Stretch)
@@ -1063,14 +1183,18 @@ fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
             ctx.world,
             controls.open_browser_login,
             AppAction::OpenBrowserLogin,
-            "Open Browser Login",
+            tr(
+                ctx.world,
+                "pixiv.auth.open_browser_login",
+                "Open Browser Login",
+            ),
         )
         .into_any_flex(),
         action_button(
             ctx.world,
             controls.exchange_auth_code,
             AppAction::ExchangeAuthCode,
-            "Login (auth_code)",
+            tr(ctx.world, "pixiv.auth.login_auth_code", "Login (auth_code)"),
         )
         .into_any_flex(),
         sized_box(apply_text_input_style(
@@ -1079,7 +1203,11 @@ fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
                 auth.refresh_token_input.clone(),
                 AppAction::SetRefreshToken,
             )
-            .placeholder("Refresh token"),
+            .placeholder(tr(
+                ctx.world,
+                "pixiv.auth.placeholder.refresh_token",
+                "Refresh token",
+            )),
             &input_style,
         ))
         .width(Dim::Stretch)
@@ -1088,7 +1216,7 @@ fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
             ctx.world,
             controls.refresh_token,
             AppAction::RefreshToken,
-            "Refresh Token",
+            tr(ctx.world, "pixiv.auth.refresh_token", "Refresh Token"),
         )
         .into_any_flex(),
     ];
@@ -1125,14 +1253,14 @@ fn project_response_panel(_: &PixivResponsePanel, ctx: ProjectionCtx<'_>) -> UiV
                     ctx.world,
                     controls.copy_response,
                     AppAction::CopyResponseBody,
-                    "Copy Response Body",
+                    tr(ctx.world, "pixiv.response.copy", "Copy Response Body"),
                 )
                 .into_any_flex(),
                 action_button(
                     ctx.world,
                     controls.clear_response,
                     AppAction::ClearResponseBody,
-                    "Clear",
+                    tr(ctx.world, "pixiv.response.clear", "Clear"),
                 )
                 .into_any_flex(),
             ))
@@ -1165,7 +1293,11 @@ fn project_search_panel(_: &PixivSearchPanel, ctx: ProjectionCtx<'_>) -> UiView 
         flex_row((
             apply_text_input_style(
                 text_input(ctx.entity, ui.search_text.clone(), AppAction::SetSearchText)
-                    .placeholder("Search illust keyword"),
+                    .placeholder(tr(
+                        ctx.world,
+                        "pixiv.search.placeholder",
+                        "Search illust keyword",
+                    )),
                 &input_style,
             )
             .flex(1.0),
@@ -1173,7 +1305,7 @@ fn project_search_panel(_: &PixivSearchPanel, ctx: ProjectionCtx<'_>) -> UiView 
                 ctx.world,
                 controls.search_submit,
                 AppAction::SubmitSearch,
-                "Search",
+                tr(ctx.world, "pixiv.search.submit", "Search"),
             )
             .into_any_flex(),
         ))
@@ -1184,7 +1316,11 @@ fn project_search_panel(_: &PixivSearchPanel, ctx: ProjectionCtx<'_>) -> UiView 
 
 fn project_home_feed(_: &PixivHomeFeed, ctx: ProjectionCtx<'_>) -> UiView {
     if ctx.children.is_empty() {
-        return Arc::new(label("No data yet. Login first, then switch tabs."));
+        return Arc::new(label(tr(
+            ctx.world,
+            "pixiv.feed.empty",
+            "No data yet. Login first, then switch tabs.",
+        )));
     }
 
     Arc::new(
@@ -1199,11 +1335,15 @@ fn project_home_feed(_: &PixivHomeFeed, ctx: ProjectionCtx<'_>) -> UiView {
     )
 }
 
-fn illust_thumbnail_view(visual: &IllustVisual) -> UiView {
+fn illust_thumbnail_view(world: &World, visual: &IllustVisual) -> UiView {
     if let Some(image_data) = visual.thumb_ui.clone() {
         Arc::new(image(image_data))
     } else {
-        Arc::new(label("thumbnail loading…"))
+        Arc::new(label(tr(
+            world,
+            "pixiv.feed.thumbnail_loading",
+            "thumbnail loading…",
+        )))
     }
 }
 
@@ -1281,7 +1421,7 @@ fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(
         sized_box(apply_widget_style(
             flex_col(vec![
-                sized_box(illust_thumbnail_view(&visual))
+                sized_box(illust_thumbnail_view(ctx.world, &visual))
                     .dims((Dim::Stretch, Length::px(image_height)))
                     .into_any_flex(),
                 apply_label_style(label(illust.title.clone()), &style).into_any_flex(),
@@ -1292,7 +1432,7 @@ fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
                     button_from_style(
                         ctx.entity,
                         AppAction::OpenIllust(ctx.entity),
-                        "Open",
+                        tr(ctx.world, "pixiv.feed.open", "Open"),
                         &primary_button_style,
                     )
                     .into_any_flex(),
@@ -1331,7 +1471,11 @@ fn project_detail_overlay(_: &PixivDetailOverlay, ctx: ProjectionCtx<'_>) -> UiV
     let hero: UiView = if let Some(high_res) = visual.high_res_ui {
         Arc::new(sized_box(image(high_res)).fixed_height(Length::px(280.0)))
     } else {
-        Arc::new(label("high-res loading…"))
+        Arc::new(label(tr(
+            ctx.world,
+            "pixiv.feed.high_res_loading",
+            "high-res loading…",
+        )))
     };
 
     let tags = ctx.children.into_iter().next().unwrap_or_else(empty_ui);
@@ -1342,15 +1486,25 @@ fn project_detail_overlay(_: &PixivDetailOverlay, ctx: ProjectionCtx<'_>) -> UiV
                 ctx.world,
                 controls.close_overlay,
                 AppAction::CloseIllust,
-                "Close",
+                tr(ctx.world, "pixiv.overlay.close", "Close"),
             )
             .into_any_flex(),
             hero.into_any_flex(),
             label(illust.title.clone()).into_any_flex(),
-            label(format!("Author: {}", illust.user.name)).into_any_flex(),
             label(format!(
-                "Views {}  Bookmarks {}  Comments {}",
-                illust.total_view, illust.total_bookmarks, illust.total_comments
+                "{} {}",
+                tr(ctx.world, "pixiv.overlay.author", "Author:"),
+                illust.user.name
+            ))
+            .into_any_flex(),
+            label(format!(
+                "{} {}  {} {}  {} {}",
+                tr(ctx.world, "pixiv.overlay.views", "Views"),
+                illust.total_view,
+                tr(ctx.world, "pixiv.overlay.bookmarks", "Bookmarks"),
+                illust.total_bookmarks,
+                tr(ctx.world, "pixiv.overlay.comments", "Comments"),
+                illust.total_comments
             ))
             .into_any_flex(),
             tags.into_any_flex(),
@@ -1405,25 +1559,56 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
     for event in events {
         match event.action {
             AppAction::ToggleSidebar => {
-                let mut ui = world.resource_mut::<UiState>();
-                ui.sidebar_collapsed = !ui.sidebar_collapsed;
-                ui.status_line = if ui.sidebar_collapsed {
-                    "Sidebar collapsed".to_string()
-                } else {
-                    "Sidebar expanded".to_string()
+                let collapsed = {
+                    let mut ui = world.resource_mut::<UiState>();
+                    ui.sidebar_collapsed = !ui.sidebar_collapsed;
+                    ui.sidebar_collapsed
                 };
+
+                if collapsed {
+                    set_status_key(world, "pixiv.status.sidebar_collapsed", "Sidebar collapsed");
+                } else {
+                    set_status_key(world, "pixiv.status.sidebar_expanded", "Sidebar expanded");
+                }
+            }
+            AppAction::CycleLocale => {
+                let next = {
+                    let current = world.resource::<ActiveLocale>().0.clone();
+                    next_locale(&current)
+                };
+
+                world.resource_mut::<ActiveLocale>().0 = next.clone();
+                {
+                    let mut style_sheet = world.resource_mut::<StyleSheet>();
+                    sync_font_stack_for_locale(&mut style_sheet, &next);
+                }
+
+                let status_prefix = tr(
+                    world,
+                    "pixiv.status.locale_switched",
+                    "Language switched to",
+                );
+                set_status(world, format!("{status_prefix} {}", locale_badge(&next)));
             }
             AppAction::SetTab(tab) => {
+                let status_line = match tab {
+                    NavTab::Home => tr(world, "pixiv.status.loading_home", "Loading Home feed…"),
+                    NavTab::Rankings => tr(
+                        world,
+                        "pixiv.status.loading_rankings",
+                        "Loading Rankings feed…",
+                    ),
+                    NavTab::Search => tr(
+                        world,
+                        "pixiv.status.search_ready",
+                        "Search tab ready. Enter keywords and press Search.",
+                    ),
+                };
+
                 {
                     let mut ui = world.resource_mut::<UiState>();
                     ui.active_tab = tab;
-                    ui.status_line = match tab {
-                        NavTab::Home => "Loading Home feed…".to_string(),
-                        NavTab::Rankings => "Loading Rankings feed…".to_string(),
-                        NavTab::Search => {
-                            "Search tab ready. Enter keywords and press Search.".to_string()
-                        }
-                    };
+                    ui.status_line = status_line;
                 }
 
                 let cmd = match tab {
@@ -1440,13 +1625,22 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
                 let query = world.resource::<UiState>().search_text.clone();
 
                 if query.trim().is_empty() {
-                    world.resource_mut::<UiState>().status_line =
-                        "Please enter a search keyword first.".to_string();
+                    set_status_key(
+                        world,
+                        "pixiv.status.search_keyword_required",
+                        "Please enter a search keyword first.",
+                    );
                     continue;
                 }
 
-                world.resource_mut::<UiState>().status_line =
-                    format!("Searching for ‘{}’…", query.trim());
+                set_status(
+                    world,
+                    format!(
+                        "{} ‘{}’…",
+                        tr(world, "pixiv.status.searching", "Searching for"),
+                        query.trim()
+                    ),
+                );
                 let _ = world
                     .resource::<NetworkBridge>()
                     .cmd_tx
@@ -1515,25 +1709,40 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
             AppAction::CopyResponseBody => {
                 let body = world.resource::<ResponsePanelState>().content.clone();
                 if body.trim().is_empty() {
-                    world.resource_mut::<UiState>().status_line =
-                        "No response body to copy.".to_string();
+                    set_status_key(
+                        world,
+                        "pixiv.status.no_response_to_copy",
+                        "No response body to copy.",
+                    );
                     continue;
                 }
 
                 match arboard::Clipboard::new().and_then(|mut clipboard| clipboard.set_text(body)) {
                     Ok(_) => {
-                        world.resource_mut::<UiState>().status_line =
-                            "Response body copied to clipboard.".to_string();
+                        set_status_key(
+                            world,
+                            "pixiv.status.response_copied",
+                            "Response body copied to clipboard.",
+                        );
                     }
                     Err(err) => {
-                        world.resource_mut::<UiState>().status_line =
-                            format!("Clipboard copy failed: {err}");
+                        set_status(
+                            world,
+                            format!(
+                                "{}: {err}",
+                                tr(world, "pixiv.status.copy_failed", "Clipboard copy failed")
+                            ),
+                        );
                     }
                 }
             }
             AppAction::ClearResponseBody => {
                 *world.resource_mut::<ResponsePanelState>() = ResponsePanelState::default();
-                world.resource_mut::<UiState>().status_line = "Response panel cleared.".to_string();
+                set_status_key(
+                    world,
+                    "pixiv.status.response_panel_cleared",
+                    "Response panel cleared.",
+                );
             }
             AppAction::OpenBrowserLogin => {
                 let (idp_urls, verifier) = {
@@ -1556,30 +1765,66 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
                 match build_browser_login_url(&challenge) {
                     Ok(login_url) => match open_in_system_browser(&login_url) {
                         Ok(_) => {
-                            world.resource_mut::<UiState>().status_line = if idp_urls.is_some() {
+                            let message = if idp_urls.is_some() {
                                 format!(
-                                    "Browser login page opened. Official callback should look like pixiv://account/login?code=...&via=login. Token exchange uses redirect_uri from /idp-urls (current: {redirect_uri})."
+                                    "{} {redirect_uri}.",
+                                    tr(
+                                        world,
+                                        "pixiv.status.browser_opened_ready",
+                                        "Browser login page opened. Official callback should look like pixiv://account/login?code=...&via=login. Token exchange uses redirect_uri from /idp-urls (current:)"
+                                    )
                                 )
                             } else {
-                                "Browser login page opened. /idp-urls is not ready yet, so token exchange will use fallback redirect_uri. If Login fails, wait for IdP discovery and retry.".to_string()
+                                tr(
+                                    world,
+                                    "pixiv.status.browser_opened_fallback",
+                                    "Browser login page opened. /idp-urls is not ready yet, so token exchange will use fallback redirect_uri. If Login fails, wait for IdP discovery and retry.",
+                                )
                             };
+                            set_status(world, message);
                         }
                         Err(err) => {
-                            world.resource_mut::<UiState>().status_line = format!(
-                                "Could not open browser automatically: {err}. Open this URL manually: {login_url}"
+                            set_status(
+                                world,
+                                format!(
+                                    "{}: {err}. {}: {login_url}",
+                                    tr(
+                                        world,
+                                        "pixiv.status.browser_open_failed",
+                                        "Could not open browser automatically"
+                                    ),
+                                    tr(
+                                        world,
+                                        "pixiv.status.open_url_manually",
+                                        "Open this URL manually"
+                                    )
+                                ),
                             );
                         }
                     },
                     Err(err) => {
-                        world.resource_mut::<UiState>().status_line =
-                            format!("Failed to build browser login URL: {err}");
+                        set_status(
+                            world,
+                            format!(
+                                "{}: {err}",
+                                tr(
+                                    world,
+                                    "pixiv.status.build_login_url_failed",
+                                    "Failed to build browser login URL"
+                                )
+                            ),
+                        );
                     }
                 }
             }
             AppAction::ExchangeAuthCode => {
                 let auth = world.resource::<AuthState>();
                 let Some(code) = extract_auth_code_from_input(&auth.auth_code_input) else {
-                    world.resource_mut::<UiState>().status_line = "Auth code is missing. Please paste a raw code or a callback URL containing `code=`.".to_string();
+                    set_status_key(
+                        world,
+                        "pixiv.status.auth_code_missing",
+                        "Auth code is missing. Please paste a raw code or a callback URL containing `code=`.",
+                    );
                     continue;
                 };
                 let _ =
@@ -1593,7 +1838,7 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
             }
             AppAction::RefreshToken => {
                 let refresh_token = world.resource::<AuthState>().refresh_token_input.clone();
-                world.resource_mut::<UiState>().status_line = "Refreshing token…".to_string();
+                set_status_key(world, "pixiv.status.refreshing_token", "Refreshing token…");
                 let _ = world
                     .resource::<NetworkBridge>()
                     .cmd_tx
@@ -1839,13 +2084,19 @@ fn apply_network_results(world: &mut World) {
         match result {
             NetworkResult::IdpDiscovered(idp) => {
                 world.resource_mut::<AuthState>().idp_urls = Some(idp);
-                world.resource_mut::<UiState>().status_line =
-                    "IdP endpoint discovered. Enter auth_code or refresh token.".to_string();
+                set_status_key(
+                    world,
+                    "pixiv.status.idp_discovered",
+                    "IdP endpoint discovered. Enter auth_code or refresh token.",
+                );
             }
             NetworkResult::Authenticated(session) => {
                 world.resource_mut::<AuthState>().session = Some(session.clone());
-                world.resource_mut::<UiState>().status_line =
-                    "Authenticated. Loading home feed…".to_string();
+                set_status_key(
+                    world,
+                    "pixiv.status.authenticated_loading_home",
+                    "Authenticated. Loading home feed…",
+                );
                 *world.resource_mut::<ResponsePanelState>() = ResponsePanelState::default();
 
                 if world.resource::<AuthState>().refresh_token_input.is_empty() {
@@ -1861,10 +2112,16 @@ fn apply_network_results(world: &mut World) {
             NetworkResult::FeedLoaded { source, payload } => {
                 let home_feed = world.resource::<PixivUiTree>().home_feed;
                 world.resource_mut::<UiState>().active_tab = source;
-                world.resource_mut::<UiState>().status_line = format!(
-                    "Loaded {} illustrations ({source:?})",
+                let message = format!(
+                    "{} {} ({source:?})",
+                    tr(
+                        world,
+                        "pixiv.status.loaded_illustrations",
+                        "Loaded illustrations",
+                    ),
                     payload.illusts.len()
                 );
+                set_status(world, message);
 
                 for entity in std::mem::take(&mut world.resource_mut::<FeedOrder>().0) {
                     if world.get_entity(entity).is_ok() {
@@ -1903,13 +2160,30 @@ fn apply_network_results(world: &mut World) {
                 world.resource_mut::<FeedOrder>().0 = new_order;
             }
             NetworkResult::BookmarkDone { illust_id } => {
-                world.resource_mut::<UiState>().status_line =
-                    format!("Bookmark synced for illust #{illust_id}");
+                set_status(
+                    world,
+                    format!(
+                        "{} #{illust_id}",
+                        tr(
+                            world,
+                            "pixiv.status.bookmark_synced",
+                            "Bookmark synced for illust",
+                        )
+                    ),
+                );
             }
             NetworkResult::Error { summary, details } => {
-                world.resource_mut::<UiState>().status_line = format!("Network error: {summary}");
+                let status_message = format!(
+                    "{}: {summary}",
+                    tr(world, "pixiv.status.network_error", "Network error")
+                );
+                set_status(world, status_message);
                 *world.resource_mut::<ResponsePanelState>() = ResponsePanelState {
-                    title: "Last network response body / detail".to_string(),
+                    title: tr(
+                        world,
+                        "pixiv.status.response_detail_title",
+                        "Last network response body / detail",
+                    ),
                     content: details,
                 };
             }
@@ -1980,8 +2254,17 @@ fn apply_image_results(world: &mut World) {
                 };
 
                 let Some(rgba_image) = image::RgbaImage::from_raw(width, height, rgba8) else {
-                    world.resource_mut::<UiState>().status_line =
-                        format!("Image decode buffer size mismatch for entity {entity:?}");
+                    set_status(
+                        world,
+                        format!(
+                            "{} {entity:?}",
+                            tr(
+                                world,
+                                "pixiv.status.image_decode_buffer_mismatch",
+                                "Image decode buffer size mismatch for entity",
+                            )
+                        ),
+                    );
                     continue;
                 };
                 let bevy_image = BevyImage::from_dynamic(
@@ -2024,8 +2307,13 @@ fn apply_image_results(world: &mut World) {
                     ImageKind::HighRes => "high-res",
                 };
                 if world.get_entity(entity).is_ok() {
-                    world.resource_mut::<UiState>().status_line =
-                        format!("Image load failed ({which}): {error}");
+                    set_status(
+                        world,
+                        format!(
+                            "{} ({which}): {error}",
+                            tr(world, "pixiv.status.image_load_failed", "Image load failed")
+                        ),
+                    );
                 }
             }
         }
@@ -2039,6 +2327,9 @@ fn build_app() -> App {
     register_bridge_fonts(&mut app);
 
     app.add_plugins((
+        EmbeddedAssetPlugin {
+            mode: PluginMode::ReplaceDefault,
+        },
         AssetPlugin::default(),
         TextPlugin::default(),
         BevyXilemPlugin,
@@ -2125,5 +2416,33 @@ mod tests {
     fn ensure_task_pool_initializes_io_pool() {
         ensure_task_pool_initialized();
         let _ = IoTaskPool::get();
+    }
+
+    #[test]
+    fn pixiv_locale_ids_do_not_use_dot_namespace() {
+        let locales = [
+            (
+                "en-US",
+                include_str!("../../../assets/locales/en-US/main.ftl"),
+            ),
+            (
+                "zh-CN",
+                include_str!("../../../assets/locales/zh-CN/main.ftl"),
+            ),
+            (
+                "ja-JP",
+                include_str!("../../../assets/locales/ja-JP/main.ftl"),
+            ),
+        ];
+
+        for (locale, content) in locales {
+            assert!(
+                !content
+                    .lines()
+                    .map(str::trim_start)
+                    .any(|line| line.starts_with("pixiv.")),
+                "{locale} locale still contains dot-separated pixiv message IDs"
+            );
+        }
     }
 }

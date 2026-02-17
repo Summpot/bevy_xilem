@@ -22,6 +22,18 @@ This document defines how automated agents (and humans operating like them) shou
    - Do **not** run `cargo run` unless user interaction is required to extract runtime logs or reproduce an interactive issue.
    - Prefer `cargo test`, static checks, and targeted diagnostics for routine verification.
 
+5. **Fluent message-id syntax (required)**
+   - CRITICAL SYNTAX NOTE FOR FLUENT (`.ftl`) FILES:
+     Do NOT use dots (`.`) to namespace Message IDs (e.g., `nav.home.title` is INVALID).
+     In Project Fluent, dots are strictly reserved for Attributes.
+     You MUST use hyphens (`-`) for namespacing your localized keys (e.g., use `nav-home-title` and `settings-theme-toggle`).
+
+6. **Default autonomous execution (required)**
+   - Do **not** ask the user for routine confirmations or step-by-step permission.
+   - For straightforward tasks with a clear implementation path, execute directly and report results.
+   - Only ask the user when the decision is **architecture-level** and there are **multiple valid options with meaningful trade-offs**.
+   - If there is only one reasonable path, proceed without asking.
+
 If a change affects public behavior (config schema, admin endpoints, tunnel protocol), update `DESIGN.md` and the examples/schema together.
 
 ## Quick verification checklist

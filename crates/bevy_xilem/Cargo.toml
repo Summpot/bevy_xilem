@@ -15,14 +15,19 @@ bevy_tasks.workspace = true
 bevy_time.workspace = true
 bevy_tweening.workspace = true
 bevy_window.workspace = true
+bevy_fluent.workspace = true
+bevy_embedded_assets.workspace = true
 crossbeam-queue.workspace = true
+fluent_content.workspace = true
 masonry.workspace = true
 rfd.workspace = true
 tokio.workspace = true
+unic-langid.workspace = true
 xilem.workspace = true
 xilem_core.workspace = true
 xilem_masonry.workspace = true
 vello.workspace = true
+tracing.workspace = true
 
 [dev-dependencies]
 num-traits.workspace = true
@@ -63,3 +68,7 @@ path = "../../examples/game_2048.rs"
 [[example]]
 name = "cjk_text_example"
 path = "../../examples/cjk_text_example.rs"
+
+[[example]]
+name = "i18n_showcase"
+path = "../../examples/i18n_showcase.rs"

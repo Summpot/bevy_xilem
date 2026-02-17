@@ -18,13 +18,18 @@ bevy_tasks = { version = "0.18", default-features = false, features = ["multi_th
 bevy_time = { version = "0.18", default-features = false, features = ["std"] }
 bevy_window = { version = "0.18", default-features = false, features = ["std"] }
 bevy_tweening = { version = "0.15", default-features = false }
+bevy_fluent = { git = "https://github.com/kgv/bevy_fluent", branch = "bevy-0.18" }
+bevy_embedded_assets = "0.15.0"
 crossbeam-queue = "0.3"
 tokio = { version = "1.49", features = ["rt-multi-thread"] }
 num-traits = "0.2"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
 rfd = "0.17"
+fluent_content = "0.0.5"
+unic-langid = "0.9.6"
 masonry = { path = "third_party/xilem/masonry" }
 xilem = { path = "third_party/xilem/xilem" }
 xilem_core = { path = "third_party/xilem/xilem_core" }
 xilem_masonry = { path = "third_party/xilem/xilem_masonry" }
 vello = "0.7"
+tracing = "0.1.44"

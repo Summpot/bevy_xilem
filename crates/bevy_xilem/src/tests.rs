@@ -1,13 +1,16 @@
-use std::{sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use crate::{
-    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, Hovered, Pressed, ProjectionCtx, Selector,
-    StyleRule, StyleSetter, StyleSheet, UiEventQueue, UiProjectorRegistry, UiRoot, UiView,
-    ecs_button, register_builtin_projectors, resolve_style, resolve_style_for_entity_classes,
-    synthesize_roots_with_stats,
+    ActiveLocale, AppBevyXilemExt, BevyXilemPlugin, ColorStyle, Hovered, LocalizationCache,
+    Pressed, ProjectionCtx, Selector, StyleRule, StyleSetter, StyleSheet, UiEventQueue,
+    UiProjectorRegistry, UiRoot, UiView, ecs_button, register_builtin_projectors, resolve_style,
+    resolve_style_for_entity_classes, synthesize_roots_with_stats,
 };
 use bevy_app::App;
+use bevy_asset::{AssetPlugin, Assets};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
+use bevy_fluent::prelude::BundleAsset;
+use bevy_tasks::{IoTaskPool, TaskPool};
 use bevy_tweening::Lens;
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -64,6 +67,168 @@ fn ui_event_queue_drains_typed_actions() {
     assert_eq!(actions.len(), 1);
     assert_eq!(actions[0].entity, root);
     assert_eq!(actions[0].action, TestAction::Clicked);
+}
+
+#[test]
+fn plugin_adds_fluent_assets_when_asset_plugin_exists() {
+    let mut app = App::new();
+    app.add_plugins((AssetPlugin::default(), BevyXilemPlugin));
+
+    assert!(app.world().contains_resource::<Assets<BundleAsset>>());
+}
+
+#[test]
+fn localization_cache_resolves_showcase_hello_world_for_zh_cn() {
+    let _ = IoTaskPool::get_or_init(TaskPool::new);
+
+    let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("assets");
+    assert!(
+        assets_dir.join("locales/zh-CN/main.ftl").exists(),
+        "expected showcase locale file at {}",
+        assets_dir.join("locales/zh-CN/main.ftl").display()
+    );
+
+    let mut app = App::new();
+    app.add_plugins((
+        AssetPlugin {
+            file_path: assets_dir.to_string_lossy().into_owned(),
+            ..AssetPlugin::default()
+        },
+        BevyXilemPlugin,
+    ));
+    app.insert_resource(ActiveLocale::new(
+        "zh-CN"
+            .parse()
+            .expect("zh-CN locale identifier should parse"),
+    ));
+
+    let mut translated = None;
+    for _ in 0..300 {
+        app.update();
+
+        translated = app
+            .world()
+            .resource::<LocalizationCache>()
+            .content("hello_world");
+
+        if translated.is_some() {
+            break;
+        }
+
+        std::thread::sleep(Duration::from_millis(5));
+    }
+
+    assert_eq!(translated.as_deref(), Some("你好，世界！"));
+}
+
+#[test]
+fn resolve_localized_text_prefers_translation_over_uilabel_fallback() {
+    let _ = IoTaskPool::get_or_init(TaskPool::new);
+
+    let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("assets");
+
+    let mut app = App::new();
+    app.add_plugins((
+        AssetPlugin {
+            file_path: assets_dir.to_string_lossy().into_owned(),
+            ..AssetPlugin::default()
+        },
+        BevyXilemPlugin,
+    ));
+    app.insert_resource(ActiveLocale::new(
+        "zh-CN"
+            .parse()
+            .expect("zh-CN locale identifier should parse"),
+    ));
+
+    let entity = app
+        .world_mut()
+        .spawn((
+            crate::UiLabel::new("Hello world"),
+            crate::LocalizeText::new("hello_world"),
+        ))
+        .id();
+
+    let mut resolved = String::from("Hello world");
+    for _ in 0..300 {
+        app.update();
+
+        resolved = crate::resolve_localized_text(app.world(), entity, "Hello world");
+        if resolved == "你好，世界！" {
+            break;
+        }
+
+        std::thread::sleep(Duration::from_millis(5));
+    }
+
+    assert_eq!(resolved, "你好，世界！");
+}
+
+#[test]
+fn localized_text_updates_after_active_locale_change() {
+    let _ = IoTaskPool::get_or_init(TaskPool::new);
+
+    let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("assets");
+
+    let mut app = App::new();
+    app.add_plugins((
+        AssetPlugin {
+            file_path: assets_dir.to_string_lossy().into_owned(),
+            ..AssetPlugin::default()
+        },
+        BevyXilemPlugin,
+    ));
+    app.insert_resource(ActiveLocale::new(
+        "en-US"
+            .parse()
+            .expect("en-US locale identifier should parse"),
+    ));
+
+    let entity = app
+        .world_mut()
+        .spawn((
+            crate::UiLabel::new("Hello world"),
+            crate::LocalizeText::new("hello_world"),
+        ))
+        .id();
+
+    let mut resolved_en = String::from("Hello world");
+    for _ in 0..300 {
+        app.update();
+
+        resolved_en = crate::resolve_localized_text(app.world(), entity, "Hello world");
+        if resolved_en == "Hello, world!" {
+            break;
+        }
+
+        std::thread::sleep(Duration::from_millis(5));
+    }
+
+    assert_eq!(resolved_en, "Hello, world!");
+
+    app.world_mut().resource_mut::<ActiveLocale>().0 = "zh-CN"
+        .parse()
+        .expect("zh-CN locale identifier should parse");
+
+    let mut resolved_zh = resolved_en;
+    for _ in 0..300 {
+        app.update();
+
+        resolved_zh = crate::resolve_localized_text(app.world(), entity, "Hello world");
+        if resolved_zh == "你好，世界！" {
+            break;
+        }
+
+        std::thread::sleep(Duration::from_millis(5));
+    }
+
+    assert_eq!(resolved_zh, "你好，世界！");
 }
 
 #[test]
@@ -447,4 +612,42 @@ fn xilem_font_bridge_deduplicates_same_font_bytes() {
     let mut bridge = crate::XilemFontBridge::default();
     assert!(bridge.register_font_bytes(b"font-data"));
     assert!(!bridge.register_font_bytes(b"font-data"));
+}
+
+#[test]
+fn locale_font_stack_ja_prioritizes_jp_before_sc() {
+    let locale = "ja-JP"
+        .parse()
+        .expect("ja-JP locale identifier should parse");
+    let stack = crate::locale_font_family_stack(&locale);
+
+    assert!(stack.len() >= 4);
+    assert_eq!(stack[0], "Inter");
+    assert_eq!(stack[1], "Noto Sans JP");
+    assert_eq!(stack[3], "Noto Sans SC");
+}
+
+#[test]
+fn locale_font_stack_zh_cn_prioritizes_sc_before_jp() {
+    let locale = "zh-CN"
+        .parse()
+        .expect("zh-CN locale identifier should parse");
+    let stack = crate::locale_font_family_stack(&locale);
+
+    assert!(stack.len() >= 4);
+    assert_eq!(stack[0], "Inter");
+    assert_eq!(stack[1], "Noto Sans SC");
+    assert_eq!(stack[3], "Noto Sans JP");
+}
+
+#[test]
+fn resolve_localized_text_falls_back_when_cache_is_missing() {
+    let mut world = World::new();
+    let entity = world.spawn((crate::LocalizeText::new("hello_world"),)).id();
+
+    let with_fallback = crate::resolve_localized_text(&world, entity, "Fallback");
+    let without_fallback = crate::resolve_localized_text(&world, entity, "");
+
+    assert_eq!(with_fallback, "Fallback");
+    assert_eq!(without_fallback, "hello_world");
 }

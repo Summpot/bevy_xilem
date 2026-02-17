@@ -49,6 +49,7 @@ pub mod app_ext;
 pub mod ecs;
 pub mod events;
 pub mod fonts;
+pub mod i18n;
 pub mod plugin;
 pub mod projection;
 pub mod runner;
@@ -74,6 +75,7 @@ pub use app_ext::*;
 pub use ecs::*;
 pub use events::*;
 pub use fonts::*;
+pub use i18n::*;
 pub use plugin::*;
 pub use projection::*;
 pub use runner::*;
@@ -88,21 +90,24 @@ pub mod prelude {
     pub use bevy_ecs::hierarchy::{ChildOf, Children};
 
     pub use crate::{
-        AppBevyXilemExt, BevyXilemPlugin, BevyXilemRuntime, BuiltinUiAction, ColorStyle,
-        ComputedStyle, CurrentColorStyle, EcsButtonView, Hovered, LayoutStyle, MasonryRuntime,
-        Pressed, ProjectionCtx, PseudoClass, Selector, StyleClass, StyleDirty, StyleRule,
-        StyleSetter, StyleSheet, StyleTransition, SynthesizedUiViews, TargetColorStyle, TextStyle,
-        TypedUiEvent, UiAnyView, UiButton, UiEvent, UiEventQueue, UiFlexColumn, UiFlexRow,
-        UiInteractionEvent, UiLabel, UiProjector, UiProjectorRegistry, UiRoot, UiSynthesisStats,
-        UiView, XilemFontBridge, button, button_with_child, checkbox, collect_bevy_font_assets,
-        ecs_button, ecs_button_with_child, ecs_checkbox, ecs_slider, ecs_switch, ecs_text_button,
-        ecs_text_input, emit_ui_action, gather_ui_roots, inject_bevy_input_into_masonry,
-        mark_style_dirty, rebuild_masonry_runtime, register_builtin_projectors, resolve_style,
+        ActiveLocale, AppBevyXilemExt, BevyXilemPlugin, BevyXilemRuntime, BuiltinUiAction,
+        ColorStyle, ComputedStyle, CurrentColorStyle, EcsButtonView, Hovered, LayoutStyle,
+        LocalizationAssetRoot, LocalizeText, MasonryRuntime, Pressed, ProjectionCtx, PseudoClass,
+        Selector, StyleClass, StyleDirty, StyleRule, StyleSetter, StyleSheet, StyleTransition,
+        SynthesizedUiViews, TargetColorStyle, TextStyle, TypedUiEvent, UiAnyView, UiButton,
+        UiEvent, UiEventQueue, UiFlexColumn, UiFlexRow, UiInteractionEvent, UiLabel, UiProjector,
+        UiProjectorRegistry, UiRoot, UiSynthesisStats, UiView, XilemFontBridge,
+        apply_locale_font_family_fallback, button, button_with_child, checkbox,
+        collect_bevy_font_assets, ecs_button, ecs_button_with_child, ecs_checkbox, ecs_slider,
+        ecs_switch, ecs_text_button, ecs_text_input, emit_ui_action, gather_ui_roots,
+        inject_bevy_input_into_masonry, load_localization_assets, locale_font_family_stack,
+        mark_style_dirty, rebuild_masonry_runtime, refresh_localization_cache,
+        register_builtin_projectors, resolve_localized_text, resolve_style,
         resolve_style_for_classes, resolve_style_for_entity_classes, run_app,
-        run_app_with_window_options, slider, switch, sync_fonts_to_xilem, synthesize_roots,
-        synthesize_roots_with_stats, synthesize_ui, synthesize_world, text_button, text_input,
-        xilem_button, xilem_button_any_pointer, xilem_checkbox, xilem_slider, xilem_switch,
-        xilem_text_button, xilem_text_input,
+        run_app_with_window_options, slider, switch, sync_fluent_locale_from_active_locale,
+        sync_fonts_to_xilem, synthesize_roots, synthesize_roots_with_stats, synthesize_ui,
+        synthesize_world, text_button, text_input, xilem_button, xilem_button_any_pointer,
+        xilem_checkbox, xilem_slider, xilem_switch, xilem_text_button, xilem_text_input,
     };
 
     pub use crate::{

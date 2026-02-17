@@ -1,13 +1,15 @@
 use std::{fmt, marker::PhantomData, sync::Arc};
 
 use bevy_ecs::prelude::*;
+use tracing::trace;
 use xilem_masonry::{
     AnyWidgetView,
     view::{FlexExt as _, flex_col, flex_row, label},
 };
 
 use crate::{
-    ecs::{UiButton, UiFlexColumn, UiFlexRow, UiLabel},
+    ecs::{LocalizeText, UiButton, UiFlexColumn, UiFlexRow, UiLabel},
+    i18n::{apply_locale_font_family_fallback, resolve_localized_text},
     styling::{apply_label_style, apply_widget_style, resolve_style},
     views::ecs_button,
 };
@@ -134,21 +136,41 @@ fn project_flex_row(_: &UiFlexRow, ctx: ProjectionCtx<'_>) -> UiView {
 }
 
 fn project_label(label_component: &UiLabel, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    Arc::new(apply_label_style(
-        label(label_component.text.clone()),
-        &style,
-    ))
+    let mut style = resolve_style(ctx.world, ctx.entity);
+    apply_locale_font_family_fallback(ctx.world, &mut style);
+
+    let text = resolve_localized_text(ctx.world, ctx.entity, &label_component.text);
+    let localization_key = ctx
+        .world
+        .get::<LocalizeText>(ctx.entity)
+        .map(|localize| localize.key.as_str());
+    trace!(
+        entity = ?ctx.entity,
+        localization_key = ?localization_key,
+        fallback_text = %label_component.text,
+        resolved_text = %text,
+        "projected UiLabel text"
+    );
+    Arc::new(apply_label_style(label(text), &style))
 }
 
 fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
+    let label = resolve_localized_text(ctx.world, ctx.entity, &button_component.label);
+    let localization_key = ctx
+        .world
+        .get::<LocalizeText>(ctx.entity)
+        .map(|localize| localize.key.as_str());
+    trace!(
+        entity = ?ctx.entity,
+        localization_key = ?localization_key,
+        fallback_text = %button_component.label,
+        resolved_text = %label,
+        "projected UiButton label"
+    );
+
     Arc::new(apply_widget_style(
-        ecs_button(
-            ctx.entity,
-            BuiltinUiAction::Clicked,
-            button_component.label.clone(),
-        ),
+        ecs_button(ctx.entity, BuiltinUiAction::Clicked, label),
         &style,
     ))
 }
