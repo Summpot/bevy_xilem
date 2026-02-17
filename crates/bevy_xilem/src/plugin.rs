@@ -12,8 +12,8 @@ use crate::{
     events::UiEventQueue,
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
     i18n::{
-        ActiveLocale, LocalizationAssetRoot, LocalizationCache, LocalizationFolderHandle,
-        load_localization_assets, refresh_localization_cache,
+        ActiveLocale, LocaleFontRegistry, LocalizationAssetRoot, LocalizationCache,
+        LocalizationFolderHandle, load_localization_assets, refresh_localization_cache,
         sync_fluent_locale_from_active_locale,
     },
     projection::{UiProjectorRegistry, register_builtin_projectors},
@@ -39,6 +39,7 @@ impl Plugin for BevyXilemPlugin {
             .init_resource::<StyleSheet>()
             .init_resource::<XilemFontBridge>()
             .init_resource::<ActiveLocale>()
+            .init_resource::<LocaleFontRegistry>()
             .init_resource::<LocalizationAssetRoot>()
             .init_resource::<LocalizationFolderHandle>()
             .init_resource::<LocalizationCache>()

@@ -3,8 +3,9 @@ use std::sync::Arc;
 use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_xilem::{
     ActiveLocale, AppBevyXilemExt, BevyXilemPlugin, BuiltinUiAction, ColorStyle, LayoutStyle,
-    LocalizeText, ProjectionCtx, StyleClass, StyleSetter, StyleSheet, TextStyle, UiButton,
-    UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiView, apply_label_style, apply_widget_style,
+    LocaleFontRegistry, LocalizeText, ProjectionCtx, StyleClass, StyleSetter, StyleSheet,
+    TextStyle, UiButton, UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiView, apply_label_style,
+    apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_asset::{AssetPlugin, AssetServer, Handle},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -45,6 +46,40 @@ fn register_bridge_fonts(app: &mut App) {
     app.register_xilem_font_bytes(include_bytes!("../assets/fonts/Inter-Regular.otf"));
     app.register_xilem_font_bytes(include_bytes!("../assets/fonts/NotoSansCJKsc-Regular.otf"));
     app.register_xilem_font_bytes(include_bytes!("../assets/fonts/NotoSansCJKjp-Regular.otf"));
+}
+
+fn configure_locale_font_registry() -> LocaleFontRegistry {
+    LocaleFontRegistry::default()
+        .set_default(vec![
+            "Inter",
+            "Noto Sans SC",
+            "Noto Sans CJK SC",
+            "Noto Sans JP",
+            "Noto Sans CJK JP",
+            "sans-serif",
+        ])
+        .add_mapping(
+            "ja-JP",
+            vec![
+                "Inter",
+                "Noto Sans JP",
+                "Noto Sans CJK JP",
+                "Noto Sans SC",
+                "Noto Sans CJK SC",
+                "sans-serif",
+            ],
+        )
+        .add_mapping(
+            "zh-CN",
+            vec![
+                "Inter",
+                "Noto Sans SC",
+                "Noto Sans CJK SC",
+                "Noto Sans JP",
+                "Noto Sans CJK JP",
+                "sans-serif",
+            ],
+        )
 }
 
 fn load_demo_fonts(asset_server: Res<AssetServer>, mut font_handles: ResMut<DemoFontHandles>) {
@@ -259,6 +294,7 @@ fn build_i18n_app() -> App {
     ))
     .init_resource::<DemoFontHandles>()
     .insert_resource(ActiveLocale::new(parse_locale("en-US")))
+    .insert_resource(configure_locale_font_registry())
     .register_projector::<LocaleBadge>(project_locale_badge)
     .add_systems(
         Startup,

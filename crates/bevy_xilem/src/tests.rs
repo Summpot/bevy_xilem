@@ -1,10 +1,10 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use crate::{
-    ActiveLocale, AppBevyXilemExt, BevyXilemPlugin, ColorStyle, Hovered, LocalizationCache,
-    Pressed, ProjectionCtx, Selector, StyleRule, StyleSetter, StyleSheet, UiEventQueue,
-    UiProjectorRegistry, UiRoot, UiView, ecs_button, register_builtin_projectors, resolve_style,
-    resolve_style_for_entity_classes, synthesize_roots_with_stats,
+    ActiveLocale, AppBevyXilemExt, BevyXilemPlugin, ColorStyle, Hovered, LocaleFontRegistry,
+    LocalizationCache, Pressed, ProjectionCtx, Selector, StyleRule, StyleSetter, StyleSheet,
+    UiEventQueue, UiProjectorRegistry, UiRoot, UiView, ecs_button, register_builtin_projectors,
+    resolve_style, resolve_style_for_entity_classes, synthesize_roots_with_stats,
 };
 use bevy_app::App;
 use bevy_asset::{AssetPlugin, Assets};
@@ -546,7 +546,10 @@ fn resolve_style_for_classes_applies_font_family() {
     sheet.set_class(
         "cjk-text",
         StyleSetter {
-            font_family: Some(vec!["Inter".to_string(), "Noto Sans CJK SC".to_string()]),
+            font_family: Some(vec![
+                "Primary Family".to_string(),
+                "Fallback Family".to_string(),
+            ]),
             ..StyleSetter::default()
         },
     );
@@ -555,7 +558,10 @@ fn resolve_style_for_classes_applies_font_family() {
     let resolved = crate::resolve_style_for_classes(&world, ["cjk-text"]);
     assert_eq!(
         resolved.font_family,
-        Some(vec!["Inter".to_string(), "Noto Sans CJK SC".to_string()])
+        Some(vec![
+            "Primary Family".to_string(),
+            "Fallback Family".to_string()
+        ])
     );
 }
 
@@ -615,29 +621,55 @@ fn xilem_font_bridge_deduplicates_same_font_bytes() {
 }
 
 #[test]
-fn locale_font_stack_ja_prioritizes_jp_before_sc() {
-    let locale = "ja-JP"
-        .parse()
-        .expect("ja-JP locale identifier should parse");
-    let stack = crate::locale_font_family_stack(&locale);
+fn locale_font_registry_resolves_mapping_then_default() {
+    let registry = LocaleFontRegistry::default()
+        .set_default(vec!["Default Sans", "sans-serif"])
+        .add_mapping("fr-FR", vec!["French Sans", "sans-serif"]);
 
-    assert!(stack.len() >= 4);
-    assert_eq!(stack[0], "Inter");
-    assert_eq!(stack[1], "Noto Sans JP");
-    assert_eq!(stack[3], "Noto Sans SC");
+    let french = "fr-FR"
+        .parse()
+        .expect("fr-FR locale identifier should parse");
+    let english = "en-US"
+        .parse()
+        .expect("en-US locale identifier should parse");
+
+    assert_eq!(
+        registry.font_stack_for_locale(&french),
+        Some(vec!["French Sans".to_string(), "sans-serif".to_string()])
+    );
+    assert_eq!(
+        registry.font_stack_for_locale(&english),
+        Some(vec!["Default Sans".to_string(), "sans-serif".to_string()])
+    );
 }
 
 #[test]
-fn locale_font_stack_zh_cn_prioritizes_sc_before_jp() {
-    let locale = "zh-CN"
-        .parse()
-        .expect("zh-CN locale identifier should parse");
-    let stack = crate::locale_font_family_stack(&locale);
+fn locale_font_fallback_uses_registry_and_respects_explicit_style_font() {
+    let mut world = World::new();
+    world.insert_resource(ActiveLocale::new(
+        "fr-FR"
+            .parse()
+            .expect("fr-FR locale identifier should parse"),
+    ));
+    world.insert_resource(
+        LocaleFontRegistry::default()
+            .set_default(vec!["Default Sans", "sans-serif"])
+            .add_mapping("fr-FR", vec!["French Sans", "sans-serif"]),
+    );
 
-    assert!(stack.len() >= 4);
-    assert_eq!(stack[0], "Inter");
-    assert_eq!(stack[1], "Noto Sans SC");
-    assert_eq!(stack[3], "Noto Sans JP");
+    let mut resolved = crate::ResolvedStyle::default();
+    crate::apply_locale_font_family_fallback(&world, &mut resolved);
+    assert_eq!(
+        resolved.font_family,
+        Some(vec!["French Sans".to_string(), "sans-serif".to_string()])
+    );
+
+    let mut explicit = crate::ResolvedStyle {
+        font_family: Some(vec!["App Font".to_string()]),
+        ..crate::ResolvedStyle::default()
+    };
+    crate::apply_locale_font_family_fallback(&world, &mut explicit);
+    assert_eq!(explicit.font_family, Some(vec!["App Font".to_string()]));
 }
 
 #[test]

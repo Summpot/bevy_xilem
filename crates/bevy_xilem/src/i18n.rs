@@ -35,6 +35,48 @@ impl ActiveLocale {
     }
 }
 
+/// Locale-aware font stack registry used for text rendering fallback.
+#[derive(Resource, Debug, Clone, Default)]
+pub struct LocaleFontRegistry {
+    pub default_font_stack: Vec<String>,
+    pub locale_mappings: HashMap<String, Vec<String>>,
+}
+
+impl LocaleFontRegistry {
+    #[must_use]
+    pub fn add_mapping(mut self, locale: &str, stack: Vec<&str>) -> Self {
+        self.locale_mappings.insert(
+            locale.to_string(),
+            stack.into_iter().map(String::from).collect(),
+        );
+        self
+    }
+
+    #[must_use]
+    pub fn set_default(mut self, stack: Vec<&str>) -> Self {
+        self.default_font_stack = stack.into_iter().map(String::from).collect();
+        self
+    }
+
+    #[must_use]
+    pub fn font_stack_for_locale(&self, locale: &LanguageIdentifier) -> Option<Vec<String>> {
+        let locale_key = locale.to_string();
+        if let Some(stack) = self
+            .locale_mappings
+            .get(locale_key.as_str())
+            .filter(|stack| !stack.is_empty())
+        {
+            return Some(stack.clone());
+        }
+
+        if self.default_font_stack.is_empty() {
+            None
+        } else {
+            Some(self.default_font_stack.clone())
+        }
+    }
+}
+
 /// Root folder path for fluent localization assets.
 ///
 /// Defaults to `assets/locales` via Bevy asset path `"locales"`.
@@ -332,45 +374,6 @@ pub fn resolve_localized_text(world: &World, entity: Entity, fallback: &str) -> 
     }
 }
 
-/// Compute locale-aware CJK fallback stack used to resolve Han variants correctly.
-#[must_use]
-pub fn locale_font_family_stack(locale: &LanguageIdentifier) -> Vec<String> {
-    if locale.language.as_str() == "ja" {
-        return vec![
-            "Inter".to_string(),
-            "Noto Sans JP".to_string(),
-            "Noto Sans CJK JP".to_string(),
-            "Noto Sans SC".to_string(),
-            "Noto Sans CJK SC".to_string(),
-            "sans-serif".to_string(),
-        ];
-    }
-
-    if locale.language.as_str() == "zh"
-        && locale
-            .region
-            .is_some_and(|region| region.as_str().eq_ignore_ascii_case("CN"))
-    {
-        return vec![
-            "Inter".to_string(),
-            "Noto Sans SC".to_string(),
-            "Noto Sans CJK SC".to_string(),
-            "Noto Sans JP".to_string(),
-            "Noto Sans CJK JP".to_string(),
-            "sans-serif".to_string(),
-        ];
-    }
-
-    vec![
-        "Inter".to_string(),
-        "Noto Sans SC".to_string(),
-        "Noto Sans CJK SC".to_string(),
-        "Noto Sans JP".to_string(),
-        "Noto Sans CJK JP".to_string(),
-        "sans-serif".to_string(),
-    ]
-}
-
 /// Apply locale-aware fallback stack when no explicit style font stack is present.
 pub fn apply_locale_font_family_fallback(world: &World, style: &mut ResolvedStyle) {
     if style.font_family.is_some() {
@@ -381,5 +384,11 @@ pub fn apply_locale_font_family_fallback(world: &World, style: &mut ResolvedStyl
         .get_resource::<ActiveLocale>()
         .map_or_else(default_language_identifier, |active| active.0.clone());
 
-    style.font_family = Some(locale_font_family_stack(&locale));
+    let font_stack = world
+        .get_resource::<LocaleFontRegistry>()
+        .and_then(|registry| registry.font_stack_for_locale(&locale));
+
+    if let Some(font_stack) = font_stack {
+        style.font_family = Some(font_stack);
+    }
 }

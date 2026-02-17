@@ -134,7 +134,7 @@ two-stage sync pipeline to register custom font bytes into Masonry's font databa
 - This enables stylesheet-level `font_family` usage for custom CJK fonts without
   requiring projector-level ad-hoc font wiring.
 
-### 5.7) i18n/l10n bridge (`bevy_fluent`) + locale-aware CJK fallback
+### 5.7) i18n/l10n bridge (`bevy_fluent`) + data-driven locale font fallback
 
 `bevy_xilem` now integrates `bevy_fluent` for ECS-side text localization and ties
 locale state into projector text/font resolution.
@@ -154,16 +154,20 @@ locale state into projector text/font resolution.
 - Built-in `UiLabel`/`UiButton` projectors resolve text through cache-backed Fluent lookup,
   with fallback to original hardcoded text.
 
-To address Han Unification variant rendering issues (same Unicode codepoints in JP/SC),
-label projector styling now injects locale-aware default font fallback stacks when no
-explicit `font_family` is provided:
+To address Han Unification and locale-specific typography needs without hardcoding app assets,
+`bevy_xilem` now uses a configurable resource:
 
-- `ja`: `Inter -> Noto Sans JP -> Noto Sans CJK JP -> Noto Sans SC -> Noto Sans CJK SC`
-- `zh-CN`: `Inter -> Noto Sans SC -> Noto Sans CJK SC -> Noto Sans JP -> Noto Sans CJK JP`
+- `LocaleFontRegistry { default_font_stack, locale_mappings }`
 
-Because synthesis runs each frame and projectors read `ActiveLocale` dynamically,
-mutating `ActiveLocale` in systems updates both translated content and font fallback
-priority immediately on next frame.
+Built-in label projection reads `ActiveLocale` and applies fallback `font_family` only when an
+explicit style stack is absent:
+
+- if `locale_mappings` contains the active locale tag, that stack is used;
+- otherwise `default_font_stack` is used;
+- if neither is configured, projector fallback does not force any font stack.
+
+Locale/font policy is therefore owned by application setup (examples/apps insert and configure
+`LocaleFontRegistry`), while `bevy_xilem` remains framework-agnostic.
 
 ### 6) ECS control adapter coverage
 
@@ -235,6 +239,7 @@ so user code no longer needs to allocate/store a dedicated node-id component.
 - `StyleSheet`
 - `XilemFontBridge`
 - `ActiveLocale`
+- `LocaleFontRegistry`
 - `LocalizationAssetRoot`
 - `LocalizationFolderHandle`
 - `LocalizationCache`

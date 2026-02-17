@@ -6,16 +6,17 @@ use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_image::Image as BevyImage;
 use bevy_text::{Font, TextPlugin};
 use bevy_xilem::{
-    ActiveLocale, AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, LocalizationCache,
-    ProjectionCtx, ResolvedStyle, StyleClass, StyleSetter, StyleSheet, StyleTransition, TextStyle,
-    UiEventQueue, UiRoot, UiView, apply_label_style, apply_text_input_style, apply_widget_style,
+    ActiveLocale, AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, LocaleFontRegistry,
+    LocalizationCache, ProjectionCtx, ResolvedStyle, StyleClass, StyleSetter, StyleSheet,
+    StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView, apply_label_style,
+    apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
     bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim},
     bevy_window::WindowResized,
-    button, locale_font_family_stack, resolve_style, resolve_style_for_classes,
-    resolve_style_for_entity_classes, run_app_with_window_options, text_input,
+    button, resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
+    run_app_with_window_options, text_input,
     xilem::{
         Color,
         masonry::layout::{Dim, Length},
@@ -108,26 +109,73 @@ fn set_status_key(world: &mut World, key: &str, fallback: &str) {
     set_status(world, message);
 }
 
-fn localized_font_stack(locale: &LanguageIdentifier) -> Vec<String> {
-    let mut stack = locale_font_family_stack(locale);
-    for family in [
-        "Noto Sans CJK TC",
-        "NotoSansCJKtc",
-        "Noto Sans CJK KR",
-        "NotoSansCJKkr",
-        "PingFang SC",
-        "Hiragino Sans",
-        "Apple SD Gothic Neo",
-    ] {
-        if !stack.iter().any(|item| item == family) {
-            stack.push(family.to_string());
-        }
-    }
-    stack
+fn configure_locale_font_registry() -> LocaleFontRegistry {
+    LocaleFontRegistry::default()
+        .set_default(vec![
+            "Inter",
+            "Noto Sans SC",
+            "Noto Sans CJK SC",
+            "Noto Sans JP",
+            "Noto Sans CJK JP",
+            "Noto Sans CJK TC",
+            "Noto Sans CJK KR",
+            "sans-serif",
+        ])
+        .add_mapping(
+            "ja-JP",
+            vec![
+                "Inter",
+                "Noto Sans JP",
+                "Noto Sans CJK JP",
+                "Noto Sans SC",
+                "Noto Sans CJK SC",
+                "Noto Sans CJK TC",
+                "Noto Sans CJK KR",
+                "sans-serif",
+            ],
+        )
+        .add_mapping(
+            "zh-CN",
+            vec![
+                "Inter",
+                "Noto Sans SC",
+                "Noto Sans CJK SC",
+                "Noto Sans JP",
+                "Noto Sans CJK JP",
+                "Noto Sans CJK TC",
+                "Noto Sans CJK KR",
+                "sans-serif",
+            ],
+        )
+        .add_mapping(
+            "zh-TW",
+            vec![
+                "Inter",
+                "Noto Sans CJK TC",
+                "Noto Sans SC",
+                "Noto Sans CJK SC",
+                "Noto Sans JP",
+                "Noto Sans CJK JP",
+                "Noto Sans CJK KR",
+                "sans-serif",
+            ],
+        )
+        .add_mapping(
+            "ko-KR",
+            vec![
+                "Inter",
+                "Noto Sans CJK KR",
+                "Noto Sans SC",
+                "Noto Sans CJK SC",
+                "Noto Sans JP",
+                "Noto Sans CJK JP",
+                "Noto Sans CJK TC",
+                "sans-serif",
+            ],
+        )
 }
 
-fn sync_font_stack_for_locale(sheet: &mut StyleSheet, locale: &LanguageIdentifier) {
-    let stack = localized_font_stack(locale);
+fn sync_font_stack_for_locale(sheet: &mut StyleSheet, stack: Option<&[String]>) {
     for class_name in [
         "pixiv.root",
         "pixiv.button",
@@ -138,7 +186,7 @@ fn sync_font_stack_for_locale(sheet: &mut StyleSheet, locale: &LanguageIdentifie
     ] {
         if let Some(existing) = sheet.get_class(class_name).cloned() {
             let mut updated = existing;
-            updated.font_family = Some(stack.clone());
+            updated.font_family = stack.map(|stack| stack.to_vec());
             sheet.set_class(class_name, updated);
         }
     }
@@ -768,11 +816,15 @@ fn load_pixiv_fonts(asset_server: Res<AssetServer>, mut font_handles: ResMut<Pix
         .push(asset_server.load("fonts/NotoSansCJKkr-Regular.otf"));
 }
 
-fn setup_styles(mut sheet: ResMut<StyleSheet>, active_locale: Option<Res<ActiveLocale>>) {
+fn setup_styles(
+    mut sheet: ResMut<StyleSheet>,
+    active_locale: Option<Res<ActiveLocale>>,
+    font_registry: Res<LocaleFontRegistry>,
+) {
     let locale = active_locale
         .as_ref()
         .map_or_else(|| parse_locale("en-US"), |current| current.0.clone());
-    let default_fonts = localized_font_stack(&locale);
+    let default_fonts = font_registry.font_stack_for_locale(&locale);
 
     sheet.set_class(
         "pixiv.root",
@@ -787,7 +839,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>, active_locale: Option<Res<ActiveL
                 text: Some(Color::from_rgb8(0xEE, 0xEE, 0xEE)),
                 ..ColorStyle::default()
             },
-            font_family: Some(default_fonts.clone()),
+            font_family: default_fonts.clone(),
             ..StyleSetter::default()
         },
     );
@@ -840,7 +892,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>, active_locale: Option<Res<ActiveL
                 ..LayoutStyle::default()
             },
             text: TextStyle { size: Some(14.0) },
-            font_family: Some(default_fonts.clone()),
+            font_family: default_fonts.clone(),
             transition: Some(StyleTransition { duration: 0.14 }),
             ..StyleSetter::default()
         },
@@ -923,7 +975,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>, active_locale: Option<Res<ActiveL
                 text: Some(Color::from_rgb8(0xE7, 0xE7, 0xE7)),
                 ..ColorStyle::default()
             },
-            font_family: Some(default_fonts.clone()),
+            font_family: default_fonts.clone(),
             transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleSetter::default()
         },
@@ -946,7 +998,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>, active_locale: Option<Res<ActiveL
                 ..ColorStyle::default()
             },
             text: TextStyle { size: Some(14.0) },
-            font_family: Some(default_fonts.clone()),
+            font_family: default_fonts.clone(),
             ..StyleSetter::default()
         },
     );
@@ -967,7 +1019,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>, active_locale: Option<Res<ActiveL
                 text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE4)),
                 ..ColorStyle::default()
             },
-            font_family: Some(default_fonts.clone()),
+            font_family: default_fonts.clone(),
             transition: Some(StyleTransition { duration: 0.15 }),
             ..StyleSetter::default()
         },
@@ -988,7 +1040,7 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>, active_locale: Option<Res<ActiveL
                 border: Some(Color::from_rgb8(0x3A, 0x3A, 0x3A)),
                 ..ColorStyle::default()
             },
-            font_family: Some(default_fonts),
+            font_family: default_fonts,
             ..StyleSetter::default()
         },
     );
@@ -1579,8 +1631,12 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
 
                 world.resource_mut::<ActiveLocale>().0 = next.clone();
                 {
+                    let font_stack = {
+                        let registry = world.resource::<LocaleFontRegistry>();
+                        registry.font_stack_for_locale(&next)
+                    };
                     let mut style_sheet = world.resource_mut::<StyleSheet>();
-                    sync_font_stack_for_locale(&mut style_sheet, &next);
+                    sync_font_stack_for_locale(&mut style_sheet, font_stack.as_deref());
                 }
 
                 let status_prefix = tr(
@@ -2335,6 +2391,7 @@ fn build_app() -> App {
         BevyXilemPlugin,
     ))
     .init_resource::<PixivFontHandles>()
+    .insert_resource(configure_locale_font_registry())
     .register_projector::<PixivRoot>(project_root)
     .register_projector::<PixivSidebar>(project_sidebar)
     .register_projector::<PixivMainColumn>(project_main_column)
