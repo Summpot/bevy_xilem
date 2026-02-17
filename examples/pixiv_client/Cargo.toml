@@ -1,0 +1,24 @@
+[package]
+name = "pixiv_client"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+anyhow = "1"
+arboard = "3"
+base64 = "0.22"
+bevy_asset = { version = "0.18", default-features = false }
+bevy_ecs = { version = "0.18", default-features = false, features = ["std"] }
+bevy_image = { version = "0.18", default-features = false }
+bevy_xilem = { path = "../../crates/bevy_xilem" }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+crossbeam-channel = "0.5"
+image = { version = "0.25", default-features = true }
+md5 = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+vello = "0.7"
+webbrowser = "1"

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/bevy_xilem"]
+members = ["crates/bevy_xilem", "examples/pixiv_client"]
 exclude = ["third_party/xilem"]
 
 [workspace.package]

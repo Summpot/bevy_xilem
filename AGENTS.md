@@ -18,6 +18,10 @@ This document defines how automated agents (and humans operating like them) shou
      - If it exists, run `cargo upgrade` to see whether a newer compatible version is available and prefer the newest reasonable versions.
      - If it does **not** exist (e.g., `cargo-edit` not installed), **do not check newer version**; just skip this step and proceed.
 
+4. **Avoid interactive app runs by default**
+   - Do **not** run `cargo run` unless user interaction is required to extract runtime logs or reproduce an interactive issue.
+   - Prefer `cargo test`, static checks, and targeted diagnostics for routine verification.
+
 If a change affects public behavior (config schema, admin endpoints, tunnel protocol), update `DESIGN.md` and the examples/schema together.
 
 ## Quick verification checklist
