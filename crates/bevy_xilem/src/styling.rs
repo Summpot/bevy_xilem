@@ -94,6 +94,10 @@ pub struct TargetColorStyle {
     pub border: Option<Color>,
 }
 
+/// Marker identifying a [`TweenAnim`] created by the style transition pipeline.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct StyleManagedTween;
+
 /// Pseudo classes supported by selectors.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PseudoClass {
@@ -717,7 +721,16 @@ fn spawn_color_style_tween(
         ColorStyleLens { start, end },
     );
 
-    world.entity_mut(entity).insert(TweenAnim::new(tween));
+    world
+        .entity_mut(entity)
+        .insert((TweenAnim::new(tween), StyleManagedTween));
+}
+
+fn clear_style_managed_tween(world: &mut World, entity: Entity) {
+    if world.get::<StyleManagedTween>(entity).is_some() {
+        world.entity_mut(entity).remove::<TweenAnim>();
+        world.entity_mut(entity).remove::<StyleManagedTween>();
+    }
 }
 
 /// Consume interaction events and synchronize [`Hovered`] / [`Pressed`] marker components.
@@ -901,7 +914,7 @@ pub fn sync_style_targets(world: &mut World) {
 
                         if transition.duration <= f32::EPSILON {
                             ensure_current(world, entity, end);
-                            world.entity_mut(entity).remove::<TweenAnim>();
+                            clear_style_managed_tween(world, entity);
                         } else {
                             let start = world
                                 .get::<CurrentColorStyle>(entity)
@@ -917,14 +930,14 @@ pub fn sync_style_targets(world: &mut World) {
                                     transition.duration,
                                 );
                             } else {
-                                world.entity_mut(entity).remove::<TweenAnim>();
+                                clear_style_managed_tween(world, entity);
                             }
                         }
                     }
                     None => {
                         world.entity_mut(entity).remove::<TargetColorStyle>();
                         world.entity_mut(entity).remove::<CurrentColorStyle>();
-                        world.entity_mut(entity).remove::<TweenAnim>();
+                        clear_style_managed_tween(world, entity);
                     }
                 }
             }
@@ -932,7 +945,7 @@ pub fn sync_style_targets(world: &mut World) {
                 world.entity_mut(entity).remove::<ComputedStyle>();
                 world.entity_mut(entity).remove::<TargetColorStyle>();
                 world.entity_mut(entity).remove::<CurrentColorStyle>();
-                world.entity_mut(entity).remove::<TweenAnim>();
+                clear_style_managed_tween(world, entity);
             }
         }
 

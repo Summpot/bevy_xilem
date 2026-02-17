@@ -10,13 +10,14 @@ use bevy_xilem::{
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_input::{ButtonInput, keyboard::KeyCode},
+    bevy_window::WindowResized,
     button, emit_ui_action, resolve_style, resolve_style_for_classes, run_app_with_window_options,
     xilem::{
         Color,
         masonry::layout::Length,
         style::Style as _,
         view::{
-            CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, label,
+            CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, label, portal,
             sized_box,
         },
         winit::{dpi::LogicalSize, error::EventLoopError},
@@ -41,7 +42,48 @@ use masonry::{
 
 const BOARD_SIDE: usize = 4;
 const BOARD_LEN: usize = BOARD_SIDE * BOARD_SIDE;
-const TILE_SIZE: f64 = 86.0;
+
+#[derive(Resource, Debug, Clone, Copy)]
+struct GameViewport {
+    width: f64,
+    height: f64,
+}
+
+impl Default for GameViewport {
+    fn default() -> Self {
+        Self {
+            width: 760.0,
+            height: 980.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct GameLayoutMetrics {
+    tile_size: f64,
+    control_button_width: f64,
+    control_button_height: f64,
+}
+
+impl GameLayoutMetrics {
+    fn from_viewport(viewport: GameViewport) -> Self {
+        let usable_width = (viewport.width - 120.0).max(240.0);
+        let usable_height = (viewport.height - 420.0).max(220.0);
+
+        let tile_from_width = usable_width / 4.6;
+        let tile_from_height = usable_height / 4.4;
+        let tile_size = tile_from_width.min(tile_from_height).clamp(44.0, 92.0);
+
+        let control_button_width = (tile_size * 1.22).clamp(82.0, 124.0);
+        let control_button_height = (tile_size * 0.64).clamp(42.0, 58.0);
+
+        Self {
+            tile_size,
+            control_button_width,
+            control_button_height,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MoveDirection {
@@ -704,7 +746,7 @@ fn project_game_root(_: &GameRoot, ctx: ProjectionCtx<'_>) -> UiView {
         &style,
     );
 
-    Arc::new(hotkey_capture(ctx.entity, content))
+    Arc::new(hotkey_capture(ctx.entity, portal(content)))
 }
 
 fn project_header_block(_: &HeaderBlock, ctx: ProjectionCtx<'_>) -> UiView {
@@ -796,6 +838,8 @@ fn project_board_row(_: &BoardRow, ctx: ProjectionCtx<'_>) -> UiView {
 
 fn project_tile_cell(tile: &TileCell, ctx: ProjectionCtx<'_>) -> UiView {
     let state = ctx.world.resource::<Game2048State>();
+    let viewport = *ctx.world.resource::<GameViewport>();
+    let metrics = GameLayoutMetrics::from_viewport(viewport);
     let value = state.game.tiles[tile.index];
     let class_name = tile_value_class(value);
     let style = resolve_style_for_classes(ctx.world, ["g2048.tile", class_name]);
@@ -811,8 +855,8 @@ fn project_tile_cell(tile: &TileCell, ctx: ProjectionCtx<'_>) -> UiView {
             apply_label_style(label(text), &style),
             &style,
         ))
-        .fixed_width(Length::px(TILE_SIZE))
-        .fixed_height(Length::px(TILE_SIZE)),
+        .fixed_width(Length::px(metrics.tile_size))
+        .fixed_height(Length::px(metrics.tile_size)),
     )
 }
 
@@ -847,6 +891,8 @@ fn project_controls_row(_: &ControlsRow, ctx: ProjectionCtx<'_>) -> UiView {
 }
 
 fn project_control_button(button_info: &ControlButton, ctx: ProjectionCtx<'_>) -> UiView {
+    let viewport = *ctx.world.resource::<GameViewport>();
+    let metrics = GameLayoutMetrics::from_viewport(viewport);
     let style = resolve_style(ctx.world, ctx.entity);
     let text_color = style
         .colors
@@ -865,8 +911,8 @@ fn project_control_button(button_info: &ControlButton, ctx: ProjectionCtx<'_>) -
                 .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
                 .color(text_color),
         )
-        .fixed_width(Length::px(102.0))
-        .fixed_height(Length::px(54.0)),
+        .fixed_width(Length::px(metrics.control_button_width))
+        .fixed_height(Length::px(metrics.control_button_height)),
     )
 }
 
@@ -1629,6 +1675,16 @@ fn drain_game_events(world: &mut World) {
     }
 }
 
+fn track_game_viewport(
+    mut window_resized: MessageReader<WindowResized>,
+    mut viewport: ResMut<GameViewport>,
+) {
+    for event in window_resized.read() {
+        viewport.width = (event.width as f64).max(1.0);
+        viewport.height = (event.height as f64).max(1.0);
+    }
+}
+
 fn sync_keyboard_input(world: &mut World) {
     if world.get_resource::<ButtonInput<KeyCode>>().is_none() {
         world.insert_resource(ButtonInput::<KeyCode>::default());
@@ -1693,6 +1749,7 @@ fn build_2048_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(ButtonInput::<KeyCode>::default())
+        .insert_resource(GameViewport::default())
         .insert_resource(Game2048State::default())
         .register_projector::<GameRoot>(project_game_root)
         .register_projector::<HeaderBlock>(project_header_block)
@@ -1707,6 +1764,7 @@ fn build_2048_app() -> App {
         .register_projector::<ControlButton>(project_control_button)
         .register_projector::<HintLine>(project_hint_line)
         .add_systems(Startup, (setup_game_styles, setup_game_world))
+        .add_systems(PreUpdate, track_game_viewport)
         .add_systems(
             PreUpdate,
             (
@@ -1860,5 +1918,22 @@ mod tests {
         game.recompute_flags();
         assert!(game.game_over);
         assert!(!can_move(&game.tiles));
+    }
+
+    #[test]
+    fn layout_metrics_shrink_with_smaller_viewports() {
+        let large = GameLayoutMetrics::from_viewport(GameViewport {
+            width: 900.0,
+            height: 1000.0,
+        });
+        let small = GameLayoutMetrics::from_viewport(GameViewport {
+            width: 520.0,
+            height: 620.0,
+        });
+
+        assert!(small.tile_size < large.tile_size);
+        assert!(small.control_button_width <= large.control_button_width);
+        assert!(small.control_button_height <= large.control_button_height);
+        assert!(small.tile_size >= 44.0);
     }
 }

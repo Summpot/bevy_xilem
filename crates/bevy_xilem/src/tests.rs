@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use crate::{
     AppBevyXilemExt, BevyXilemPlugin, ColorStyle, Hovered, Pressed, ProjectionCtx, Selector,
@@ -341,4 +341,33 @@ fn pointer_left_does_not_clear_pressed_marker() {
 
     assert!(world.get::<crate::Hovered>(entity).is_none());
     assert!(world.get::<crate::Pressed>(entity).is_some());
+}
+
+#[test]
+fn sync_style_targets_keeps_unmanaged_tween_anim() {
+    let mut world = World::new();
+
+    let tween = bevy_tweening::Tween::new(
+        bevy_tweening::EaseMethod::default(),
+        Duration::from_secs(1),
+        crate::ColorStyleLens {
+            start: crate::CurrentColorStyle {
+                bg: Some(crate::xilem::Color::from_rgb8(0x10, 0x20, 0x30)),
+                text: None,
+                border: None,
+            },
+            end: crate::CurrentColorStyle {
+                bg: Some(crate::xilem::Color::from_rgb8(0x40, 0x50, 0x60)),
+                text: None,
+                border: None,
+            },
+        },
+    );
+
+    let entity = world.spawn((bevy_tweening::TweenAnim::new(tween),)).id();
+    world.entity_mut(entity).insert(crate::StyleDirty);
+
+    crate::sync_style_targets(&mut world);
+
+    assert!(world.get::<bevy_tweening::TweenAnim>(entity).is_some());
 }

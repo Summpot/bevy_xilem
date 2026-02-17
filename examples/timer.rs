@@ -1,4 +1,8 @@
-use std::{sync::Arc, time::Instant};
+use std::{
+    f64::consts::{FRAC_PI_2, TAU},
+    sync::Arc,
+    time::Instant,
+};
 use tokio::time;
 
 use bevy_xilem::{
@@ -10,11 +14,24 @@ use bevy_xilem::{
     button, emit_ui_action, resolve_style, resolve_style_for_classes,
     resolve_style_for_entity_classes, run_app_with_window_options, slider,
     xilem::{
+        Color,
         core::fork,
-        view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, progress_bar, task},
+        masonry::layout::Length,
+        style::Style as _,
+        vello::{
+            Scene,
+            kurbo::{Affine, Cap, Circle, Line, Point, Size, Stroke, Vec2},
+            peniko::Fill,
+        },
+        view::{
+            CrossAxisAlignment, FlexExt as _, canvas, flex_col, flex_row, label, progress_bar,
+            sized_box, task,
+        },
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
+
+const DIAL_SIZE: f64 = 188.0;
 
 /// 7GUIs-like Timer.
 ///
@@ -26,6 +43,7 @@ use bevy_xilem::{
 struct TimerState {
     duration_secs: f64,
     elapsed_secs: f64,
+    running: bool,
     last_tick: Instant,
 }
 
@@ -34,6 +52,7 @@ impl Default for TimerState {
         Self {
             duration_secs: 10.0,
             elapsed_secs: 0.0,
+            running: true,
             last_tick: Instant::now(),
         }
     }
@@ -42,6 +61,7 @@ impl Default for TimerState {
 #[derive(Debug, Clone)]
 enum TimerEvent {
     SetDurationSecs(f64),
+    ToggleRunning,
     Reset,
     Tick,
 }
@@ -51,6 +71,10 @@ struct TimerRootView;
 
 fn clamp01(v: f64) -> f64 {
     v.clamp(0.0, 1.0)
+}
+
+fn dial_angle(progress: f64) -> f64 {
+    (clamp01(progress) * TAU) - FRAC_PI_2
 }
 
 fn format_secs(secs: f64) -> String {
@@ -63,6 +87,10 @@ fn apply_timer_event(state: &mut TimerState, event: TimerEvent) {
         TimerEvent::SetDurationSecs(new_duration) => {
             state.duration_secs = new_duration.max(0.1);
             state.elapsed_secs = state.elapsed_secs.min(state.duration_secs);
+        }
+        TimerEvent::ToggleRunning => {
+            state.running = !state.running;
+            state.last_tick = Instant::now();
         }
         TimerEvent::Reset => {
             state.elapsed_secs = 0.0;
@@ -77,16 +105,114 @@ fn tick_timer(state: &mut TimerState) {
     let dt = now.saturating_duration_since(state.last_tick).as_secs_f64();
     state.last_tick = now;
 
-    if state.elapsed_secs < state.duration_secs {
+    if state.running && state.elapsed_secs < state.duration_secs {
         state.elapsed_secs = (state.elapsed_secs + dt).min(state.duration_secs);
     }
+}
+
+fn draw_timer_dial(scene: &mut Scene, size: Size, progress: f64, running: bool) {
+    let center = Point::new(size.width / 2.0, size.height / 2.0);
+    let radius = (size.width.min(size.height) * 0.5) - 3.0;
+
+    let outer = Circle::new(center, radius);
+    let inner = Circle::new(center, radius - 12.0);
+
+    scene.fill(
+        Fill::NonZero,
+        Affine::IDENTITY,
+        Color::from_rgb8(0x1B, 0x1B, 0x1D),
+        None,
+        &outer,
+    );
+    scene.fill(
+        Fill::NonZero,
+        Affine::IDENTITY,
+        Color::from_rgb8(0x28, 0x28, 0x2C),
+        None,
+        &inner,
+    );
+    scene.stroke(
+        &Stroke::new(2.0),
+        Affine::IDENTITY,
+        Color::from_rgb8(0x70, 0x75, 0x84),
+        None,
+        &outer,
+    );
+
+    for tick in 0..60 {
+        let major = tick % 5 == 0;
+        let angle = ((tick as f64) / 60.0) * TAU - FRAC_PI_2;
+        let unit = Vec2::from_angle(angle);
+        let outer_pt = center + (radius - 9.0) * unit;
+        let inner_pt = center
+            + if major {
+                (radius - 24.0) * unit
+            } else {
+                (radius - 17.0) * unit
+            };
+
+        scene.stroke(
+            &Stroke::new(if major { 2.2 } else { 1.1 }).with_caps(Cap::Round),
+            Affine::IDENTITY,
+            if major {
+                Color::from_rgb8(0xB8, 0xC0, 0xD4)
+            } else {
+                Color::from_rgb8(0x6E, 0x75, 0x88)
+            },
+            None,
+            &Line::new(inner_pt, outer_pt),
+        );
+    }
+
+    let lit_markers = (clamp01(progress) * 60.0).round() as usize;
+    for step in 0..lit_markers {
+        let angle = ((step as f64) / 60.0) * TAU - FRAC_PI_2;
+        let marker_pos = center + (radius - 31.0) * Vec2::from_angle(angle);
+        let marker = Circle::new(marker_pos, 1.8);
+        scene.fill(
+            Fill::NonZero,
+            Affine::IDENTITY,
+            if running {
+                Color::from_rgb8(0x79, 0xD7, 0x9C)
+            } else {
+                Color::from_rgb8(0xD5, 0xAF, 0x78)
+            },
+            None,
+            &marker,
+        );
+    }
+
+    let hand_angle = dial_angle(progress);
+    let hand_end = center + (radius - 35.0) * Vec2::from_angle(hand_angle);
+    scene.stroke(
+        &Stroke::new(4.0).with_caps(Cap::Round),
+        Affine::IDENTITY,
+        if running {
+            Color::from_rgb8(0x7A, 0xE4, 0xA3)
+        } else {
+            Color::from_rgb8(0xF0, 0xBF, 0x82)
+        },
+        None,
+        &Line::new(center, hand_end),
+    );
+
+    scene.fill(
+        Fill::NonZero,
+        Affine::IDENTITY,
+        Color::from_rgb8(0xF3, 0xF7, 0xFF),
+        None,
+        &Circle::new(center, 4.5),
+    );
 }
 
 fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
     let root_style = resolve_style(ctx.world, ctx.entity);
     let title_style = resolve_style_for_classes(ctx.world, ["timer.title"]);
+    let dial_shell_style = resolve_style_for_classes(ctx.world, ["timer.dial-shell"]);
     let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
     let body_text_style = resolve_style_for_classes(ctx.world, ["timer.body-text"]);
+    let pause_button_style =
+        resolve_style_for_entity_classes(ctx.world, ctx.entity, ["timer.pause-button"]);
     let reset_button_style =
         resolve_style_for_entity_classes(ctx.world, ctx.entity, ["timer.reset-button"]);
 
@@ -97,6 +223,9 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
     } else {
         Some(1.0)
     };
+    let progress_value = progress.unwrap_or(1.0);
+
+    let pause_label = if state.running { "Pause" } else { "Resume" };
 
     let title = apply_label_style(label("Timer"), &title_style);
 
@@ -128,18 +257,42 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
         &row_style,
     );
 
-    let reset = apply_widget_style(
-        button(ctx.entity, TimerEvent::Reset, "Reset"),
-        &reset_button_style,
+    let controls = apply_widget_style(
+        flex_row((
+            apply_widget_style(
+                button(ctx.entity, TimerEvent::ToggleRunning, pause_label),
+                &pause_button_style,
+            ),
+            apply_widget_style(
+                button(ctx.entity, TimerEvent::Reset, "Reset"),
+                &reset_button_style,
+            ),
+        )),
+        &row_style,
     );
 
     let content = apply_widget_style(
         flex_col((
             title,
+            sized_box(
+                canvas(move |_: (), _ctx, scene: &mut Scene, size: Size| {
+                    draw_timer_dial(scene, size, progress_value, state.running);
+                })
+                .alt_text("Timer dial"),
+            )
+            .fixed_width(Length::px(DIAL_SIZE))
+            .fixed_height(Length::px(DIAL_SIZE))
+            .padding(dial_shell_style.layout.padding)
+            .corner_radius(dial_shell_style.layout.corner_radius)
+            .border(
+                dial_shell_style.colors.border.unwrap_or(Color::TRANSPARENT),
+                dial_shell_style.layout.border_width,
+            )
+            .background_color(dial_shell_style.colors.bg.unwrap_or(Color::TRANSPARENT)),
             elapsed_row,
             progress_bar(progress),
             duration_row,
-            reset,
+            controls,
         ))
         .cross_axis_alignment(CrossAxisAlignment::Start),
         &root_style,
@@ -204,6 +357,22 @@ fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
     );
 
     style_sheet.set_class(
+        "timer.dial-shell",
+        StyleSetter {
+            layout: LayoutStyle {
+                padding: Some(6.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x14, 0x14, 0x15)),
+                border: Some(bevy_xilem::xilem::Color::from_rgb8(0x37, 0x3A, 0x44)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    style_sheet.set_class(
         "timer.row",
         StyleSetter {
             layout: LayoutStyle {
@@ -227,6 +396,26 @@ fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
     );
 
     style_sheet.set_class(
+        "timer.pause-button",
+        StyleSetter {
+            layout: LayoutStyle {
+                padding: Some(6.0),
+                corner_radius: Some(8.0),
+                border_width: Some(0.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x3A, 0x53, 0x76)),
+                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x4D, 0x6A, 0x92)),
+                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x2E, 0x45, 0x64)),
+                ..ColorStyle::default()
+            },
+            transition: Some(StyleTransition { duration: 0.22 }),
+            ..StyleSetter::default()
+        },
+    );
+
+    style_sheet.set_class(
         "timer.reset-button",
         StyleSetter {
             layout: LayoutStyle {
@@ -237,11 +426,11 @@ fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
             },
             colors: ColorStyle {
                 bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x35, 0x35, 0x35)),
-                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x4A, 0x4A, 0x4A)),
-                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x22, 0x22, 0x22)),
+                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x64, 0x64, 0x64)),
+                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x1B, 0x1B, 0x1B)),
                 ..ColorStyle::default()
             },
-            transition: Some(StyleTransition { duration: 0.15 }),
+            transition: Some(StyleTransition { duration: 0.22 }),
             ..StyleSetter::default()
         },
     );
@@ -289,4 +478,43 @@ fn main() -> Result<(), EventLoopError> {
     run_app_with_window_options(build_bevy_timer_app(), "Timer", |options| {
         options.with_initial_inner_size(LogicalSize::new(520.0, 260.0))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn dial_angle_maps_progress_clockwise_from_top() {
+        assert!((dial_angle(0.0) + FRAC_PI_2).abs() < 1e-9);
+        assert!(dial_angle(0.25).abs() < 1e-9);
+        assert!((dial_angle(0.5) - FRAC_PI_2).abs() < 1e-9);
+    }
+
+    #[test]
+    fn toggle_running_event_flips_state() {
+        let mut state = TimerState::default();
+        assert!(state.running);
+
+        apply_timer_event(&mut state, TimerEvent::ToggleRunning);
+        assert!(!state.running);
+
+        apply_timer_event(&mut state, TimerEvent::ToggleRunning);
+        assert!(state.running);
+    }
+
+    #[test]
+    fn paused_timer_does_not_accumulate_elapsed_time() {
+        let mut state = TimerState {
+            duration_secs: 10.0,
+            elapsed_secs: 3.0,
+            running: false,
+            last_tick: Instant::now() - Duration::from_secs(2),
+        };
+
+        tick_timer(&mut state);
+
+        assert!((state.elapsed_secs - 3.0).abs() < 1e-9);
+    }
 }
