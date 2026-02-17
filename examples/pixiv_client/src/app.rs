@@ -4,20 +4,23 @@ use anyhow::{Context, Result};
 use bevy_asset::{Assets, Handle, RenderAssetUsages};
 use bevy_image::Image as BevyImage;
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
+    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, ResolvedStyle,
+    StyleClass, StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::prelude::*,
     bevy_tasks::{AsyncComputeTaskPool, TaskPool},
     bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim},
-    button, resolve_style, resolve_style_for_classes, run_app_with_window_options, text_input,
+    bevy_window::WindowResized,
+    button, resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
+    run_app_with_window_options, text_input,
     xilem::{
         Color,
-        masonry::layout::Length,
+        masonry::layout::{Dim, Length},
+        style::Style as _,
         view::{
-            CrossAxisAlignment, FlexExt as _, MainAxisAlignment, flex_col, flex_row, image, label,
-            sized_box, virtual_scroll,
+            CrossAxisAlignment, FlexExt as _, FlexSpacer, MainAxisAlignment, flex_col, flex_row,
+            image, label, portal, sized_box, virtual_scroll,
         },
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
@@ -32,8 +35,11 @@ use vello::peniko::{Blob, ImageAlphaType, ImageData, ImageFormat};
 
 const CARD_BASE_WIDTH: f64 = 270.0;
 const CARD_BASE_HEIGHT: f64 = 310.0;
-const CARDS_PER_ROW: usize = 3;
-const AUTH_PANEL_WIDTH: f64 = 640.0;
+const CARD_MIN_WIDTH: f64 = 260.0;
+const CARD_ROW_GAP: f64 = 10.0;
+const MAX_CARD_COLUMNS: usize = 6;
+const SIDEBAR_EXPANDED_WIDTH: f64 = 208.0;
+const SIDEBAR_COLLAPSED_WIDTH: f64 = 72.0;
 const RESPONSE_PANEL_HEIGHT: f64 = 180.0;
 const PIXIV_AUTH_TOKEN_FALLBACK: &str = "https://oauth.secure.pixiv.net/auth/token";
 const PIXIV_WEB_REDIRECT_FALLBACK: &str =
@@ -80,6 +86,36 @@ struct OverlayTags(Vec<Entity>);
 struct ResponsePanelState {
     title: String,
     content: String,
+}
+
+#[derive(Resource, Debug, Clone, Copy)]
+struct ViewportMetrics {
+    width: f32,
+    height: f32,
+}
+
+impl Default for ViewportMetrics {
+    fn default() -> Self {
+        Self {
+            width: 1360.0,
+            height: 860.0,
+        }
+    }
+}
+
+#[derive(Resource, Debug, Clone, Copy)]
+struct PixivControls {
+    toggle_sidebar: Entity,
+    home_tab: Entity,
+    rankings_tab: Entity,
+    search_tab: Entity,
+    open_browser_login: Entity,
+    exchange_auth_code: Entity,
+    refresh_token: Entity,
+    search_submit: Entity,
+    copy_response: Entity,
+    clear_response: Entity,
+    close_overlay: Entity,
 }
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -386,6 +422,59 @@ fn open_in_system_browser(url: &str) -> Result<()> {
     ))
 }
 
+fn spawn_control_entity(commands: &mut Commands, classes: &[&str]) -> Entity {
+    commands
+        .spawn((StyleClass(
+            classes.iter().map(|class| (*class).to_string()).collect(),
+        ),))
+        .id()
+}
+
+fn compute_feed_layout(viewport_width: f64, sidebar_collapsed: bool) -> (usize, f64) {
+    let sidebar_width = if sidebar_collapsed {
+        SIDEBAR_COLLAPSED_WIDTH
+    } else {
+        SIDEBAR_EXPANDED_WIDTH
+    };
+
+    let available_width = (viewport_width - sidebar_width - 64.0).max(CARD_MIN_WIDTH);
+    let columns = ((available_width / CARD_MIN_WIDTH).floor() as usize).clamp(1, MAX_CARD_COLUMNS);
+    let spacing = CARD_ROW_GAP * columns.saturating_sub(1) as f64;
+    let card_width = ((available_width - spacing) / columns as f64).max(180.0);
+
+    (columns, card_width)
+}
+
+fn button_from_style(
+    entity: Entity,
+    action: AppAction,
+    label_text: impl Into<String>,
+    style: &ResolvedStyle,
+) -> UiView {
+    let text_color = style.colors.text.unwrap_or(Color::WHITE);
+    Arc::new(
+        button(entity, action, label_text.into())
+            .padding(style.layout.padding)
+            .corner_radius(style.layout.corner_radius)
+            .border(
+                style.colors.border.unwrap_or(Color::TRANSPARENT),
+                style.layout.border_width,
+            )
+            .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
+            .color(text_color),
+    )
+}
+
+fn action_button(
+    world: &World,
+    entity: Entity,
+    action: AppAction,
+    label_text: impl Into<String>,
+) -> UiView {
+    let style = resolve_style(world, entity);
+    button_from_style(entity, action, label_text, &style)
+}
+
 fn setup(mut commands: Commands) {
     ensure_task_pool_initialized();
 
@@ -415,8 +504,42 @@ fn setup(mut commands: Commands) {
     commands.insert_resource(FeedOrder::default());
     commands.insert_resource(OverlayTags::default());
     commands.insert_resource(ResponsePanelState::default());
+    commands.insert_resource(ViewportMetrics::default());
     commands.insert_resource(PixivApiClient::default());
     commands.insert_resource(Assets::<BevyImage>::default());
+
+    let controls = PixivControls {
+        toggle_sidebar: spawn_control_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.sidebar"],
+        ),
+        home_tab: spawn_control_entity(&mut commands, &["pixiv.button", "pixiv.button.subtle"]),
+        rankings_tab: spawn_control_entity(&mut commands, &["pixiv.button", "pixiv.button.subtle"]),
+        search_tab: spawn_control_entity(&mut commands, &["pixiv.button", "pixiv.button.subtle"]),
+        open_browser_login: spawn_control_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.primary"],
+        ),
+        exchange_auth_code: spawn_control_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.primary"],
+        ),
+        refresh_token: spawn_control_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.primary"],
+        ),
+        search_submit: spawn_control_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.primary"],
+        ),
+        copy_response: spawn_control_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.primary"],
+        ),
+        clear_response: spawn_control_entity(&mut commands, &["pixiv.button", "pixiv.button.warn"]),
+        close_overlay: spawn_control_entity(&mut commands, &["pixiv.button", "pixiv.button.warn"]),
+    };
+    commands.insert_resource(controls);
 
     commands.spawn((
         UiRoot,
@@ -465,6 +588,100 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
     );
 
     sheet.set_class(
+        "pixiv.auth-panel",
+        StyleSetter {
+            layout: LayoutStyle {
+                padding: Some(10.0),
+                gap: Some(8.0),
+                border_width: Some(1.0),
+                corner_radius: Some(10.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x19, 0x19, 0x19)),
+                border: Some(Color::from_rgb8(0x30, 0x30, 0x30)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    sheet.set_class(
+        "pixiv.button",
+        StyleSetter {
+            layout: LayoutStyle {
+                padding: Some(8.0),
+                corner_radius: Some(10.0),
+                border_width: Some(1.0),
+                ..LayoutStyle::default()
+            },
+            text: TextStyle { size: Some(14.0) },
+            transition: Some(StyleTransition { duration: 0.14 }),
+            ..StyleSetter::default()
+        },
+    );
+
+    sheet.set_class(
+        "pixiv.button.primary",
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x12, 0x89, 0xE4)),
+                hover_bg: Some(Color::from_rgb8(0x2D, 0x9B, 0xEB)),
+                pressed_bg: Some(Color::from_rgb8(0x0D, 0x73, 0xBF)),
+                border: Some(Color::from_rgb8(0x2D, 0x9B, 0xEB)),
+                text: Some(Color::from_rgb8(0xF7, 0xFB, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    sheet.set_class(
+        "pixiv.button.subtle",
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x2A, 0x2A, 0x2A)),
+                hover_bg: Some(Color::from_rgb8(0x36, 0x36, 0x36)),
+                pressed_bg: Some(Color::from_rgb8(0x1E, 0x1E, 0x1E)),
+                border: Some(Color::from_rgb8(0x40, 0x40, 0x40)),
+                text: Some(Color::from_rgb8(0xE7, 0xE7, 0xE7)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    sheet.set_class(
+        "pixiv.button.sidebar",
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x20, 0x20, 0x20)),
+                hover_bg: Some(Color::from_rgb8(0x2C, 0x2C, 0x2C)),
+                pressed_bg: Some(Color::from_rgb8(0x16, 0x16, 0x16)),
+                border: Some(Color::from_rgb8(0x36, 0x36, 0x36)),
+                text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE4)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    sheet.set_class(
+        "pixiv.button.warn",
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x5D, 0x2A, 0x2A)),
+                hover_bg: Some(Color::from_rgb8(0x73, 0x34, 0x34)),
+                pressed_bg: Some(Color::from_rgb8(0x49, 0x21, 0x21)),
+                border: Some(Color::from_rgb8(0x8B, 0x45, 0x45)),
+                text: Some(Color::from_rgb8(0xFF, 0xEF, 0xEF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    sheet.set_class(
         "pixiv.primary-btn",
         StyleSetter {
             layout: LayoutStyle {
@@ -474,10 +691,11 @@ fn setup_styles(mut sheet: ResMut<StyleSheet>) {
                 ..LayoutStyle::default()
             },
             colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x00, 0x96, 0xFA)),
-                hover_bg: Some(Color::from_rgb8(0x14, 0xA2, 0xFA)),
-                pressed_bg: Some(Color::from_rgb8(0x00, 0x7C, 0xD0)),
-                text: Some(Color::WHITE),
+                bg: Some(Color::from_rgb8(0x2A, 0x2A, 0x2A)),
+                hover_bg: Some(Color::from_rgb8(0x36, 0x36, 0x36)),
+                pressed_bg: Some(Color::from_rgb8(0x1E, 0x1E, 0x1E)),
+                border: Some(Color::from_rgb8(0x40, 0x40, 0x40)),
+                text: Some(Color::from_rgb8(0xE7, 0xE7, 0xE7)),
                 ..ColorStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.15 }),
@@ -551,43 +769,70 @@ fn project_root(_: &PixivRoot, ctx: ProjectionCtx<'_>) -> UiView {
     let root_style = resolve_style(ctx.world, ctx.entity);
     let ui = ctx.world.resource::<UiState>();
     let auth = ctx.world.resource::<AuthState>();
+    let controls = *ctx.world.resource::<PixivControls>();
 
     let sidebar_style = resolve_style_for_classes(ctx.world, ["pixiv.sidebar"]);
-    let btn_style = resolve_style_for_classes(ctx.world, ["pixiv.primary-btn"]);
+    let auth_panel_style = resolve_style_for_classes(ctx.world, ["pixiv.auth-panel"]);
+
+    let sidebar_width = if ui.sidebar_collapsed {
+        SIDEBAR_COLLAPSED_WIDTH
+    } else {
+        SIDEBAR_EXPANDED_WIDTH
+    };
 
     let sidebar = {
         let mut items = Vec::new();
         items.push(
-            apply_widget_style(
-                button(
-                    ctx.entity,
-                    AppAction::ToggleSidebar,
-                    if ui.sidebar_collapsed { ">>" } else { "<<" },
-                ),
-                &btn_style,
+            action_button(
+                ctx.world,
+                controls.toggle_sidebar,
+                AppAction::ToggleSidebar,
+                if ui.sidebar_collapsed {
+                    "Expand ▶"
+                } else {
+                    "◀ Collapse"
+                },
             )
             .into_any_flex(),
         );
 
         if !ui.sidebar_collapsed {
             items.push(
-                apply_widget_style(
-                    button(ctx.entity, AppAction::SetTab(NavTab::Home), "Home"),
-                    &btn_style,
+                action_button(
+                    ctx.world,
+                    controls.home_tab,
+                    AppAction::SetTab(NavTab::Home),
+                    if ui.active_tab == NavTab::Home {
+                        "● Home"
+                    } else {
+                        "Home"
+                    },
                 )
                 .into_any_flex(),
             );
             items.push(
-                apply_widget_style(
-                    button(ctx.entity, AppAction::SetTab(NavTab::Rankings), "Rankings"),
-                    &btn_style,
+                action_button(
+                    ctx.world,
+                    controls.rankings_tab,
+                    AppAction::SetTab(NavTab::Rankings),
+                    if ui.active_tab == NavTab::Rankings {
+                        "● Rankings"
+                    } else {
+                        "Rankings"
+                    },
                 )
                 .into_any_flex(),
             );
             items.push(
-                apply_widget_style(
-                    button(ctx.entity, AppAction::SetTab(NavTab::Search), "Search"),
-                    &btn_style,
+                action_button(
+                    ctx.world,
+                    controls.search_tab,
+                    AppAction::SetTab(NavTab::Search),
+                    if ui.active_tab == NavTab::Search {
+                        "● Search"
+                    } else {
+                        "Search"
+                    },
                 )
                 .into_any_flex(),
             );
@@ -626,7 +871,7 @@ fn project_root(_: &PixivRoot, ctx: ProjectionCtx<'_>) -> UiView {
                 .placeholder("PKCE code_verifier"),
                 &root_style,
             ))
-            .fixed_width(Length::px(AUTH_PANEL_WIDTH))
+            .width(Dim::Stretch)
             .into_any_flex(),
         );
         rows.push(
@@ -639,24 +884,24 @@ fn project_root(_: &PixivRoot, ctx: ProjectionCtx<'_>) -> UiView {
                 .placeholder("Auth code"),
                 &root_style,
             ))
-            .fixed_width(Length::px(AUTH_PANEL_WIDTH))
+            .width(Dim::Stretch)
             .into_any_flex(),
         );
         rows.push(
-            apply_widget_style(
-                button(
-                    ctx.entity,
-                    AppAction::OpenBrowserLogin,
-                    "Open Browser Login",
-                ),
-                &btn_style,
+            action_button(
+                ctx.world,
+                controls.open_browser_login,
+                AppAction::OpenBrowserLogin,
+                "Open Browser Login",
             )
             .into_any_flex(),
         );
         rows.push(
-            apply_widget_style(
-                button(ctx.entity, AppAction::ExchangeAuthCode, "Login (auth_code)"),
-                &btn_style,
+            action_button(
+                ctx.world,
+                controls.exchange_auth_code,
+                AppAction::ExchangeAuthCode,
+                "Login (auth_code)",
             )
             .into_any_flex(),
         );
@@ -670,26 +915,30 @@ fn project_root(_: &PixivRoot, ctx: ProjectionCtx<'_>) -> UiView {
                 .placeholder("Refresh token"),
                 &root_style,
             ))
-            .fixed_width(Length::px(AUTH_PANEL_WIDTH))
+            .width(Dim::Stretch)
             .into_any_flex(),
         );
         rows.push(
-            apply_widget_style(
-                button(ctx.entity, AppAction::RefreshToken, "Refresh Token"),
-                &btn_style,
+            action_button(
+                ctx.world,
+                controls.refresh_token,
+                AppAction::RefreshToken,
+                "Refresh Token",
             )
             .into_any_flex(),
         );
 
-        Arc::new(
-            sized_box(flex_col(rows).cross_axis_alignment(CrossAxisAlignment::Start))
-                .fixed_width(Length::px(AUTH_PANEL_WIDTH + 10.0)),
-        ) as UiView
+        Arc::new(apply_widget_style(
+            flex_col(rows)
+                .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                .width(Dim::Stretch),
+            &auth_panel_style,
+        )) as UiView
     };
 
-    let response_panel = build_response_panel(ctx.world, ctx.entity);
+    let response_panel = build_response_panel(ctx.world, controls);
 
-    let grid = build_feed_grid(ctx.world, ctx.entity);
+    let grid = build_feed_grid(ctx.world);
 
     let search_bar = if ui.active_tab == NavTab::Search {
         let search_line = flex_row((
@@ -699,11 +948,16 @@ fn project_root(_: &PixivRoot, ctx: ProjectionCtx<'_>) -> UiView {
                 &root_style,
             )
             .flex(1.0),
-            apply_widget_style(
-                button(ctx.entity, AppAction::SubmitSearch, "Search"),
-                &btn_style,
-            ),
-        ));
+            action_button(
+                ctx.world,
+                controls.search_submit,
+                AppAction::SubmitSearch,
+                "Search",
+            )
+            .into_any_flex(),
+        ))
+        .cross_axis_alignment(CrossAxisAlignment::Stretch)
+        .width(Dim::Stretch);
         Arc::new(search_line) as UiView
     } else {
         Arc::new(label("")) as UiView
@@ -715,27 +969,37 @@ fn project_root(_: &PixivRoot, ctx: ProjectionCtx<'_>) -> UiView {
     )) as UiView;
 
     let main_content = Arc::new(
-        flex_col((
-            status_label.into_any_flex(),
-            auth_panel.into_any_flex(),
-            response_panel.into_any_flex(),
-            search_bar.into_any_flex(),
-            grid.into_any_flex(),
-            build_detail_overlay(ctx.world, ctx.entity).into_any_flex(),
-        ))
-        .cross_axis_alignment(CrossAxisAlignment::Start),
+        portal(
+            flex_col((
+                status_label.into_any_flex(),
+                auth_panel.into_any_flex(),
+                response_panel.into_any_flex(),
+                search_bar.into_any_flex(),
+                grid.into_any_flex(),
+                build_detail_overlay(ctx.world, controls).into_any_flex(),
+            ))
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .width(Dim::Stretch),
+        )
+        .dims(Dim::Stretch),
     ) as UiView;
 
     Arc::new(apply_widget_style(
-        flex_row((sidebar.into_any_flex(), main_content.into_any_flex()))
-            .main_axis_alignment(MainAxisAlignment::Start),
+        flex_row((
+            sized_box(sidebar)
+                .dims((Length::px(sidebar_width), Dim::Stretch))
+                .into_any_flex(),
+            main_content.flex(1.0).into_any_flex(),
+        ))
+        .main_axis_alignment(MainAxisAlignment::Start)
+        .cross_axis_alignment(CrossAxisAlignment::Stretch)
+        .dims(Dim::Stretch),
         &root_style,
     ))
 }
 
-fn build_response_panel(world: &World, dispatcher: Entity) -> UiView {
+fn build_response_panel(world: &World, controls: PixivControls) -> UiView {
     let panel = world.resource::<ResponsePanelState>();
-    let btn_style = resolve_style_for_classes(world, ["pixiv.primary-btn"]);
 
     if panel.content.trim().is_empty() {
         return Arc::new(label(""));
@@ -753,18 +1017,18 @@ fn build_response_panel(world: &World, dispatcher: Entity) -> UiView {
         flex_col((
             label(panel.title.clone()).into_any_flex(),
             flex_row((
-                apply_widget_style(
-                    button(
-                        dispatcher,
-                        AppAction::CopyResponseBody,
-                        "Copy Response Body",
-                    ),
-                    &btn_style,
+                action_button(
+                    world,
+                    controls.copy_response,
+                    AppAction::CopyResponseBody,
+                    "Copy Response Body",
                 )
                 .into_any_flex(),
-                apply_widget_style(
-                    button(dispatcher, AppAction::ClearResponseBody, "Clear"),
-                    &btn_style,
+                action_button(
+                    world,
+                    controls.clear_response,
+                    AppAction::ClearResponseBody,
+                    "Clear",
                 )
                 .into_any_flex(),
             ))
@@ -776,49 +1040,54 @@ fn build_response_panel(world: &World, dispatcher: Entity) -> UiView {
                     Arc::new(label(lines.get(row_idx).cloned().unwrap_or_default())) as UiView
                 }
             }))
-            .fixed_height(Length::px(RESPONSE_PANEL_HEIGHT))
+            .dims((Dim::Stretch, Length::px(RESPONSE_PANEL_HEIGHT)))
             .into_any_flex(),
         ))
-        .cross_axis_alignment(CrossAxisAlignment::Start),
+        .cross_axis_alignment(CrossAxisAlignment::Stretch)
+        .width(Dim::Stretch),
     )
 }
 
-fn build_feed_grid(world: &World, dispatcher: Entity) -> UiView {
+fn build_feed_grid(world: &World) -> UiView {
     let order = world.resource::<FeedOrder>().0.clone();
     if order.is_empty() {
         return Arc::new(label("No data yet. Login first, then switch tabs."));
     }
 
+    let ui = world.resource::<UiState>();
+    let viewport = world.resource::<ViewportMetrics>();
+    let (cards_per_row, card_width) =
+        compute_feed_layout(viewport.width as f64, ui.sidebar_collapsed);
+
     let row_views = order
-        .chunks(CARDS_PER_ROW)
+        .chunks(cards_per_row)
         .map(|chunk| {
-            let cards = chunk
+            let mut cards = chunk
                 .iter()
-                .filter_map(|entity| build_illust_card(world, dispatcher, *entity))
+                .filter_map(|entity| build_illust_card(world, *entity, card_width))
                 .map(|view| view.into_any_flex())
                 .collect::<Vec<_>>();
-            Arc::new(flex_row(cards).cross_axis_alignment(CrossAxisAlignment::Start)) as UiView
+
+            if chunk.len() < cards_per_row {
+                cards.push(FlexSpacer::Flex(1.0).into_any_flex());
+            }
+
+            Arc::new(
+                flex_row(cards)
+                    .cross_axis_alignment(CrossAxisAlignment::Start)
+                    .width(Dim::Stretch),
+            ) as UiView
         })
         .collect::<Vec<_>>();
 
-    let rows = Arc::new(row_views);
-    let row_count = i64::try_from(rows.len()).unwrap_or(i64::MAX);
-
     Arc::new(
-        sized_box(virtual_scroll(0..row_count, {
-            let rows = Arc::clone(&rows);
-            move |_, idx| {
-                let row_idx = usize::try_from(idx).unwrap_or(0);
-                rows.get(row_idx)
-                    .cloned()
-                    .unwrap_or_else(|| Arc::new(label("")))
-            }
-        }))
-        .fixed_height(Length::px(520.0)),
+        flex_col(row_views)
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .width(Dim::Stretch),
     )
 }
 
-fn build_illust_card(world: &World, _dispatcher: Entity, entity: Entity) -> Option<UiView> {
+fn build_illust_card(world: &World, entity: Entity, card_width: f64) -> Option<UiView> {
     let illust = world.get::<Illust>(entity)?;
     let visual = world
         .get::<IllustVisual>(entity)
@@ -829,7 +1098,10 @@ fn build_illust_card(world: &World, _dispatcher: Entity, entity: Entity) -> Opti
         .copied()
         .unwrap_or_default();
     let style = resolve_style(world, entity);
-    let button_style = resolve_style_for_classes(world, ["pixiv.primary-btn"]);
+    let primary_button_style =
+        resolve_style_for_entity_classes(world, entity, ["pixiv.button", "pixiv.button.primary"]);
+    let subtle_button_style =
+        resolve_style_for_entity_classes(world, entity, ["pixiv.button", "pixiv.button.subtle"]);
 
     let image_view: UiView = if let Some(image_data) = visual.thumb_ui {
         Arc::new(image(image_data))
@@ -848,9 +1120,10 @@ fn build_illust_card(world: &World, _dispatcher: Entity, entity: Entity) -> Opti
     };
 
     let mut card_children = Vec::new();
+    let image_height = (card_width * 0.58 * anim.card_scale as f64).max(120.0);
     card_children.push(
         sized_box(image_view)
-            .fixed_height(Length::px((160.0_f32 * anim.card_scale) as f64))
+            .dims((Dim::Stretch, Length::px(image_height)))
             .into_any_flex(),
     );
 
@@ -876,14 +1149,21 @@ fn build_illust_card(world: &World, _dispatcher: Entity, entity: Entity) -> Opti
     );
 
     let heart = if illust.is_bookmarked { "♥" } else { "♡" };
-    let heart_button = sized_box(button(entity, AppAction::Bookmark(entity), heart))
-        .fixed_width(Length::px((46.0_f32 * anim.heart_scale) as f64));
+    let heart_button = sized_box(button_from_style(
+        entity,
+        AppAction::Bookmark(entity),
+        heart,
+        &subtle_button_style,
+    ))
+    .fixed_width(Length::px((46.0_f32 * anim.heart_scale) as f64));
 
     card_children.push(
         flex_row((
-            apply_widget_style(
-                button(entity, AppAction::OpenIllust(entity), "Open"),
-                &button_style,
+            button_from_style(
+                entity,
+                AppAction::OpenIllust(entity),
+                "Open",
+                &primary_button_style,
             )
             .into_any_flex(),
             heart_button.into_any_flex(),
@@ -894,16 +1174,15 @@ fn build_illust_card(world: &World, _dispatcher: Entity, entity: Entity) -> Opti
 
     Some(Arc::new(
         sized_box(apply_widget_style(flex_col(card_children), &style))
-            .fixed_width(Length::px(
-                (CARD_BASE_WIDTH * anim.card_scale as f64).max(140.0),
-            ))
+            .fixed_width(Length::px((card_width * anim.card_scale as f64).max(180.0)))
             .fixed_height(Length::px(
-                (CARD_BASE_HEIGHT * anim.card_scale as f64).max(180.0),
+                ((CARD_BASE_HEIGHT * (card_width / CARD_BASE_WIDTH)) * anim.card_scale as f64)
+                    .max(200.0),
             )),
     ))
 }
 
-fn build_detail_overlay(world: &World, dispatcher: Entity) -> UiView {
+fn build_detail_overlay(world: &World, controls: PixivControls) -> UiView {
     let ui = world.resource::<UiState>();
     let Some(entity) = ui.selected_illust else {
         return Arc::new(label(""));
@@ -913,7 +1192,6 @@ fn build_detail_overlay(world: &World, dispatcher: Entity) -> UiView {
         return Arc::new(label(""));
     };
     let style = resolve_style_for_classes(world, ["pixiv.overlay"]);
-    let btn_style = resolve_style_for_classes(world, ["pixiv.primary-btn"]);
     let visual = world
         .get::<IllustVisual>(entity)
         .cloned()
@@ -934,12 +1212,10 @@ fn build_detail_overlay(world: &World, dispatcher: Entity) -> UiView {
                 let tag = world.get::<OverlayTag>(*entity)?;
                 let tag_style = resolve_style(world, *entity);
                 Some(
-                    apply_widget_style(
-                        button(
-                            *entity,
-                            AppAction::SearchByTag(tag.text.clone()),
-                            tag.text.clone(),
-                        ),
+                    button_from_style(
+                        *entity,
+                        AppAction::SearchByTag(tag.text.clone()),
+                        tag.text.clone(),
                         &tag_style,
                     )
                     .into_any_flex(),
@@ -951,9 +1227,11 @@ fn build_detail_overlay(world: &World, dispatcher: Entity) -> UiView {
 
     Arc::new(apply_widget_style(
         flex_col((
-            apply_widget_style(
-                button(dispatcher, AppAction::CloseIllust, "Close"),
-                &btn_style,
+            action_button(
+                world,
+                controls.close_overlay,
+                AppAction::CloseIllust,
+                "Close",
             )
             .into_any_flex(),
             hero.into_any_flex(),
@@ -966,7 +1244,8 @@ fn build_detail_overlay(world: &World, dispatcher: Entity) -> UiView {
             .into_any_flex(),
             flex_col(tag_rows).into_any_flex(),
         ))
-        .cross_axis_alignment(CrossAxisAlignment::Start),
+        .cross_axis_alignment(CrossAxisAlignment::Stretch)
+        .width(Dim::Stretch),
         &style,
     ))
 }
@@ -984,9 +1263,25 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
             AppAction::ToggleSidebar => {
                 let mut ui = world.resource_mut::<UiState>();
                 ui.sidebar_collapsed = !ui.sidebar_collapsed;
+                ui.status_line = if ui.sidebar_collapsed {
+                    "Sidebar collapsed".to_string()
+                } else {
+                    "Sidebar expanded".to_string()
+                };
             }
             AppAction::SetTab(tab) => {
-                world.resource_mut::<UiState>().active_tab = tab;
+                {
+                    let mut ui = world.resource_mut::<UiState>();
+                    ui.active_tab = tab;
+                    ui.status_line = match tab {
+                        NavTab::Home => "Loading Home feed…".to_string(),
+                        NavTab::Rankings => "Loading Rankings feed…".to_string(),
+                        NavTab::Search => {
+                            "Search tab ready. Enter keywords and press Search.".to_string()
+                        }
+                    };
+                }
+
                 let cmd = match tab {
                     NavTab::Home => NetworkCommand::FetchHome,
                     NavTab::Rankings => NetworkCommand::FetchRanking,
@@ -999,6 +1294,15 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
             }
             AppAction::SubmitSearch => {
                 let query = world.resource::<UiState>().search_text.clone();
+
+                if query.trim().is_empty() {
+                    world.resource_mut::<UiState>().status_line =
+                        "Please enter a search keyword first.".to_string();
+                    continue;
+                }
+
+                world.resource_mut::<UiState>().status_line =
+                    format!("Searching for ‘{}’…", query.trim());
                 let _ = world
                     .resource::<NetworkBridge>()
                     .cmd_tx
@@ -1085,6 +1389,7 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
             }
             AppAction::ClearResponseBody => {
                 *world.resource_mut::<ResponsePanelState>() = ResponsePanelState::default();
+                world.resource_mut::<UiState>().status_line = "Response panel cleared.".to_string();
             }
             AppAction::OpenBrowserLogin => {
                 let (idp_urls, verifier) = {
@@ -1143,15 +1448,24 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
                         });
             }
             AppAction::RefreshToken => {
-                let auth = world.resource::<AuthState>();
+                let refresh_token = world.resource::<AuthState>().refresh_token_input.clone();
+                world.resource_mut::<UiState>().status_line = "Refreshing token…".to_string();
                 let _ = world
                     .resource::<NetworkBridge>()
                     .cmd_tx
-                    .send(NetworkCommand::Refresh {
-                        refresh_token: auth.refresh_token_input.clone(),
-                    });
+                    .send(NetworkCommand::Refresh { refresh_token });
             }
         }
+    }
+}
+
+fn track_viewport_metrics(
+    mut resize_events: MessageReader<WindowResized>,
+    mut viewport: ResMut<ViewportMetrics>,
+) {
+    for event in resize_events.read() {
+        viewport.width = event.width;
+        viewport.height = event.height;
     }
 }
 
@@ -1577,6 +1891,7 @@ fn build_app() -> App {
         .add_systems(
             Update,
             (
+                track_viewport_metrics,
                 spawn_network_tasks,
                 apply_network_results,
                 spawn_image_tasks,
@@ -1591,4 +1906,36 @@ pub fn run() -> std::result::Result<(), EventLoopError> {
     run_app_with_window_options(build_app(), "Pixiv Desktop", |options| {
         options.with_initial_inner_size(LogicalSize::new(1360.0, 860.0))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn feed_layout_scales_with_viewport_width() {
+        let (narrow_columns, _) = compute_feed_layout(900.0, false);
+        let (wide_columns, _) = compute_feed_layout(1700.0, false);
+
+        assert!(wide_columns >= narrow_columns);
+        assert!(wide_columns > 1);
+    }
+
+    #[test]
+    fn collapsed_sidebar_yields_more_card_space() {
+        let (expanded_columns, expanded_card_width) = compute_feed_layout(1360.0, false);
+        let (collapsed_columns, collapsed_card_width) = compute_feed_layout(1360.0, true);
+
+        assert!(collapsed_columns >= expanded_columns);
+        assert!(collapsed_card_width >= expanded_card_width);
+    }
+
+    #[test]
+    fn auth_code_can_be_extracted_from_nested_redirect() {
+        let nested = "https://example.com/callback?redirect_uri=https%3A%2F%2Fapp.example.com%2Fauth%3Fcode%3Dabc123";
+        assert_eq!(
+            extract_auth_code_from_input(nested).as_deref(),
+            Some("abc123")
+        );
+    }
 }
