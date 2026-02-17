@@ -1,6 +1,6 @@
 use bevy_xilem::{
-    BevyXilemPlugin, ColorStyle, LayoutStyle, StyleClass, StyleSetter, StyleSheet, TextStyle,
-    UiFlexColumn, UiLabel, UiRoot,
+    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, StyleClass, StyleSetter, StyleSheet,
+    TextStyle, UiFlexColumn, UiLabel, UiRoot,
     bevy_app::{App, Startup},
     bevy_asset::{AssetPlugin, AssetServer, Handle},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -20,6 +20,15 @@ struct DemoFontHandles {
 
 fn ensure_task_pool_initialized() {
     let _ = IoTaskPool::get_or_init(TaskPool::new);
+}
+
+fn register_bridge_fonts(app: &mut App) {
+    app.register_xilem_font_path("assets/fonts/Inter-Regular.otf")
+        .expect("failed to register Inter-Regular.otf into Xilem font bridge");
+    app.register_xilem_font_path("assets/fonts/NotoSansCJKsc-Regular.otf")
+        .expect("failed to register NotoSansCJKsc-Regular.otf into Xilem font bridge");
+    app.register_xilem_font_path("assets/fonts/NotoSansCJKjp-Regular.otf")
+        .expect("failed to register NotoSansCJKjp-Regular.otf into Xilem font bridge");
 }
 
 fn load_demo_fonts(asset_server: Res<AssetServer>, mut font_handles: ResMut<DemoFontHandles>) {
@@ -110,7 +119,12 @@ fn setup_cjk_styles(mut style_sheet: ResMut<StyleSheet>) {
             font_family: Some(vec![
                 "Inter".into(),
                 "Noto Sans CJK SC".into(),
+                "NotoSansCJKsc".into(),
                 "Noto Sans CJK JP".into(),
+                "NotoSansCJKjp".into(),
+                "PingFang SC".into(),
+                "Hiragino Sans".into(),
+                "Apple SD Gothic Neo".into(),
                 "sans-serif".into(),
             ]),
             ..StyleSetter::default()
@@ -122,6 +136,8 @@ fn build_cjk_app() -> App {
     ensure_task_pool_initialized();
 
     let mut app = App::new();
+    register_bridge_fonts(&mut app);
+
     app.add_plugins((
         AssetPlugin::default(),
         TextPlugin::default(),

@@ -1017,11 +1017,11 @@ fn lerp_f64(start: f64, end: f64, t: f32) -> f64 {
 
 fn map_font_family_name(name: &str) -> FontFamily<'static> {
     let trimmed = name.trim();
-    match trimmed.to_ascii_lowercase().as_str() {
-        "sans-serif" | "system-ui" => FontFamily::Generic(GenericFamily::SystemUi),
-        "serif" => FontFamily::Generic(GenericFamily::Serif),
-        "monospace" => FontFamily::Generic(GenericFamily::Monospace),
-        _ => FontFamily::Named(trimmed.to_string().into()),
+    let lower = trimmed.to_ascii_lowercase();
+    if let Some(generic) = GenericFamily::parse(lower.as_str()) {
+        FontFamily::Generic(generic)
+    } else {
+        FontFamily::Named(trimmed.to_string().into())
     }
 }
 

@@ -50,9 +50,16 @@ fn default_font_stack() -> Vec<String> {
     vec![
         "Inter".into(),
         "Noto Sans CJK SC".into(),
+        "NotoSansCJKsc".into(),
         "Noto Sans CJK JP".into(),
+        "NotoSansCJKjp".into(),
         "Noto Sans CJK TC".into(),
+        "NotoSansCJKtc".into(),
         "Noto Sans CJK KR".into(),
+        "NotoSansCJKkr".into(),
+        "PingFang SC".into(),
+        "Hiragino Sans".into(),
+        "Apple SD Gothic Neo".into(),
         "sans-serif".into(),
     ]
 }
@@ -349,6 +356,19 @@ fn spawn_card_tween(
 fn ensure_task_pool_initialized() {
     let _ = IoTaskPool::get_or_init(TaskPool::new);
     let _ = AsyncComputeTaskPool::get_or_init(TaskPool::new);
+}
+
+fn register_bridge_fonts(app: &mut App) {
+    app.register_xilem_font_path("assets/fonts/Inter-Regular.otf")
+        .expect("failed to register Inter-Regular.otf into Xilem font bridge");
+    app.register_xilem_font_path("assets/fonts/NotoSansCJKsc-Regular.otf")
+        .expect("failed to register NotoSansCJKsc-Regular.otf into Xilem font bridge");
+    app.register_xilem_font_path("assets/fonts/NotoSansCJKjp-Regular.otf")
+        .expect("failed to register NotoSansCJKjp-Regular.otf into Xilem font bridge");
+    app.register_xilem_font_path("assets/fonts/NotoSansCJKtc-Regular.otf")
+        .expect("failed to register NotoSansCJKtc-Regular.otf into Xilem font bridge");
+    app.register_xilem_font_path("assets/fonts/NotoSansCJKkr-Regular.otf")
+        .expect("failed to register NotoSansCJKkr-Regular.otf into Xilem font bridge");
 }
 
 fn ease_quadratic_in_out(t: f32) -> f32 {
@@ -2016,6 +2036,8 @@ fn build_app() -> App {
     ensure_task_pool_initialized();
 
     let mut app = App::new();
+    register_bridge_fonts(&mut app);
+
     app.add_plugins((
         AssetPlugin::default(),
         TextPlugin::default(),
