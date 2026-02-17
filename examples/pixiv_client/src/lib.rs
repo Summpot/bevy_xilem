@@ -5,11 +5,13 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use bevy_ecs::prelude::{Component, Resource};
 use chrono::Local;
 use reqwest::blocking::{Client, RequestBuilder};
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned};
 use sha2::{Digest, Sha256};
 
 pub const APP_API_BASE: &str = "https://app-api.pixiv.net";
 pub const ACCOUNTS_BASE: &str = "https://accounts.pixiv.net";
+/// Reverse-engineered from APK (`fn/b.java`): `/idp-urls` is under app-api base.
+pub const IDP_BASE: &str = APP_API_BASE;
 pub const APP_VERSION: &str = "6.171.0";
 pub const APP_OS: &str = "android";
 
@@ -119,13 +121,63 @@ pub struct Tag {
     pub translated_name: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct ProfileImageUrls {
     pub medium: String,
 }
 
+impl<'de> Deserialize<'de> for ProfileImageUrls {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct RawProfileImageUrls {
+            #[serde(default)]
+            medium: Option<String>,
+            #[serde(default, rename = "px_50x50")]
+            px_50x50: Option<String>,
+            #[serde(default, rename = "px_170x170")]
+            px_170x170: Option<String>,
+        }
+
+        let raw = RawProfileImageUrls::deserialize(deserializer)?;
+        let medium = raw
+            .medium
+            .or(raw.px_50x50)
+            .or(raw.px_170x170)
+            .ok_or_else(|| {
+                serde::de::Error::custom(
+                    "missing profile image URL: expected `medium` or `px_50x50`/`px_170x170`",
+                )
+            })?;
+
+        Ok(Self { medium })
+    }
+}
+
+fn deserialize_u64_from_string_or_number<'de, D>(
+    deserializer: D,
+) -> std::result::Result<u64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum U64Like {
+        Number(u64),
+        String(String),
+    }
+
+    match U64Like::deserialize(deserializer)? {
+        U64Like::Number(value) => Ok(value),
+        U64Like::String(value) => value.parse::<u64>().map_err(serde::de::Error::custom),
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Component)]
 pub struct User {
+    #[serde(deserialize_with = "deserialize_u64_from_string_or_number")]
     pub id: u64,
     pub name: String,
     #[serde(default)]
@@ -244,7 +296,7 @@ impl PixivApiClient {
     }
 
     pub fn discover_idp_urls(&self) -> Result<IdpUrlResponse> {
-        let url = format!("{ACCOUNTS_BASE}/idp-urls");
+        let url = format!("{IDP_BASE}/idp-urls");
         let req = self.app_headers(self.http.get(url), None);
         let response = req.send().context("discover idp-urls failed")?;
         Self::decode_json(response)
@@ -422,5 +474,36 @@ mod tests {
         let message = err.to_string();
         assert!(message.contains("failed to decode json"));
         assert!(message.contains("not-json-response"));
+    }
+
+    #[test]
+    fn auth_token_response_accepts_string_user_id_and_px_profile_keys() {
+        let body = r#"{
+            "access_token": "token",
+            "expires_in": 3600,
+            "token_type": "bearer",
+            "scope": "",
+            "refresh_token": "refresh",
+            "user": {
+                "profile_image_urls": {
+                    "px_16x16": "https://example.com/16.png",
+                    "px_50x50": "https://example.com/50.png",
+                    "px_170x170": "https://example.com/170.png"
+                },
+                "id": "33239622",
+                "name": "summpot",
+                "account": "user_knrk3528"
+            }
+        }"#;
+
+        let parsed = PixivApiClient::decode_json_from_body::<AuthTokenResponse>(
+            reqwest::StatusCode::OK,
+            body,
+        )
+        .expect("auth response should parse");
+
+        let user = parsed.user.expect("user should exist");
+        assert_eq!(user.id, 33_239_622);
+        assert_eq!(user.profile_image_urls.medium, "https://example.com/50.png");
     }
 }

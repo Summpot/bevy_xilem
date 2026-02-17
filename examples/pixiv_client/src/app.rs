@@ -1588,7 +1588,7 @@ fn build_app() -> App {
 }
 
 pub fn run() -> std::result::Result<(), EventLoopError> {
-    run_app_with_window_options(build_app(), "Pixiv Desktop MVP (bevy_xilem)", |options| {
+    run_app_with_window_options(build_app(), "Pixiv Desktop", |options| {
         options.with_initial_inner_size(LogicalSize::new(1360.0, 860.0))
     })
 }
