@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
 use bevy_app::App;
+use masonry::layout::{Dim, UnitPoint};
+use xilem::style::Style as _;
 use xilem::{
     AppState, EventLoop, WindowId, WindowOptions, WindowView, Xilem, core::map_state, view::label,
     window, winit::error::EventLoopError,
 };
+use xilem_masonry::view::zstack;
 
 use crate::synthesize::SynthesizedUiViews;
 
@@ -42,23 +45,35 @@ impl BevyXilemRuntime {
         }
     }
 
-    fn update_and_first_root_or_label(
-        &mut self,
-        fallback_text: impl Into<String>,
-    ) -> crate::UiView {
+    fn update_and_root_or_label(&mut self, fallback_text: impl Into<String>) -> crate::UiView {
         self.bevy_app.update();
-        self.bevy_app
+        let roots = self
+            .bevy_app
             .world()
             .get_resource::<SynthesizedUiViews>()
-            .and_then(|views| views.roots.first().cloned())
-            .unwrap_or_else(|| Arc::new(label(fallback_text.into())))
+            .map(|views| views.roots.clone())
+            .unwrap_or_default();
+        compose_window_root(&roots, fallback_text)
+    }
+}
+
+fn compose_window_root(roots: &[crate::UiView], fallback_text: impl Into<String>) -> crate::UiView {
+    match roots {
+        [] => Arc::new(label(fallback_text.into())),
+        [root] => root.clone(),
+        _ => Arc::new(
+            zstack(roots.to_vec())
+                .alignment(UnitPoint::TOP_LEFT)
+                .width(Dim::Stretch)
+                .height(Dim::Stretch),
+        ),
     }
 }
 
 fn app_logic(
     state: &mut BevyXilemRuntime,
 ) -> impl Iterator<Item = WindowView<BevyXilemRuntime>> + use<> {
-    let root_view = state.update_and_first_root_or_label("No synthesized bevy_xilem root");
+    let root_view = state.update_and_root_or_label("No synthesized bevy_xilem root");
     let window_id = state.window_id;
     let window_title = state.window_title.clone();
     let configure_window = state.configure_window.clone();
@@ -120,4 +135,34 @@ pub fn run_app_with_window_options(
     let runtime = BevyXilemRuntime::new(bevy_app, window_title, Arc::new(configure_window));
     let app = Xilem::new(runtime, app_logic);
     app.run_in(EventLoop::with_user_event())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use xilem::view::label;
+
+    use crate::UiView;
+
+    use super::compose_window_root;
+
+    #[test]
+    fn compose_window_root_returns_single_root_unchanged() {
+        let root: UiView = Arc::new(label("main root"));
+        let composed = compose_window_root(std::slice::from_ref(&root), "fallback");
+
+        assert!(Arc::ptr_eq(&composed, &root));
+    }
+
+    #[test]
+    fn compose_window_root_stacks_multiple_roots() {
+        let root_a: UiView = Arc::new(label("root a"));
+        let root_b: UiView = Arc::new(label("root b"));
+
+        let composed = compose_window_root(&[root_a.clone(), root_b.clone()], "fallback");
+
+        assert!(!Arc::ptr_eq(&composed, &root_a));
+        assert!(!Arc::ptr_eq(&composed, &root_b));
+    }
 }

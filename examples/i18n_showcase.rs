@@ -50,6 +50,48 @@ fn ensure_task_pool_initialized() {
     let _ = IoTaskPool::get_or_init(TaskPool::new);
 }
 
+fn cjk_fallback_font_stack() -> Vec<&'static str> {
+    vec![
+        "Inter",
+        "Noto Sans CJK SC",
+        "NotoSansCJKsc",
+        "Noto Sans CJK JP",
+        "NotoSansCJKjp",
+        "PingFang SC",
+        "Hiragino Sans",
+        "Apple SD Gothic Neo",
+        "sans-serif",
+    ]
+}
+
+fn zh_cjk_fallback_font_stack() -> Vec<&'static str> {
+    vec![
+        "Inter",
+        "Noto Sans CJK SC",
+        "NotoSansCJKsc",
+        "Noto Sans CJK JP",
+        "NotoSansCJKjp",
+        "PingFang SC",
+        "Hiragino Sans",
+        "Apple SD Gothic Neo",
+        "sans-serif",
+    ]
+}
+
+fn ja_cjk_fallback_font_stack() -> Vec<&'static str> {
+    vec![
+        "Inter",
+        "Noto Sans CJK JP",
+        "NotoSansCJKjp",
+        "Noto Sans CJK SC",
+        "NotoSansCJKsc",
+        "Hiragino Sans",
+        "PingFang SC",
+        "Apple SD Gothic Neo",
+        "sans-serif",
+    ]
+}
+
 fn project_locale_badge(_: &LocaleBadge, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let locale_text = ctx.world.get_resource::<AppI18n>().map_or_else(
@@ -562,27 +604,17 @@ fn build_i18n_app() -> App {
     .register_i18n_bundle(
         "en-US",
         SyncTextSource::FilePath("assets/locales/en-US/main.ftl"),
-        vec!["Inter", "sans-serif"],
+        cjk_fallback_font_stack(),
     )
     .register_i18n_bundle(
         "zh-CN",
         SyncTextSource::FilePath("assets/locales/zh-CN/main.ftl"),
-        vec![
-            "Inter",
-            "Noto Sans CJK SC",
-            "Noto Sans CJK JP",
-            "sans-serif",
-        ],
+        zh_cjk_fallback_font_stack(),
     )
     .register_i18n_bundle(
         "ja-JP",
         SyncTextSource::FilePath("assets/locales/ja-JP/main.ftl"),
-        vec![
-            "Inter",
-            "Noto Sans CJK JP",
-            "Noto Sans CJK SC",
-            "sans-serif",
-        ],
+        ja_cjk_fallback_font_stack(),
     )
     .register_projector::<LocaleBadge>(project_locale_badge)
     .register_projector::<ShowcaseStatus>(project_showcase_status)

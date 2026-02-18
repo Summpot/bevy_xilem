@@ -175,15 +175,19 @@ fn project_overlay_root(_: &UiOverlayRoot, ctx: ProjectionCtx<'_>) -> UiView {
     )
 }
 
+fn app_i18n_font_stack(world: &World) -> Option<Vec<String>> {
+    world
+        .get_resource::<AppI18n>()
+        .map(AppI18n::get_font_stack)
+        .filter(|stack| !stack.is_empty())
+}
+
 fn localized_font_stack(world: &World, entity: Entity) -> Option<Vec<String>> {
     if world.get::<LocalizeText>(entity).is_none() {
         return None;
     }
 
-    world
-        .get_resource::<AppI18n>()
-        .map(AppI18n::get_font_stack)
-        .filter(|stack| !stack.is_empty())
+    app_i18n_font_stack(world)
 }
 
 fn project_label(label_component: &UiLabel, ctx: ProjectionCtx<'_>) -> UiView {
@@ -255,8 +259,8 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
         backdrop_style.colors.bg = Some(xilem::Color::from_rgba8(0, 0, 0, 160));
     }
 
-    let title_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.title"]);
-    let body_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.body"]);
+    let mut title_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.title"]);
+    let mut body_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.body"]);
     let mut dismiss_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.dismiss"]);
     if dismiss_style.layout.padding <= 0.0 {
         dismiss_style.layout.padding = 8.0;
@@ -269,6 +273,14 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
         dialog.dismiss_key.as_deref(),
         &dialog.dismiss_label,
     );
+
+    if (dialog.title_key.is_some() || dialog.body_key.is_some() || dialog.dismiss_key.is_some())
+        && let Some(stack) = app_i18n_font_stack(ctx.world)
+    {
+        title_style.font_family = Some(stack.clone());
+        body_style.font_family = Some(stack.clone());
+        dismiss_style.font_family = Some(stack);
+    }
 
     let backdrop = xilem_masonry::view::sized_box(apply_direct_widget_style(
         ecs_button(ctx.entity, OverlayUiAction::DismissDialog, ""),
@@ -301,7 +313,17 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
 }
 
 fn project_combo_box(combo_box: &UiComboBox, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
+    let mut style = resolve_style(ctx.world, ctx.entity);
+
+    if (combo_box.placeholder_key.is_some()
+        || combo_box
+            .options
+            .iter()
+            .any(|option| option.label_key.is_some()))
+        && let Some(stack) = app_i18n_font_stack(ctx.world)
+    {
+        style.font_family = Some(stack);
+    }
 
     let selected_label = combo_box
         .clamped_selected()
@@ -347,7 +369,20 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
         menu_style.layout.border_width = 1.0;
     }
 
-    let item_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.item"]);
+    let mut item_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.item"]);
+
+    let options_have_localized_labels = anchor
+        .and_then(|anchor| ctx.world.get::<UiComboBox>(anchor))
+        .is_some_and(|combo_box| {
+            combo_box
+                .options
+                .iter()
+                .any(|option| option.label_key.is_some())
+        });
+
+    if options_have_localized_labels && let Some(stack) = app_i18n_font_stack(ctx.world) {
+        item_style.font_family = Some(stack);
+    }
 
     let items = anchor
         .and_then(|anchor| ctx.world.get::<UiComboBox>(anchor))
