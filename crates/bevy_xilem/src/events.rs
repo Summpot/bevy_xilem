@@ -4,8 +4,40 @@ use std::{
     sync::{Arc, OnceLock, PoisonError, RwLock},
 };
 
-use bevy_ecs::{entity::Entity, prelude::Resource};
+use bevy_ecs::{entity::Entity, prelude::Component, prelude::Resource};
+use bevy_input::mouse::MouseButton;
 use crossbeam_queue::SegQueue;
+
+/// Pointer phase used by high-level UI pointer events.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UiPointerPhase {
+    Pressed,
+    Released,
+}
+
+/// Hit-tested UI pointer event before ECS bubbling.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UiPointerHitEvent {
+    pub target: Entity,
+    pub position: (f64, f64),
+    pub button: MouseButton,
+    pub phase: UiPointerPhase,
+}
+
+/// Bubbling UI pointer event emitted for each ancestor in the hierarchy.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UiPointerEvent {
+    pub target: Entity,
+    pub current_target: Entity,
+    pub position: (f64, f64),
+    pub button: MouseButton,
+    pub phase: UiPointerPhase,
+    pub consumed: bool,
+}
+
+/// Marker that stops bubbling at the tagged entity.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct StopUiPointerPropagation;
 
 /// Type-erased UI action emitted by Masonry widgets.
 pub struct UiEvent {

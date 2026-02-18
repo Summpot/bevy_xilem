@@ -98,6 +98,69 @@ impl UiDialog {
     }
 }
 
+/// Universal placement hints for floating overlays.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum OverlayPlacement {
+    /// Centered inside the viewport.
+    #[default]
+    Center,
+    /// Anchored above the anchor/window edge.
+    Top,
+    /// Anchored below the anchor/window edge.
+    Bottom,
+    /// Anchored to the left of the anchor/window edge.
+    Left,
+    /// Anchored to the right of the anchor/window edge.
+    Right,
+    /// Anchored to top edge, aligned to logical start.
+    TopStart,
+    /// Anchored to top edge, aligned to logical end.
+    TopEnd,
+    /// Anchored to bottom edge, aligned to logical start.
+    BottomStart,
+    /// Anchored to bottom edge, aligned to logical end.
+    BottomEnd,
+    /// Anchored to left edge, aligned to logical start.
+    LeftStart,
+    /// Anchored to right edge, aligned to logical start.
+    RightStart,
+}
+
+/// Placement and collision behavior for an overlay entity.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OverlayConfig {
+    /// Preferred placement for this overlay.
+    pub placement: OverlayPlacement,
+    /// Anchor entity for placement. `None` anchors to the window.
+    pub anchor: Option<Entity>,
+    /// Enables automatic placement flipping when the preferred side overflows.
+    pub auto_flip: bool,
+}
+
+impl Default for OverlayConfig {
+    fn default() -> Self {
+        Self {
+            placement: OverlayPlacement::Center,
+            anchor: None,
+            auto_flip: false,
+        }
+    }
+}
+
+/// Runtime-computed window-space placement for an overlay surface.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
+pub struct OverlayComputedPosition {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    pub placement: OverlayPlacement,
+}
+
+/// Marker for overlays that should close on outside click.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AutoDismiss;
+
 /// Single combo option entry.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiComboOption {
@@ -123,23 +186,8 @@ impl UiComboOption {
     }
 }
 
-/// Preferred dropdown placement around an anchor control.
-///
-/// This supports eight practical directions:
-/// - vertical: top / bottom with start-center-end alignment
-/// - horizontal: left / right with start alignment
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub enum UiDropdownPlacement {
-    #[default]
-    BottomStart,
-    Bottom,
-    BottomEnd,
-    TopStart,
-    Top,
-    TopEnd,
-    RightStart,
-    LeftStart,
-}
+/// Backward-compatible alias for overlay placement in combo APIs.
+pub type UiDropdownPlacement = OverlayPlacement;
 
 /// Combo-box anchor control.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
@@ -149,7 +197,7 @@ pub struct UiComboBox {
     pub is_open: bool,
     pub placeholder: String,
     pub placeholder_key: Option<String>,
-    pub dropdown_placement: UiDropdownPlacement,
+    pub dropdown_placement: OverlayPlacement,
     pub auto_flip_placement: bool,
 }
 
@@ -162,7 +210,7 @@ impl UiComboBox {
             is_open: false,
             placeholder: "Select".to_string(),
             placeholder_key: None,
-            dropdown_placement: UiDropdownPlacement::BottomStart,
+            dropdown_placement: OverlayPlacement::BottomStart,
             auto_flip_placement: true,
         }
     }
@@ -180,15 +228,25 @@ impl UiComboBox {
     }
 
     #[must_use]
-    pub fn with_dropdown_placement(mut self, placement: UiDropdownPlacement) -> Self {
+    pub fn with_dropdown_placement(mut self, placement: OverlayPlacement) -> Self {
         self.dropdown_placement = placement;
         self
+    }
+
+    #[must_use]
+    pub fn with_overlay_placement(self, placement: OverlayPlacement) -> Self {
+        self.with_dropdown_placement(placement)
     }
 
     #[must_use]
     pub fn with_auto_flip_placement(mut self, auto_flip: bool) -> Self {
         self.auto_flip_placement = auto_flip;
         self
+    }
+
+    #[must_use]
+    pub fn with_overlay_auto_flip(self, auto_flip: bool) -> Self {
+        self.with_auto_flip_placement(auto_flip)
     }
 
     #[must_use]

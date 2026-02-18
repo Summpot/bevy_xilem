@@ -14,18 +14,20 @@ use xilem_masonry::{
 
 use crate::{
     ecs::{
-        AnchoredTo, LocalizeText, OverlayAnchorRect, UiButton, UiComboBox, UiDialog,
-        UiDropdownMenu, UiDropdownPlacement, UiFlexColumn, UiFlexRow, UiLabel, UiOverlayRoot,
+        AnchoredTo, LocalizeText, OverlayAnchorRect, OverlayComputedPosition, UiButton, UiComboBox,
+        UiDialog, UiDropdownMenu, UiFlexColumn, UiFlexRow, UiLabel, UiOverlayRoot,
     },
     i18n::{AppI18n, resolve_localized_text},
     overlay::OverlayUiAction,
-    runtime::MasonryRuntime,
     styling::{
         apply_direct_widget_style, apply_label_style, apply_widget_style, resolve_style,
         resolve_style_for_classes,
     },
     views::{ecs_button, ecs_button_with_child},
 };
+
+#[cfg(test)]
+use crate::UiDropdownPlacement;
 
 /// Xilem state used by synthesized UI views.
 pub type UiXilemState = ();
@@ -173,6 +175,7 @@ fn translate_text(world: &World, key: Option<&str>, fallback: &str) -> String {
 const DIALOG_SURFACE_MIN_WIDTH: f64 = 240.0;
 const DIALOG_SURFACE_MAX_WIDTH: f64 = 400.0;
 const DROPDOWN_MAX_VIEWPORT_HEIGHT: f64 = 300.0;
+#[cfg(test)]
 const OVERLAY_ANCHOR_GAP: f64 = 4.0;
 
 fn estimate_text_width_px(text: &str, font_size: f32) -> f64 {
@@ -280,6 +283,7 @@ fn estimate_dropdown_viewport_height_px(
     content_height.clamp(per_item, DROPDOWN_MAX_VIEWPORT_HEIGHT)
 }
 
+#[cfg(test)]
 fn dropdown_origin_for_placement(
     anchor_rect: OverlayAnchorRect,
     dropdown_width: f64,
@@ -289,10 +293,20 @@ fn dropdown_origin_for_placement(
     let start_x = anchor_rect.left;
     let centered_x = anchor_rect.left + (anchor_rect.width - dropdown_width) * 0.5;
     let end_x = anchor_rect.left + anchor_rect.width - dropdown_width;
+    let centered_y = anchor_rect.top + (anchor_rect.height - dropdown_height) * 0.5;
     let bottom_y = anchor_rect.top + anchor_rect.height + OVERLAY_ANCHOR_GAP;
     let top_y = anchor_rect.top - dropdown_height - OVERLAY_ANCHOR_GAP;
 
     match placement {
+        UiDropdownPlacement::Center => (centered_x, centered_y),
+        UiDropdownPlacement::Left => (
+            anchor_rect.left - dropdown_width - OVERLAY_ANCHOR_GAP,
+            centered_y,
+        ),
+        UiDropdownPlacement::Right => (
+            anchor_rect.left + anchor_rect.width + OVERLAY_ANCHOR_GAP,
+            centered_y,
+        ),
         UiDropdownPlacement::BottomStart => (start_x, bottom_y),
         UiDropdownPlacement::Bottom => (centered_x, bottom_y),
         UiDropdownPlacement::BottomEnd => (end_x, bottom_y),
@@ -310,6 +324,7 @@ fn dropdown_origin_for_placement(
     }
 }
 
+#[cfg(test)]
 fn dropdown_overflow_score(
     x: f64,
     y: f64,
@@ -326,6 +341,7 @@ fn dropdown_overflow_score(
     left_overflow + top_overflow + right_overflow + bottom_overflow
 }
 
+#[cfg(test)]
 fn clamp_dropdown_origin(
     x: f64,
     y: f64,
@@ -339,8 +355,39 @@ fn clamp_dropdown_origin(
     (x.clamp(0.0, max_x), y.clamp(0.0, max_y))
 }
 
+#[cfg(test)]
 fn dropdown_auto_flip_order(preferred: UiDropdownPlacement) -> [UiDropdownPlacement; 8] {
     match preferred {
+        UiDropdownPlacement::Center => [
+            UiDropdownPlacement::Center,
+            UiDropdownPlacement::Bottom,
+            UiDropdownPlacement::Top,
+            UiDropdownPlacement::BottomStart,
+            UiDropdownPlacement::TopStart,
+            UiDropdownPlacement::BottomEnd,
+            UiDropdownPlacement::TopEnd,
+            UiDropdownPlacement::RightStart,
+        ],
+        UiDropdownPlacement::Left => [
+            UiDropdownPlacement::Left,
+            UiDropdownPlacement::Right,
+            UiDropdownPlacement::LeftStart,
+            UiDropdownPlacement::RightStart,
+            UiDropdownPlacement::BottomStart,
+            UiDropdownPlacement::TopStart,
+            UiDropdownPlacement::Bottom,
+            UiDropdownPlacement::Top,
+        ],
+        UiDropdownPlacement::Right => [
+            UiDropdownPlacement::Right,
+            UiDropdownPlacement::Left,
+            UiDropdownPlacement::RightStart,
+            UiDropdownPlacement::LeftStart,
+            UiDropdownPlacement::BottomStart,
+            UiDropdownPlacement::TopStart,
+            UiDropdownPlacement::Bottom,
+            UiDropdownPlacement::Top,
+        ],
         UiDropdownPlacement::BottomStart => [
             UiDropdownPlacement::BottomStart,
             UiDropdownPlacement::TopStart,
@@ -424,6 +471,7 @@ fn dropdown_auto_flip_order(preferred: UiDropdownPlacement) -> [UiDropdownPlacem
     }
 }
 
+#[cfg(test)]
 fn select_dropdown_origin(
     anchor_rect: OverlayAnchorRect,
     dropdown_width: f64,
@@ -629,7 +677,13 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
         dismiss_style.font_family = Some(stack);
     }
 
-    let dialog_surface_width = estimate_dialog_surface_width_px(
+    let computed_position = ctx
+        .world
+        .get::<OverlayComputedPosition>(ctx.entity)
+        .copied()
+        .unwrap_or_default();
+
+    let estimated_width = estimate_dialog_surface_width_px(
         &title,
         &body,
         &dismiss_label,
@@ -640,10 +694,10 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
     );
 
     let dialog_gap = dialog_style.layout.gap.max(10.0);
-    let dialog_surface_height = estimate_dialog_surface_height_px(
+    let estimated_height = estimate_dialog_surface_height_px(
         &title,
         &body,
-        dialog_surface_width,
+        estimated_width,
         title_style.text.size,
         body_style.text.size,
         dismiss_style.text.size,
@@ -652,6 +706,18 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
         dialog_style.layout.padding.max(12.0),
         dialog_style.layout.padding.max(12.0),
     );
+
+    let dialog_surface_width = if computed_position.width > 1.0 {
+        computed_position.width
+    } else {
+        estimated_width
+    };
+
+    let dialog_surface_height = if computed_position.height > 1.0 {
+        computed_position.height
+    } else {
+        estimated_height
+    };
 
     let backdrop = apply_direct_widget_style(
         ecs_button(ctx.entity, OverlayUiAction::DismissDialog, "")
@@ -677,8 +743,11 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
     .fixed_width(Length::px(dialog_surface_width))
     .fixed_height(Length::px(dialog_surface_height));
 
+    let positioned_surface =
+        transformed(dialog_surface).translate((computed_position.x, computed_position.y));
+
     Arc::new(
-        zstack((backdrop, dialog_surface.alignment(UnitPoint::CENTER)))
+        zstack((backdrop, positioned_surface.alignment(UnitPoint::TOP_LEFT)))
             .alignment(UnitPoint::TOP_LEFT)
             .width(Dim::Stretch)
             .height(Dim::Stretch),
@@ -771,23 +840,19 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
         })
         .unwrap_or_default();
 
-    let preferred_placement = anchor
-        .and_then(|anchor| ctx.world.get::<UiComboBox>(anchor))
-        .map(|combo_box| combo_box.dropdown_placement)
-        .unwrap_or_default();
-
-    let auto_flip_placement = anchor
-        .and_then(|anchor| ctx.world.get::<UiComboBox>(anchor))
-        .map(|combo_box| combo_box.auto_flip_placement)
-        .unwrap_or(true);
-
     let anchor_rect = ctx
         .world
         .get::<OverlayAnchorRect>(ctx.entity)
         .copied()
         .unwrap_or_default();
 
-    let dropdown_width = estimate_dropdown_surface_width_px(
+    let computed_position = ctx
+        .world
+        .get::<OverlayComputedPosition>(ctx.entity)
+        .copied()
+        .unwrap_or_default();
+
+    let estimated_dropdown_width = estimate_dropdown_surface_width_px(
         anchor_rect.width.max(1.0),
         translated_options.iter().map(String::as_str),
         item_style.text.size,
@@ -795,28 +860,27 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
     );
 
     let item_gap = menu_style.layout.gap.max(6.0);
-    let dropdown_height = estimate_dropdown_viewport_height_px(
+    let estimated_dropdown_height = estimate_dropdown_viewport_height_px(
         translated_options.len(),
         item_style.text.size,
         item_style.layout.padding,
         item_gap,
     );
 
-    let (viewport_width, viewport_height) = ctx
-        .world
-        .get_non_send_resource::<MasonryRuntime>()
-        .map(|runtime| runtime.viewport_size())
-        .unwrap_or((1024.0, 768.0));
+    let dropdown_width = if computed_position.width > 1.0 {
+        computed_position.width
+    } else {
+        estimated_dropdown_width
+    };
 
-    let (_placement, dropdown_x, dropdown_y) = select_dropdown_origin(
-        anchor_rect,
-        dropdown_width,
-        dropdown_height,
-        viewport_width,
-        viewport_height,
-        preferred_placement,
-        auto_flip_placement,
-    );
+    let dropdown_height = if computed_position.height > 1.0 {
+        computed_position.height
+    } else {
+        estimated_dropdown_height
+    };
+
+    let dropdown_x = computed_position.x;
+    let dropdown_y = computed_position.y;
 
     let items = translated_options
         .into_iter()
@@ -844,16 +908,8 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
     let dropdown_panel = transformed(apply_widget_style(scrollable_menu, &menu_style))
         .translate((dropdown_x, dropdown_y));
 
-    let backdrop_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.backdrop"]);
-    let backdrop = apply_direct_widget_style(
-        ecs_button(ctx.entity, OverlayUiAction::DismissDropdown, "")
-            .width(Dim::Stretch)
-            .height(Dim::Stretch),
-        &backdrop_style,
-    );
-
     Arc::new(
-        zstack((backdrop, dropdown_panel.alignment(UnitPoint::TOP_LEFT)))
+        zstack((dropdown_panel.alignment(UnitPoint::TOP_LEFT),))
             .alignment(UnitPoint::TOP_LEFT)
             .width(Dim::Stretch)
             .height(Dim::Stretch),

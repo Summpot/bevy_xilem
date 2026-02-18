@@ -3,9 +3,10 @@ use std::sync::Arc;
 use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_xilem::{
     AppBevyXilemExt, AppI18n, BevyXilemPlugin, BuiltinUiAction, ColorStyle, LayoutStyle,
-    LocalizeText, ProjectionCtx, StyleClass, StyleSetter, StyleSheet, SyncAssetSource,
-    SyncTextSource, TextStyle, UiButton, UiComboBox, UiComboBoxChanged, UiComboOption, UiDialog,
-    UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiView, apply_label_style, apply_widget_style,
+    LocalizeText, OverlayConfig, OverlayPlacement, ProjectionCtx, StyleClass, StyleSetter,
+    StyleSheet, SyncAssetSource, SyncTextSource, TextStyle, UiButton, UiComboBox,
+    UiComboBoxChanged, UiComboOption, UiDialog, UiEventQueue, UiFlexColumn, UiLabel, UiRoot,
+    UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_asset::AssetPlugin,
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -184,7 +185,9 @@ fn setup_i18n_world(mut commands: Commands) {
                 UiComboOption::new("noto-jp", "Noto Sans CJK JP")
                     .with_label_key("showcase-combo-option-jp"),
             ])
-            .with_placeholder_key("showcase-combo-placeholder"),
+            .with_placeholder_key("showcase-combo-placeholder")
+            .with_overlay_placement(OverlayPlacement::BottomStart)
+            .with_overlay_auto_flip(true),
             StyleClass(vec!["i18n.combo".to_string()]),
             ChildOf(root),
         ))
@@ -212,7 +215,9 @@ fn setup_i18n_world(mut commands: Commands) {
                 UiComboOption::new("zh-CN", "简体中文"),
                 UiComboOption::new("ja-JP", "日本語"),
             ])
-            .with_placeholder("Language"),
+            .with_placeholder("Language")
+            .with_overlay_placement(OverlayPlacement::BottomStart)
+            .with_overlay_auto_flip(true),
             StyleClass(vec!["i18n.combo".to_string()]),
             ChildOf(root),
         ))
@@ -530,6 +535,11 @@ fn drain_i18n_events(world: &mut World) {
                     "showcase-dialog-body",
                     "showcase-dialog-close",
                 ),
+                OverlayConfig {
+                    placement: OverlayPlacement::Center,
+                    anchor: None,
+                    auto_flip: false,
+                },
                 StyleClass(vec!["i18n.dialog".to_string()]),
             ));
         }

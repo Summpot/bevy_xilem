@@ -144,12 +144,24 @@ Hit-testing invariant:
 - `ensure_overlay_root` guarantees one overlay root exists when regular `UiRoot` exists.
 - Overlay root is synthesized as an independent root and rendered on top through root stacking.
 
+Universal placement model:
+
+- `OverlayPlacement` defines canonical positions used by all floating surfaces:
+  `Center`, `Top`, `Bottom`, `Left`, `Right`, `TopStart`, `TopEnd`,
+  `BottomStart`, `BottomEnd`, `LeftStart`, `RightStart`.
+- `OverlayConfig { placement, anchor, auto_flip }` is attached to overlay entities.
+  - `anchor: None` anchors to the window (dialogs).
+  - `anchor: Some(entity)` anchors to another UI entity (dropdowns/tooltips).
+- `OverlayComputedPosition { x, y, width, height, placement }` stores runtime-resolved
+  placement after collision checks.
+
 Built-in floating widgets:
 
 - `UiDialog` (modal with full-screen backdrop)
 - `UiComboBox` (anchor control)
 - `UiDropdownMenu` (floating list in overlay layer)
 - `AnchoredTo(Entity)` + `OverlayAnchorRect` for anchor tracking
+- `AutoDismiss` marker for overlays that close on outside click.
 
 Overlay ownership and lifecycle policy:
 
@@ -165,20 +177,34 @@ Modal backdrop dismissal policy:
 - Clicking outside the panel (on backdrop) emits dismiss action reliably.
 - Centering logic avoids introducing full-screen hit-test blockers above the backdrop.
 
-Dropdown placement policy:
+Overlay placement policy:
 
-- `UiComboBox` now supports placement preference via `UiDropdownPlacement` with 8 directions:
-  `BottomStart`, `Bottom`, `BottomEnd`, `TopStart`, `Top`, `TopEnd`, `RightStart`, `LeftStart`.
-- `UiComboBox::auto_flip_placement` enables viewport-aware fallback when preferred placement
-  does not fit remaining space (for example, bottom → top near lower window edge).
-- Placement uses runtime window size snapshots and clamps final origin to viewport bounds.
+- `sync_overlay_positions` runs in `PostUpdate` and computes final positions for all entities
+  with `OverlayConfig`.
+- The system uses `PrimaryWindow` bounds (with runtime viewport fallback) and anchor widget
+  rectangles gathered from Masonry widget geometry.
+- Collision handling computes visible area and supports automatic flipping when preferred
+  placement would overflow (notably bottom → top for near-bottom dropdowns).
+- Final clamped coordinates are written to `OverlayComputedPosition`, and overlay projectors
+  read these values when rendering transformed surfaces.
 
 Overlay runtime flow:
 
 - Built-in overlay actions (`OverlayUiAction`) are drained by `handle_overlay_actions`.
 - Combo open/close spawns/despawns dropdown entities under `UiOverlayRoot`.
-- `sync_dropdown_positions` queries Masonry's latest window-space widget bounds and updates
-  `OverlayAnchorRect` so dropdowns follow anchors during resize/scroll/layout changes.
+- `ensure_overlay_defaults` applies default placement policy for built-ins:
+  - `UiDialog` → `{ Center, None, auto_flip: false }`
+  - `UiDropdownMenu` (from combo) → `{ BottomStart, Some(combo), auto_flip: true }`
+
+Pointer routing + click-outside:
+
+- `dismiss_overlays_on_click` performs global pointer routing with overlay-first hit testing.
+- Overlay hit boxes are collected from retained Masonry geometry and split by
+  `UiOverlayRoot` ancestry (overlay first, main-root fallback).
+- Outside clicks close `AutoDismiss` overlays (dropdown/dialog) and suppress combo-trigger
+  reopen races on the same click.
+- `bubble_ui_pointer_events` emits `UiPointerEvent` and walks up `ChildOf` parent chains
+  until roots or `StopUiPointerPropagation`.
 
 ### 5.6) Font Bridge (Bevy assets/fonts → Masonry/Parley)
 
@@ -304,10 +330,10 @@ and registers tweening support with:
 
 and registers systems:
 
-- `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
-- `Update`: `ensure_overlay_root -> handle_overlay_actions -> sync_dropdown_positions -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
+- `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> dismiss_overlays_on_click -> bubble_ui_pointer_events -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
+- `Update`: `ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> handle_overlay_actions -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
   (with `reparent_overlay_entities` inserted after `ensure_overlay_root`)
-- `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime` (chained)
+- `PostUpdate`: `sync_overlay_positions -> synthesize_ui -> rebuild_masonry_runtime` (chained)
 
 Transition execution details:
 

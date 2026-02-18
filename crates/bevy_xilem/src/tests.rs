@@ -3,13 +3,14 @@ use std::{sync::Arc, time::Duration};
 use crate::{
     AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, Hovered, Pressed, ProjectionCtx,
     Selector, StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue,
-    UiProjectorRegistry, UiRoot, UiView, ecs_button, ensure_overlay_root,
-    ensure_overlay_root_entity, handle_overlay_actions, register_builtin_projectors,
-    reparent_overlay_entities, resolve_style, resolve_style_for_entity_classes,
-    spawn_in_overlay_root, synthesize_roots_with_stats,
+    UiProjectorRegistry, UiRoot, UiView, bubble_ui_pointer_events, ecs_button,
+    ensure_overlay_defaults, ensure_overlay_root, ensure_overlay_root_entity,
+    handle_overlay_actions, register_builtin_projectors, reparent_overlay_entities, resolve_style,
+    resolve_style_for_entity_classes, spawn_in_overlay_root, synthesize_roots_with_stats,
 };
 use bevy_app::App;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
+use bevy_input::mouse::MouseButton;
 use bevy_tweening::Lens;
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -722,4 +723,76 @@ fn reparent_overlay_entities_moves_dialog_to_overlay_root() {
         .expect("dialog should be parented")
         .parent();
     assert_eq!(parent, overlay_root);
+}
+
+#[test]
+fn ensure_overlay_defaults_assigns_dialog_and_dropdown_configs() {
+    let mut world = World::new();
+    let combo = world
+        .spawn((crate::UiComboBox::new(vec![crate::UiComboOption::new(
+            "v", "V",
+        )]),))
+        .id();
+    let dialog = world.spawn((crate::UiDialog::new("t", "b"),)).id();
+    let dropdown = world
+        .spawn((crate::UiDropdownMenu, crate::AnchoredTo(combo)))
+        .id();
+
+    ensure_overlay_defaults(&mut world);
+
+    let dialog_config = world
+        .get::<crate::OverlayConfig>(dialog)
+        .expect("dialog should receive overlay config");
+    assert_eq!(dialog_config.placement, crate::OverlayPlacement::Center);
+    assert_eq!(dialog_config.anchor, None);
+    assert!(!dialog_config.auto_flip);
+    assert!(world.get::<crate::AutoDismiss>(dialog).is_some());
+
+    let dropdown_config = world
+        .get::<crate::OverlayConfig>(dropdown)
+        .expect("dropdown should receive overlay config");
+    assert_eq!(
+        dropdown_config.placement,
+        crate::OverlayPlacement::BottomStart
+    );
+    assert_eq!(dropdown_config.anchor, Some(combo));
+    assert!(dropdown_config.auto_flip);
+    assert!(world.get::<crate::AutoDismiss>(dropdown).is_some());
+}
+
+#[test]
+fn pointer_hits_bubble_to_parent_until_consumed() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let root = world.spawn_empty().id();
+    let parent = world
+        .spawn((ChildOf(root), crate::StopUiPointerPropagation))
+        .id();
+    let child = world.spawn((ChildOf(parent),)).id();
+
+    world.resource::<UiEventQueue>().push_typed(
+        child,
+        crate::UiPointerHitEvent {
+            target: child,
+            position: (12.0, 24.0),
+            button: MouseButton::Left,
+            phase: crate::UiPointerPhase::Pressed,
+        },
+    );
+
+    bubble_ui_pointer_events(&mut world);
+
+    let bubbled = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<crate::UiPointerEvent>();
+
+    assert_eq!(bubbled.len(), 2);
+    assert_eq!(bubbled[0].entity, child);
+    assert_eq!(bubbled[0].action.current_target, child);
+    assert!(!bubbled[0].action.consumed);
+
+    assert_eq!(bubbled[1].entity, parent);
+    assert_eq!(bubbled[1].action.current_target, parent);
+    assert!(bubbled[1].action.consumed);
 }

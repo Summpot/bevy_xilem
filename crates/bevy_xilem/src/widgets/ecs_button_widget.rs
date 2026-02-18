@@ -270,4 +270,8 @@ where
     fn accepts_focus(&self) -> bool {
         true
     }
+
+    fn get_debug_text(&self) -> Option<String> {
+        Some(format!("entity={}", self.entity.to_bits()))
+    }
 }

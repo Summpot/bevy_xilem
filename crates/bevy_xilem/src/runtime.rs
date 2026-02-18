@@ -3,7 +3,7 @@ use std::{fmt::Debug, sync::Arc};
 use bevy_ecs::{
     entity::Entity,
     message::MessageReader,
-    prelude::{FromWorld, NonSendMut, World},
+    prelude::{FromWorld, NonSendMut, ResMut, World},
 };
 use bevy_input::{
     ButtonState,
@@ -31,6 +31,7 @@ use xilem_masonry::{
 
 use crate::{
     events::{UiEventQueue, install_global_ui_event_queue},
+    overlay::OverlayPointerRoutingState,
     projection::{UiAnyView, UiView},
     synthesize::SynthesizedUiViews,
 };
@@ -299,6 +300,7 @@ fn map_mouse_button(button: MouseButton) -> Option<PointerButton> {
 /// PreUpdate input bridge: consume Bevy window/input messages and inject them into Masonry.
 pub fn inject_bevy_input_into_masonry(
     mut runtime: NonSendMut<MasonryRuntime>,
+    mut overlay_routing: ResMut<OverlayPointerRoutingState>,
     mut cursor_moved: MessageReader<CursorMoved>,
     mut cursor_left: MessageReader<CursorLeft>,
     mut mouse_button_input: MessageReader<MouseButtonInput>,
@@ -314,6 +316,19 @@ pub fn inject_bevy_input_into_masonry(
     }
 
     for event in mouse_button_input.read() {
+        let suppressed = match event.state {
+            ButtonState::Pressed => {
+                overlay_routing.take_suppressed_press(event.window, event.button)
+            }
+            ButtonState::Released => {
+                overlay_routing.take_suppressed_release(event.window, event.button)
+            }
+        };
+
+        if suppressed {
+            continue;
+        }
+
         runtime.handle_mouse_button(event.window, event.button, event.state);
     }
 

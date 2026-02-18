@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, PseudoClass,
-    Selector, StyleClass, StyleRule, StyleSetter, StyleSheet, StyleTransition, TextStyle,
-    UiEventQueue, UiRoot, UiView, apply_label_style, apply_widget_style,
+    AppBevyXilemExt, BevyXilemPlugin, BuiltinUiAction, ColorStyle, LayoutStyle, ProjectionCtx,
+    PseudoClass, Selector, StyleClass, StyleRule, StyleSetter, StyleSheet, StyleTransition,
+    TextStyle, UiButton, UiComboBox, UiComboBoxChanged, UiComboOption, UiDialog, UiEventQueue,
+    UiRoot, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    button, resolve_style, resolve_style_for_entity_classes, run_app_with_window_options, switch,
+    button, resolve_style, resolve_style_for_entity_classes, run_app_with_window_options,
+    spawn_in_overlay_root, switch,
     xilem::{
         Color,
         style::Style as _,
@@ -66,10 +68,37 @@ impl ButtonKind {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum EdgeChoice {
+    Compact,
+    Comfortable,
+    Spacious,
+}
+
+impl EdgeChoice {
+    fn from_value(value: &str) -> Option<Self> {
+        match value {
+            "compact" => Some(Self::Compact),
+            "comfortable" => Some(Self::Comfortable),
+            "spacious" => Some(Self::Spacious),
+            _ => None,
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            Self::Compact => "Compact",
+            Self::Comfortable => "Comfortable",
+            Self::Spacious => "Spacious",
+        }
+    }
+}
+
 #[derive(Resource, Debug, Clone, Copy)]
 struct GalleryState {
     theme: ThemeMode,
     last_action: Option<ButtonKind>,
+    edge_choice: Option<EdgeChoice>,
 }
 
 impl Default for GalleryState {
@@ -77,6 +106,7 @@ impl Default for GalleryState {
         Self {
             theme: ThemeMode::Dark,
             last_action: None,
+            edge_choice: None,
         }
     }
 }
@@ -85,6 +115,8 @@ impl Default for GalleryState {
 struct GalleryRuntime {
     root: Entity,
     status_badge: Entity,
+    edge_combo: Entity,
+    show_dialog_button: Entity,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -122,6 +154,9 @@ struct NestedTitle;
 
 #[derive(Component, Debug, Clone, Copy)]
 struct NestedNote;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct BottomEdgeDemo;
 
 fn root_classes(theme: ThemeMode) -> StyleClass {
     StyleClass(vec![
@@ -232,8 +267,10 @@ fn project_action_badge(_: &ActionBadge, ctx: ProjectionCtx<'_>) -> UiView {
         .map(ButtonKind::action_text)
         .unwrap_or("Click any button above");
 
+    let combo_text = state.edge_choice.map(EdgeChoice::label).unwrap_or("(none)");
+
     Arc::new(apply_widget_style(
-        apply_label_style(label(text), &style),
+        apply_label_style(label(format!("{text}\nEdge combo: {combo_text}")), &style),
         &style,
     ))
 }
@@ -281,6 +318,20 @@ fn project_nested_note(_: &NestedNote, ctx: ProjectionCtx<'_>) -> UiView {
             label("This text is styled by ancestor classes + nested descendant rules."),
             &style,
         ),
+        &style,
+    ))
+}
+
+fn project_bottom_edge_demo(_: &BottomEdgeDemo, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let children = ctx
+        .children
+        .into_iter()
+        .map(|child| child.into_any_flex())
+        .collect::<Vec<_>>();
+
+    Arc::new(apply_widget_style(
+        flex_col(children).cross_axis_alignment(CrossAxisAlignment::Start),
         &style,
     ))
 }
@@ -378,7 +429,51 @@ fn setup_gallery_world(mut commands: Commands) {
         ChildOf(nested_stack),
     ));
 
-    commands.insert_resource(GalleryRuntime { root, status_badge });
+    let bottom_demo = commands
+        .spawn((
+            BottomEdgeDemo,
+            StyleClass(vec!["gallery.bottom-edge-demo".to_string()]),
+            ChildOf(root),
+        ))
+        .id();
+
+    commands.spawn((
+        bevy_xilem::UiLabel::new(
+            "Bottom-edge ComboBox demo: open it near the window bottom, it should flip upward.",
+        ),
+        StyleClass(vec!["gallery.edge-hint".to_string()]),
+        ChildOf(bottom_demo),
+    ));
+
+    let edge_combo = commands
+        .spawn((
+            UiComboBox::new(vec![
+                UiComboOption::new("compact", "Compact"),
+                UiComboOption::new("comfortable", "Comfortable"),
+                UiComboOption::new("spacious", "Spacious"),
+            ])
+            .with_placeholder("Density")
+            .with_overlay_placement(bevy_xilem::OverlayPlacement::BottomStart)
+            .with_overlay_auto_flip(true),
+            StyleClass(vec!["gallery.edge-combo".to_string()]),
+            ChildOf(bottom_demo),
+        ))
+        .id();
+
+    let show_dialog_button = commands
+        .spawn((
+            UiButton::new("Open dialog (click backdrop to close)"),
+            StyleClass(vec!["gallery.overlay-button".to_string()]),
+            ChildOf(bottom_demo),
+        ))
+        .id();
+
+    commands.insert_resource(GalleryRuntime {
+        root,
+        status_badge,
+        edge_combo,
+        show_dialog_button,
+    });
 }
 
 fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
@@ -925,6 +1020,90 @@ fn setup_gallery_styles(mut style_sheet: ResMut<StyleSheet>) {
             ..StyleSetter::default()
         },
     );
+
+    style_sheet.set_class(
+        "gallery.bottom-edge-demo",
+        StyleSetter {
+            layout: LayoutStyle {
+                padding: Some(10.0),
+                gap: Some(8.0),
+                corner_radius: Some(10.0),
+                border_width: Some(1.0),
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x17, 0x1F, 0x31)),
+                border: Some(Color::from_rgb8(0x37, 0x4A, 0x72)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "gallery.edge-hint",
+        StyleSetter {
+            text: TextStyle { size: Some(13.0) },
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0xC5, 0xD3, 0xF3)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "gallery.edge-combo",
+        StyleSetter {
+            text: TextStyle { size: Some(15.0) },
+            layout: LayoutStyle {
+                padding: Some(10.0),
+                corner_radius: Some(8.0),
+                border_width: Some(1.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x25, 0x33, 0x4F)),
+                hover_bg: Some(Color::from_rgb8(0x2E, 0x3E, 0x5F)),
+                pressed_bg: Some(Color::from_rgb8(0x1D, 0x2B, 0x44)),
+                border: Some(Color::from_rgb8(0x4F, 0x66, 0x95)),
+                text: Some(Color::from_rgb8(0xDF, 0xE9, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "gallery.overlay-button",
+        StyleSetter {
+            text: TextStyle { size: Some(14.0) },
+            layout: LayoutStyle {
+                padding: Some(10.0),
+                corner_radius: Some(8.0),
+                border_width: Some(0.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x6E, 0x48, 0xE8)),
+                hover_bg: Some(Color::from_rgb8(0x7D, 0x58, 0xF2)),
+                pressed_bg: Some(Color::from_rgb8(0x5B, 0x3A, 0xC6)),
+                text: Some(Color::from_rgb8(0xF5, 0xF1, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "overlay.dialog.backdrop",
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgba8(0x00, 0x00, 0x00, 0xA0)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
 }
 
 fn drain_gallery_events(world: &mut World) {
@@ -960,6 +1139,44 @@ fn drain_gallery_events(world: &mut World) {
             }
         }
     }
+
+    let builtin_events = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<BuiltinUiAction>();
+
+    let show_dialog_button = world.resource::<GalleryRuntime>().show_dialog_button;
+
+    for event in builtin_events {
+        if !matches!(event.action, BuiltinUiAction::Clicked) {
+            continue;
+        }
+
+        if event.entity != show_dialog_button {
+            continue;
+        }
+
+        spawn_in_overlay_root(
+            world,
+            (UiDialog::new(
+                "Overlay dialog",
+                "Click the dimmed backdrop to close.\nOpen the bottom combo and click outside to dismiss.",
+            ),),
+        );
+    }
+
+    let combo_events = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<UiComboBoxChanged>();
+    let edge_combo = world.resource::<GalleryRuntime>().edge_combo;
+
+    for event in combo_events {
+        if event.action.combo != edge_combo {
+            continue;
+        }
+
+        world.resource_mut::<GalleryState>().edge_choice =
+            EdgeChoice::from_value(event.action.value.as_str());
+    }
 }
 
 fn build_theme_gallery_app() -> App {
@@ -975,6 +1192,7 @@ fn build_theme_gallery_app() -> App {
         .register_projector::<NestedStack>(project_nested_stack)
         .register_projector::<NestedTitle>(project_nested_title)
         .register_projector::<NestedNote>(project_nested_note)
+        .register_projector::<BottomEdgeDemo>(project_bottom_edge_demo)
         .add_systems(Startup, (setup_gallery_styles, setup_gallery_world))
         .add_systems(PreUpdate, drain_gallery_events);
     app
