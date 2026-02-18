@@ -3,9 +3,10 @@ use std::{sync::Arc, time::Duration};
 use crate::{
     AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, Hovered, Pressed, ProjectionCtx,
     Selector, StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue,
-    UiProjectorRegistry, UiRoot, UiView, ecs_button, ensure_overlay_root, handle_overlay_actions,
-    register_builtin_projectors, resolve_style, resolve_style_for_entity_classes,
-    synthesize_roots_with_stats,
+    UiProjectorRegistry, UiRoot, UiView, ecs_button, ensure_overlay_root,
+    ensure_overlay_root_entity, handle_overlay_actions, register_builtin_projectors,
+    reparent_overlay_entities, resolve_style, resolve_style_for_entity_classes,
+    spawn_in_overlay_root, synthesize_roots_with_stats,
 };
 use bevy_app::App;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
@@ -681,4 +682,44 @@ fn overlay_actions_toggle_and_select_combo_box() {
     assert_eq!(combo_after.selected, 1);
     assert!(!combo_after.is_open);
     assert!(world.get_entity(dropdown).is_err());
+}
+
+#[test]
+fn spawn_in_overlay_root_parents_entity_under_overlay_root() {
+    let mut world = World::new();
+    world.spawn((UiRoot,));
+
+    let dialog = spawn_in_overlay_root(&mut world, (crate::UiDialog::new("title", "body"),));
+
+    let overlay_root = ensure_overlay_root_entity(&mut world);
+    let parent = world
+        .get::<bevy_ecs::hierarchy::ChildOf>(dialog)
+        .expect("dialog should be parented")
+        .parent();
+
+    assert_eq!(parent, overlay_root);
+    assert!(world.get::<crate::UiOverlayRoot>(overlay_root).is_some());
+}
+
+#[test]
+fn reparent_overlay_entities_moves_dialog_to_overlay_root() {
+    let mut world = World::new();
+    let app_root = world.spawn((UiRoot,)).id();
+    let dialog = world
+        .spawn((crate::UiDialog::new("title", "body"), ChildOf(app_root)))
+        .id();
+
+    reparent_overlay_entities(&mut world);
+
+    let mut overlays = world.query_filtered::<Entity, With<crate::UiOverlayRoot>>();
+    let overlay_root = overlays
+        .iter(&world)
+        .next()
+        .expect("overlay root should exist");
+
+    let parent = world
+        .get::<bevy_ecs::hierarchy::ChildOf>(dialog)
+        .expect("dialog should be parented")
+        .parent();
+    assert_eq!(parent, overlay_root);
 }

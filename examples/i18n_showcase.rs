@@ -5,14 +5,13 @@ use bevy_xilem::{
     AppBevyXilemExt, AppI18n, BevyXilemPlugin, BuiltinUiAction, ColorStyle, LayoutStyle,
     LocalizeText, ProjectionCtx, StyleClass, StyleSetter, StyleSheet, SyncAssetSource,
     SyncTextSource, TextStyle, UiButton, UiComboBox, UiComboBoxChanged, UiComboOption, UiDialog,
-    UiEventQueue, UiFlexColumn, UiLabel, UiOverlayRoot, UiRoot, UiView, apply_label_style,
-    apply_widget_style,
+    UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_asset::AssetPlugin,
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPool},
     bevy_text::TextPlugin,
-    resolve_style, run_app_with_window_options,
+    resolve_style, run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
         view::label,
@@ -503,15 +502,6 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
     );
 }
 
-fn ensure_overlay_root_entity(world: &mut World) -> Entity {
-    let existing = {
-        let mut query = world.query_filtered::<Entity, With<UiOverlayRoot>>();
-        query.iter(world).next()
-    };
-
-    existing.unwrap_or_else(|| world.spawn((UiRoot, UiOverlayRoot)).id())
-}
-
 fn drain_i18n_events(world: &mut World) {
     let events = world
         .resource_mut::<UiEventQueue>()
@@ -530,8 +520,7 @@ fn drain_i18n_events(world: &mut World) {
         }
 
         if event.entity == runtime.show_modal_button {
-            let overlay_root = ensure_overlay_root_entity(world);
-            world.spawn((
+            spawn_in_overlay_root(world, (
                 UiDialog::new(
                     "Overlay Modal",
                     "Dialogs now live in a portal root and are not clipped by parent containers.",
@@ -542,7 +531,6 @@ fn drain_i18n_events(world: &mut World) {
                     "showcase-dialog-close",
                 ),
                 StyleClass(vec!["i18n.dialog".to_string()]),
-                ChildOf(overlay_root),
             ));
         }
     }

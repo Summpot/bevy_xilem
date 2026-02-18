@@ -52,8 +52,8 @@ struct GameViewport {
 impl Default for GameViewport {
     fn default() -> Self {
         Self {
-            width: 760.0,
-            height: 980.0,
+            width: 1040.0,
+            height: 720.0,
         }
     }
 }
@@ -61,24 +61,27 @@ impl Default for GameViewport {
 #[derive(Debug, Clone, Copy)]
 struct GameLayoutMetrics {
     tile_size: f64,
+    side_panel_width: f64,
     control_button_width: f64,
     control_button_height: f64,
 }
 
 impl GameLayoutMetrics {
     fn from_viewport(viewport: GameViewport) -> Self {
-        let usable_width = (viewport.width - 120.0).max(240.0);
-        let usable_height = (viewport.height - 420.0).max(220.0);
+        let side_panel_width = (viewport.width * 0.30).clamp(220.0, 320.0);
+        let board_width_budget = (viewport.width - side_panel_width - 150.0).max(220.0);
+        let board_height_budget = (viewport.height - 240.0).max(220.0);
 
-        let tile_from_width = usable_width / 4.6;
-        let tile_from_height = usable_height / 4.4;
+        let tile_from_width = board_width_budget / 4.4;
+        let tile_from_height = board_height_budget / 4.4;
         let tile_size = tile_from_width.min(tile_from_height).clamp(44.0, 92.0);
 
-        let control_button_width = (tile_size * 1.22).clamp(82.0, 124.0);
+        let control_button_width = (side_panel_width * 0.86).clamp(120.0, 228.0);
         let control_button_height = (tile_size * 0.64).clamp(42.0, 58.0);
 
         Self {
             tile_size,
+            side_panel_width,
             control_button_width,
             control_button_height,
         }
@@ -495,6 +498,9 @@ struct ScoreCard {
 struct StatusLine;
 
 #[derive(Component, Debug, Clone, Copy)]
+struct GameFlowRow;
+
+#[derive(Component, Debug, Clone, Copy)]
 struct BoardContainer;
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -507,6 +513,9 @@ struct TileCell {
 
 #[derive(Component, Debug, Clone, Copy)]
 struct ControlsPad;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct SidePanel;
 
 #[derive(Component, Debug, Clone, Copy)]
 struct ControlsRow;
@@ -808,6 +817,22 @@ fn project_status_line(_: &StatusLine, ctx: ProjectionCtx<'_>) -> UiView {
     ))
 }
 
+fn project_game_flow_row(_: &GameFlowRow, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let children = ctx
+        .children
+        .into_iter()
+        .map(|child| child.into_any_flex())
+        .collect::<Vec<_>>();
+
+    Arc::new(apply_widget_style(
+        flex_row(children)
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .main_axis_alignment(MainAxisAlignment::Center),
+        &style,
+    ))
+}
+
 fn project_board_container(_: &BoardContainer, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let rows = ctx
@@ -820,6 +845,27 @@ fn project_board_container(_: &BoardContainer, ctx: ProjectionCtx<'_>) -> UiView
         flex_col(rows).cross_axis_alignment(CrossAxisAlignment::Center),
         &style,
     ))
+}
+
+fn project_side_panel(_: &SidePanel, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let viewport = *ctx.world.resource::<GameViewport>();
+    let metrics = GameLayoutMetrics::from_viewport(viewport);
+    let children = ctx
+        .children
+        .into_iter()
+        .map(|child| child.into_any_flex())
+        .collect::<Vec<_>>();
+
+    Arc::new(
+        sized_box(apply_widget_style(
+            flex_col(children)
+                .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                .main_axis_alignment(MainAxisAlignment::Start),
+            &style,
+        ))
+        .fixed_width(Length::px(metrics.side_panel_width)),
+    )
 }
 
 fn project_board_row(_: &BoardRow, ctx: ProjectionCtx<'_>) -> UiView {
@@ -870,8 +916,8 @@ fn project_controls_pad(_: &ControlsPad, ctx: ProjectionCtx<'_>) -> UiView {
 
     Arc::new(apply_widget_style(
         flex_col(rows)
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .main_axis_alignment(MainAxisAlignment::Center),
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .main_axis_alignment(MainAxisAlignment::Start),
         &style,
     ))
 }
@@ -885,7 +931,7 @@ fn project_controls_row(_: &ControlsRow, ctx: ProjectionCtx<'_>) -> UiView {
         .collect::<Vec<_>>();
 
     Arc::new(apply_widget_style(
-        flex_row(buttons).main_axis_alignment(MainAxisAlignment::Center),
+        flex_row(buttons).main_axis_alignment(MainAxisAlignment::Start),
         &style,
     ))
 }
@@ -979,17 +1025,19 @@ fn setup_game_world(mut commands: Commands) {
         ));
     }
 
-    commands.spawn((
-        StatusLine,
-        StyleClass(vec!["g2048.status-host".to_string()]),
-        ChildOf(root),
-    ));
+    let flow = commands
+        .spawn((
+            GameFlowRow,
+            StyleClass(vec!["g2048.flow".to_string()]),
+            ChildOf(root),
+        ))
+        .id();
 
     let board = commands
         .spawn((
             BoardContainer,
             StyleClass(vec!["g2048.board".to_string()]),
-            ChildOf(root),
+            ChildOf(flow),
         ))
         .id();
 
@@ -1012,11 +1060,25 @@ fn setup_game_world(mut commands: Commands) {
         }
     }
 
+    let side_panel = commands
+        .spawn((
+            SidePanel,
+            StyleClass(vec!["g2048.side-panel".to_string()]),
+            ChildOf(flow),
+        ))
+        .id();
+
+    commands.spawn((
+        StatusLine,
+        StyleClass(vec!["g2048.status-host".to_string()]),
+        ChildOf(side_panel),
+    ));
+
     let controls = commands
         .spawn((
             ControlsPad,
             StyleClass(vec!["g2048.controls".to_string()]),
-            ChildOf(root),
+            ChildOf(side_panel),
         ))
         .id();
 
@@ -1089,7 +1151,7 @@ fn setup_game_world(mut commands: Commands) {
     commands.spawn((
         HintLine,
         StyleClass(vec!["g2048.hint".to_string()]),
-        ChildOf(root),
+        ChildOf(side_panel),
     ));
 }
 
@@ -1149,6 +1211,28 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
 
     style_sheet.set_class(
         "g2048.score-strip",
+        StyleSetter {
+            layout: LayoutStyle {
+                gap: Some(10.0),
+                ..LayoutStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "g2048.flow",
+        StyleSetter {
+            layout: LayoutStyle {
+                gap: Some(16.0),
+                ..LayoutStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "g2048.side-panel",
         StyleSetter {
             layout: LayoutStyle {
                 gap: Some(10.0),
@@ -1475,7 +1559,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
         "g2048.controls",
         StyleSetter {
             layout: LayoutStyle {
-                gap: Some(6.0),
+                gap: Some(8.0),
                 ..LayoutStyle::default()
             },
             ..StyleSetter::default()
@@ -1756,9 +1840,11 @@ fn build_2048_app() -> App {
         .register_projector::<ScoreStrip>(project_score_strip)
         .register_projector::<ScoreCard>(project_score_card)
         .register_projector::<StatusLine>(project_status_line)
+        .register_projector::<GameFlowRow>(project_game_flow_row)
         .register_projector::<BoardContainer>(project_board_container)
         .register_projector::<BoardRow>(project_board_row)
         .register_projector::<TileCell>(project_tile_cell)
+        .register_projector::<SidePanel>(project_side_panel)
         .register_projector::<ControlsPad>(project_controls_pad)
         .register_projector::<ControlsRow>(project_controls_row)
         .register_projector::<ControlButton>(project_control_button)
@@ -1779,7 +1865,7 @@ fn build_2048_app() -> App {
 
 fn main() -> Result<(), EventLoopError> {
     run_app_with_window_options(build_2048_app(), "2048 Game", |options| {
-        options.with_initial_inner_size(LogicalSize::new(760.0, 980.0))
+        options.with_initial_inner_size(LogicalSize::new(1040.0, 720.0))
     })
 }
 
@@ -1923,8 +2009,8 @@ mod tests {
     #[test]
     fn layout_metrics_shrink_with_smaller_viewports() {
         let large = GameLayoutMetrics::from_viewport(GameViewport {
-            width: 900.0,
-            height: 1000.0,
+            width: 1200.0,
+            height: 820.0,
         });
         let small = GameLayoutMetrics::from_viewport(GameViewport {
             width: 520.0,
@@ -1932,6 +2018,7 @@ mod tests {
         });
 
         assert!(small.tile_size < large.tile_size);
+        assert!(small.side_panel_width <= large.side_panel_width);
         assert!(small.control_button_width <= large.control_button_width);
         assert!(small.control_button_height <= large.control_button_height);
         assert!(small.tile_size >= 44.0);

@@ -7,18 +7,19 @@ use xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
 use xilem_masonry::{
     AnyWidgetView,
     view::{
-        CrossAxisAlignment, FlexExt as _, MainAxisAlignment, ZStackExt as _, flex_col, flex_row,
-        label, portal, transformed, zstack,
+        CrossAxisAlignment, FlexExt as _, ZStackExt as _, flex_col, flex_row, label, portal,
+        transformed, zstack,
     },
 };
 
 use crate::{
     ecs::{
         AnchoredTo, LocalizeText, OverlayAnchorRect, UiButton, UiComboBox, UiDialog,
-        UiDropdownMenu, UiFlexColumn, UiFlexRow, UiLabel, UiOverlayRoot,
+        UiDropdownMenu, UiDropdownPlacement, UiFlexColumn, UiFlexRow, UiLabel, UiOverlayRoot,
     },
     i18n::{AppI18n, resolve_localized_text},
     overlay::OverlayUiAction,
+    runtime::MasonryRuntime,
     styling::{
         apply_direct_widget_style, apply_label_style, apply_widget_style, resolve_style,
         resolve_style_for_classes,
@@ -172,6 +173,7 @@ fn translate_text(world: &World, key: Option<&str>, fallback: &str) -> String {
 const DIALOG_SURFACE_MIN_WIDTH: f64 = 240.0;
 const DIALOG_SURFACE_MAX_WIDTH: f64 = 400.0;
 const DROPDOWN_MAX_VIEWPORT_HEIGHT: f64 = 300.0;
+const OVERLAY_ANCHOR_GAP: f64 = 4.0;
 
 fn estimate_text_width_px(text: &str, font_size: f32) -> f64 {
     let units = text
@@ -276,6 +278,235 @@ fn estimate_dropdown_viewport_height_px(
     let gap_total = item_gap * item_count.saturating_sub(1) as f64;
     let content_height = per_item * item_count as f64 + gap_total;
     content_height.clamp(per_item, DROPDOWN_MAX_VIEWPORT_HEIGHT)
+}
+
+fn dropdown_origin_for_placement(
+    anchor_rect: OverlayAnchorRect,
+    dropdown_width: f64,
+    dropdown_height: f64,
+    placement: UiDropdownPlacement,
+) -> (f64, f64) {
+    let start_x = anchor_rect.left;
+    let centered_x = anchor_rect.left + (anchor_rect.width - dropdown_width) * 0.5;
+    let end_x = anchor_rect.left + anchor_rect.width - dropdown_width;
+    let bottom_y = anchor_rect.top + anchor_rect.height + OVERLAY_ANCHOR_GAP;
+    let top_y = anchor_rect.top - dropdown_height - OVERLAY_ANCHOR_GAP;
+
+    match placement {
+        UiDropdownPlacement::BottomStart => (start_x, bottom_y),
+        UiDropdownPlacement::Bottom => (centered_x, bottom_y),
+        UiDropdownPlacement::BottomEnd => (end_x, bottom_y),
+        UiDropdownPlacement::TopStart => (start_x, top_y),
+        UiDropdownPlacement::Top => (centered_x, top_y),
+        UiDropdownPlacement::TopEnd => (end_x, top_y),
+        UiDropdownPlacement::RightStart => (
+            anchor_rect.left + anchor_rect.width + OVERLAY_ANCHOR_GAP,
+            anchor_rect.top,
+        ),
+        UiDropdownPlacement::LeftStart => (
+            anchor_rect.left - dropdown_width - OVERLAY_ANCHOR_GAP,
+            anchor_rect.top,
+        ),
+    }
+}
+
+fn dropdown_overflow_score(
+    x: f64,
+    y: f64,
+    dropdown_width: f64,
+    dropdown_height: f64,
+    viewport_width: f64,
+    viewport_height: f64,
+) -> f64 {
+    let left_overflow = (0.0 - x).max(0.0);
+    let top_overflow = (0.0 - y).max(0.0);
+    let right_overflow = (x + dropdown_width - viewport_width).max(0.0);
+    let bottom_overflow = (y + dropdown_height - viewport_height).max(0.0);
+
+    left_overflow + top_overflow + right_overflow + bottom_overflow
+}
+
+fn clamp_dropdown_origin(
+    x: f64,
+    y: f64,
+    dropdown_width: f64,
+    dropdown_height: f64,
+    viewport_width: f64,
+    viewport_height: f64,
+) -> (f64, f64) {
+    let max_x = (viewport_width - dropdown_width).max(0.0);
+    let max_y = (viewport_height - dropdown_height).max(0.0);
+    (x.clamp(0.0, max_x), y.clamp(0.0, max_y))
+}
+
+fn dropdown_auto_flip_order(preferred: UiDropdownPlacement) -> [UiDropdownPlacement; 8] {
+    match preferred {
+        UiDropdownPlacement::BottomStart => [
+            UiDropdownPlacement::BottomStart,
+            UiDropdownPlacement::TopStart,
+            UiDropdownPlacement::BottomEnd,
+            UiDropdownPlacement::TopEnd,
+            UiDropdownPlacement::Bottom,
+            UiDropdownPlacement::Top,
+            UiDropdownPlacement::RightStart,
+            UiDropdownPlacement::LeftStart,
+        ],
+        UiDropdownPlacement::Bottom => [
+            UiDropdownPlacement::Bottom,
+            UiDropdownPlacement::Top,
+            UiDropdownPlacement::BottomStart,
+            UiDropdownPlacement::BottomEnd,
+            UiDropdownPlacement::TopStart,
+            UiDropdownPlacement::TopEnd,
+            UiDropdownPlacement::RightStart,
+            UiDropdownPlacement::LeftStart,
+        ],
+        UiDropdownPlacement::BottomEnd => [
+            UiDropdownPlacement::BottomEnd,
+            UiDropdownPlacement::TopEnd,
+            UiDropdownPlacement::BottomStart,
+            UiDropdownPlacement::TopStart,
+            UiDropdownPlacement::Bottom,
+            UiDropdownPlacement::Top,
+            UiDropdownPlacement::RightStart,
+            UiDropdownPlacement::LeftStart,
+        ],
+        UiDropdownPlacement::TopStart => [
+            UiDropdownPlacement::TopStart,
+            UiDropdownPlacement::BottomStart,
+            UiDropdownPlacement::TopEnd,
+            UiDropdownPlacement::BottomEnd,
+            UiDropdownPlacement::Top,
+            UiDropdownPlacement::Bottom,
+            UiDropdownPlacement::RightStart,
+            UiDropdownPlacement::LeftStart,
+        ],
+        UiDropdownPlacement::Top => [
+            UiDropdownPlacement::Top,
+            UiDropdownPlacement::Bottom,
+            UiDropdownPlacement::TopStart,
+            UiDropdownPlacement::TopEnd,
+            UiDropdownPlacement::BottomStart,
+            UiDropdownPlacement::BottomEnd,
+            UiDropdownPlacement::RightStart,
+            UiDropdownPlacement::LeftStart,
+        ],
+        UiDropdownPlacement::TopEnd => [
+            UiDropdownPlacement::TopEnd,
+            UiDropdownPlacement::BottomEnd,
+            UiDropdownPlacement::TopStart,
+            UiDropdownPlacement::BottomStart,
+            UiDropdownPlacement::Top,
+            UiDropdownPlacement::Bottom,
+            UiDropdownPlacement::RightStart,
+            UiDropdownPlacement::LeftStart,
+        ],
+        UiDropdownPlacement::RightStart => [
+            UiDropdownPlacement::RightStart,
+            UiDropdownPlacement::LeftStart,
+            UiDropdownPlacement::BottomStart,
+            UiDropdownPlacement::TopStart,
+            UiDropdownPlacement::Bottom,
+            UiDropdownPlacement::Top,
+            UiDropdownPlacement::BottomEnd,
+            UiDropdownPlacement::TopEnd,
+        ],
+        UiDropdownPlacement::LeftStart => [
+            UiDropdownPlacement::LeftStart,
+            UiDropdownPlacement::RightStart,
+            UiDropdownPlacement::BottomStart,
+            UiDropdownPlacement::TopStart,
+            UiDropdownPlacement::Bottom,
+            UiDropdownPlacement::Top,
+            UiDropdownPlacement::BottomEnd,
+            UiDropdownPlacement::TopEnd,
+        ],
+    }
+}
+
+fn select_dropdown_origin(
+    anchor_rect: OverlayAnchorRect,
+    dropdown_width: f64,
+    dropdown_height: f64,
+    viewport_width: f64,
+    viewport_height: f64,
+    preferred_placement: UiDropdownPlacement,
+    auto_flip: bool,
+) -> (UiDropdownPlacement, f64, f64) {
+    let order = dropdown_auto_flip_order(preferred_placement);
+
+    if !auto_flip {
+        let (x, y) = dropdown_origin_for_placement(
+            anchor_rect,
+            dropdown_width,
+            dropdown_height,
+            preferred_placement,
+        );
+        let (x, y) = clamp_dropdown_origin(
+            x,
+            y,
+            dropdown_width,
+            dropdown_height,
+            viewport_width,
+            viewport_height,
+        );
+        return (preferred_placement, x, y);
+    }
+
+    let mut best = None;
+
+    for placement in order {
+        let (x, y) =
+            dropdown_origin_for_placement(anchor_rect, dropdown_width, dropdown_height, placement);
+        let overflow = dropdown_overflow_score(
+            x,
+            y,
+            dropdown_width,
+            dropdown_height,
+            viewport_width,
+            viewport_height,
+        );
+
+        if overflow <= f64::EPSILON {
+            let (x, y) = clamp_dropdown_origin(
+                x,
+                y,
+                dropdown_width,
+                dropdown_height,
+                viewport_width,
+                viewport_height,
+            );
+            return (placement, x, y);
+        }
+
+        match best {
+            None => best = Some((placement, overflow, x, y)),
+            Some((_, best_overflow, _, _)) if overflow < best_overflow => {
+                best = Some((placement, overflow, x, y));
+            }
+            _ => {}
+        }
+    }
+
+    let (placement, _overflow, x, y) = best.unwrap_or({
+        let (x, y) = dropdown_origin_for_placement(
+            anchor_rect,
+            dropdown_width,
+            dropdown_height,
+            preferred_placement,
+        );
+        (preferred_placement, f64::INFINITY, x, y)
+    });
+
+    let (x, y) = clamp_dropdown_origin(
+        x,
+        y,
+        dropdown_width,
+        dropdown_height,
+        viewport_width,
+        viewport_height,
+    );
+    (placement, x, y)
 }
 
 fn project_overlay_root(_: &UiOverlayRoot, ctx: ProjectionCtx<'_>) -> UiView {
@@ -446,14 +677,8 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
     .fixed_width(Length::px(dialog_surface_width))
     .fixed_height(Length::px(dialog_surface_height));
 
-    let centered_surface_layer = flex_col((dialog_surface.into_any_flex(),))
-        .main_axis_alignment(MainAxisAlignment::Center)
-        .cross_axis_alignment(CrossAxisAlignment::Center)
-        .width(Dim::Stretch)
-        .height(Dim::Stretch);
-
     Arc::new(
-        zstack((backdrop, centered_surface_layer))
+        zstack((backdrop, dialog_surface.alignment(UnitPoint::CENTER)))
             .alignment(UnitPoint::TOP_LEFT)
             .width(Dim::Stretch)
             .height(Dim::Stretch),
@@ -546,6 +771,16 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
         })
         .unwrap_or_default();
 
+    let preferred_placement = anchor
+        .and_then(|anchor| ctx.world.get::<UiComboBox>(anchor))
+        .map(|combo_box| combo_box.dropdown_placement)
+        .unwrap_or_default();
+
+    let auto_flip_placement = anchor
+        .and_then(|anchor| ctx.world.get::<UiComboBox>(anchor))
+        .map(|combo_box| combo_box.auto_flip_placement)
+        .unwrap_or(true);
+
     let anchor_rect = ctx
         .world
         .get::<OverlayAnchorRect>(ctx.entity)
@@ -565,6 +800,22 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
         item_style.text.size,
         item_style.layout.padding,
         item_gap,
+    );
+
+    let (viewport_width, viewport_height) = ctx
+        .world
+        .get_non_send_resource::<MasonryRuntime>()
+        .map(|runtime| runtime.viewport_size())
+        .unwrap_or((1024.0, 768.0));
+
+    let (_placement, dropdown_x, dropdown_y) = select_dropdown_origin(
+        anchor_rect,
+        dropdown_width,
+        dropdown_height,
+        viewport_width,
+        viewport_height,
+        preferred_placement,
+        auto_flip_placement,
     );
 
     let items = translated_options
@@ -591,7 +842,7 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
     .dims((Length::px(dropdown_width), Length::px(dropdown_height)));
 
     let dropdown_panel = transformed(apply_widget_style(scrollable_menu, &menu_style))
-        .translate((anchor_rect.left, anchor_rect.top + anchor_rect.height + 4.0));
+        .translate((dropdown_x, dropdown_y));
 
     let backdrop_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.backdrop"]);
     let backdrop = apply_direct_widget_style(
@@ -626,8 +877,9 @@ pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
 mod tests {
     use super::{
         DIALOG_SURFACE_MAX_WIDTH, DIALOG_SURFACE_MIN_WIDTH, DROPDOWN_MAX_VIEWPORT_HEIGHT,
-        estimate_dialog_surface_width_px, estimate_dropdown_surface_width_px,
-        estimate_dropdown_viewport_height_px,
+        OverlayAnchorRect, UiDropdownPlacement, estimate_dialog_surface_width_px,
+        estimate_dropdown_surface_width_px, estimate_dropdown_viewport_height_px,
+        select_dropdown_origin,
     };
 
     #[test]
@@ -671,5 +923,73 @@ mod tests {
         let small = estimate_dropdown_viewport_height_px(2, 16.0, 10.0, 6.0);
         assert!(small < DROPDOWN_MAX_VIEWPORT_HEIGHT);
         assert!(small > 0.0);
+    }
+
+    #[test]
+    fn dropdown_auto_flips_to_top_when_bottom_has_no_space() {
+        let anchor = OverlayAnchorRect {
+            left: 24.0,
+            top: 168.0,
+            width: 160.0,
+            height: 32.0,
+        };
+
+        let (placement, _x, y) = select_dropdown_origin(
+            anchor,
+            200.0,
+            120.0,
+            360.0,
+            220.0,
+            UiDropdownPlacement::BottomStart,
+            true,
+        );
+
+        assert_eq!(placement, UiDropdownPlacement::TopStart);
+        assert!(y < anchor.top);
+    }
+
+    #[test]
+    fn dropdown_respects_fixed_placement_when_auto_flip_disabled() {
+        let anchor = OverlayAnchorRect {
+            left: 250.0,
+            top: 64.0,
+            width: 80.0,
+            height: 28.0,
+        };
+
+        let (placement, x, _y) = select_dropdown_origin(
+            anchor,
+            180.0,
+            100.0,
+            300.0,
+            200.0,
+            UiDropdownPlacement::RightStart,
+            false,
+        );
+
+        assert_eq!(placement, UiDropdownPlacement::RightStart);
+        assert!(x <= 300.0 - 180.0);
+    }
+
+    #[test]
+    fn dropdown_auto_flips_to_left_for_right_edge_anchor() {
+        let anchor = OverlayAnchorRect {
+            left: 282.0,
+            top: 40.0,
+            width: 24.0,
+            height: 24.0,
+        };
+
+        let (placement, _x, _y) = select_dropdown_origin(
+            anchor,
+            140.0,
+            120.0,
+            320.0,
+            240.0,
+            UiDropdownPlacement::RightStart,
+            true,
+        );
+
+        assert_eq!(placement, UiDropdownPlacement::LeftStart);
     }
 }

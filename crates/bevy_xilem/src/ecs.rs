@@ -123,6 +123,24 @@ impl UiComboOption {
     }
 }
 
+/// Preferred dropdown placement around an anchor control.
+///
+/// This supports eight practical directions:
+/// - vertical: top / bottom with start-center-end alignment
+/// - horizontal: left / right with start alignment
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum UiDropdownPlacement {
+    #[default]
+    BottomStart,
+    Bottom,
+    BottomEnd,
+    TopStart,
+    Top,
+    TopEnd,
+    RightStart,
+    LeftStart,
+}
+
 /// Combo-box anchor control.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct UiComboBox {
@@ -131,6 +149,8 @@ pub struct UiComboBox {
     pub is_open: bool,
     pub placeholder: String,
     pub placeholder_key: Option<String>,
+    pub dropdown_placement: UiDropdownPlacement,
+    pub auto_flip_placement: bool,
 }
 
 impl UiComboBox {
@@ -142,6 +162,8 @@ impl UiComboBox {
             is_open: false,
             placeholder: "Select".to_string(),
             placeholder_key: None,
+            dropdown_placement: UiDropdownPlacement::BottomStart,
+            auto_flip_placement: true,
         }
     }
 
@@ -154,6 +176,18 @@ impl UiComboBox {
     #[must_use]
     pub fn with_placeholder_key(mut self, key: impl Into<String>) -> Self {
         self.placeholder_key = Some(key.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_dropdown_placement(mut self, placement: UiDropdownPlacement) -> Self {
+        self.dropdown_placement = placement;
+        self
+    }
+
+    #[must_use]
+    pub fn with_auto_flip_placement(mut self, auto_flip: bool) -> Self {
+        self.auto_flip_placement = auto_flip;
         self
     }
 

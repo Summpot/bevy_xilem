@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use bevy_ecs::{
+    bundle::Bundle,
     entity::Entity,
     hierarchy::{ChildOf, Children},
     prelude::*,
@@ -8,8 +9,8 @@ use bevy_ecs::{
 use masonry::core::{Widget, WidgetRef};
 
 use crate::{
-    AnchoredTo, OverlayAnchorRect, UiComboBox, UiComboBoxChanged, UiDropdownMenu, UiEventQueue,
-    UiOverlayRoot, UiRoot, runtime::MasonryRuntime, widgets::EcsButtonWidget,
+    AnchoredTo, OverlayAnchorRect, UiComboBox, UiComboBoxChanged, UiDialog, UiDropdownMenu,
+    UiEventQueue, UiOverlayRoot, UiRoot, runtime::MasonryRuntime, widgets::EcsButtonWidget,
 };
 
 /// Internal overlay actions emitted by built-in floating UI projectors.
@@ -24,6 +25,23 @@ pub enum OverlayUiAction {
 fn first_overlay_root(world: &mut World) -> Option<Entity> {
     let mut query = world.query_filtered::<Entity, With<UiOverlayRoot>>();
     query.iter(world).next()
+}
+
+/// Ensure an overlay root exists and return its entity id.
+pub fn ensure_overlay_root_entity(world: &mut World) -> Entity {
+    if let Some(existing) = first_overlay_root(world) {
+        return existing;
+    }
+
+    world.spawn((UiRoot, UiOverlayRoot)).id()
+}
+
+/// Spawn an entity bundle under the global overlay root.
+///
+/// This is the recommended entrypoint for app-level modal/dropdown/tooltips.
+pub fn spawn_in_overlay_root<B: Bundle>(world: &mut World, bundle: B) -> Entity {
+    let overlay_root = ensure_overlay_root_entity(world);
+    world.spawn((bundle, ChildOf(overlay_root))).id()
 }
 
 fn collect_dropdowns_for_combo(world: &mut World, combo: Entity) -> Vec<Entity> {
@@ -81,6 +99,39 @@ pub fn ensure_overlay_root(world: &mut World) {
     world.spawn((UiRoot, UiOverlayRoot));
 }
 
+/// Move built-in overlay entities under [`UiOverlayRoot`], creating one if needed.
+///
+/// This keeps modal/dropdown ownership internal to the library and avoids app-level
+/// overlay root plumbing for common cases.
+pub fn reparent_overlay_entities(world: &mut World) {
+    let overlay_entities = {
+        let mut query = world.query_filtered::<Entity, (
+            Or<(With<UiDialog>, With<UiDropdownMenu>)>,
+            Without<UiOverlayRoot>,
+        )>();
+        query.iter(world).collect::<Vec<_>>()
+    };
+
+    if overlay_entities.is_empty() {
+        return;
+    }
+
+    let overlay_root = ensure_overlay_root_entity(world);
+
+    for entity in overlay_entities {
+        let already_parented = world
+            .get::<ChildOf>(entity)
+            .is_some_and(|child_of| child_of.parent() == overlay_root);
+        if already_parented {
+            continue;
+        }
+
+        if world.get_entity(entity).is_ok() {
+            world.entity_mut(entity).insert(ChildOf(overlay_root));
+        }
+    }
+}
+
 /// Consume built-in overlay actions and mutate ECS overlay state.
 pub fn handle_overlay_actions(world: &mut World) {
     let actions = world
@@ -117,16 +168,14 @@ pub fn handle_overlay_actions(world: &mut World) {
                     continue;
                 }
 
-                let Some(overlay_root) = first_overlay_root(world) else {
-                    continue;
-                };
-
-                world.spawn((
-                    UiDropdownMenu,
-                    AnchoredTo(event.entity),
-                    OverlayAnchorRect::default(),
-                    ChildOf(overlay_root),
-                ));
+                spawn_in_overlay_root(
+                    world,
+                    (
+                        UiDropdownMenu,
+                        AnchoredTo(event.entity),
+                        OverlayAnchorRect::default(),
+                    ),
+                );
 
                 if let Some(mut combo_box) = world.get_mut::<UiComboBox>(event.entity) {
                     combo_box.is_open = true;

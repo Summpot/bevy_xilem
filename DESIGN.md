@@ -151,6 +151,28 @@ Built-in floating widgets:
 - `UiDropdownMenu` (floating list in overlay layer)
 - `AnchoredTo(Entity)` + `OverlayAnchorRect` for anchor tracking
 
+Overlay ownership and lifecycle policy:
+
+- `spawn_in_overlay_root(world, bundle)` is the app-facing helper for portal entities.
+- `reparent_overlay_entities` runs in `Update` and automatically moves built-in overlay
+  entities (`UiDialog`, `UiDropdownMenu`) under `UiOverlayRoot`.
+- This removes example/app-level `ensure_overlay_root_entity` plumbing for common modal/dropdown flows.
+
+Modal backdrop dismissal policy:
+
+- `UiDialog` uses a dedicated full-screen backdrop action surface plus a separately aligned
+  dialog panel surface.
+- Clicking outside the panel (on backdrop) emits dismiss action reliably.
+- Centering logic avoids introducing full-screen hit-test blockers above the backdrop.
+
+Dropdown placement policy:
+
+- `UiComboBox` now supports placement preference via `UiDropdownPlacement` with 8 directions:
+  `BottomStart`, `Bottom`, `BottomEnd`, `TopStart`, `Top`, `TopEnd`, `RightStart`, `LeftStart`.
+- `UiComboBox::auto_flip_placement` enables viewport-aware fallback when preferred placement
+  does not fit remaining space (for example, bottom → top near lower window edge).
+- Placement uses runtime window size snapshots and clamps final origin to viewport bounds.
+
 Overlay runtime flow:
 
 - Built-in overlay actions (`OverlayUiAction`) are drained by `handle_overlay_actions`.
@@ -284,6 +306,7 @@ and registers systems:
 
 - `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
 - `Update`: `ensure_overlay_root -> handle_overlay_actions -> sync_dropdown_positions -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
+  (with `reparent_overlay_entities` inserted after `ensure_overlay_root`)
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime` (chained)
 
 Transition execution details:

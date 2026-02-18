@@ -11,7 +11,10 @@ use crate::{
     events::UiEventQueue,
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
     i18n::AppI18n,
-    overlay::{ensure_overlay_root, handle_overlay_actions, sync_dropdown_positions},
+    overlay::{
+        ensure_overlay_root, handle_overlay_actions, reparent_overlay_entities,
+        sync_dropdown_positions,
+    },
     projection::{UiProjectorRegistry, register_builtin_projectors},
     runtime::{MasonryRuntime, inject_bevy_input_into_masonry, rebuild_masonry_runtime},
     styling::{
@@ -56,6 +59,7 @@ impl Plugin for BevyXilemPlugin {
                 Update,
                 (
                     ensure_overlay_root,
+                    reparent_overlay_entities,
                     handle_overlay_actions,
                     sync_dropdown_positions,
                     mark_style_dirty,

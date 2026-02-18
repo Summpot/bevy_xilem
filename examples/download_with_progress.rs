@@ -7,13 +7,13 @@ use std::{
 
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiDialog, UiEventQueue, UiOverlayRoot,
-    UiRoot, UiView, apply_label_style, apply_text_input_style, apply_widget_style,
+    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiDialog, UiEventQueue, UiRoot, UiView,
+    apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPoolBuilder},
     button, emit_ui_action, resolve_style, resolve_style_for_classes, rfd,
-    run_app_with_window_options, switch, text_input,
+    run_app_with_window_options, spawn_in_overlay_root, switch, text_input,
     xilem::{
         core::fork,
         view::{
@@ -98,15 +98,6 @@ struct DownloadProgressPanel;
 #[derive(Component, Debug, Clone, Copy)]
 struct DownloadCompletionDialogModal;
 
-fn ensure_overlay_root_entity(world: &mut World) -> Entity {
-    let existing = {
-        let mut query = world.query_filtered::<Entity, With<UiOverlayRoot>>();
-        query.iter(world).next()
-    };
-
-    existing.unwrap_or_else(|| world.spawn((UiRoot, UiOverlayRoot)).id())
-}
-
 fn despawn_download_modal(world: &mut World) {
     let dialogs = {
         let mut query = world.query_filtered::<Entity, With<DownloadCompletionDialogModal>>();
@@ -122,13 +113,14 @@ fn despawn_download_modal(world: &mut World) {
 
 fn spawn_download_modal(world: &mut World, message: String) {
     despawn_download_modal(world);
-    let overlay_root = ensure_overlay_root_entity(world);
-    world.spawn((
-        UiDialog::new("Download finished", message),
-        StyleClass(vec!["download.dialog".to_string()]),
-        DownloadCompletionDialogModal,
-        ChildOf(overlay_root),
-    ));
+    spawn_in_overlay_root(
+        world,
+        (
+            UiDialog::new("Download finished", message),
+            StyleClass(vec!["download.dialog".to_string()]),
+            DownloadCompletionDialogModal,
+        ),
+    );
 }
 
 fn ensure_io_task_pool() {

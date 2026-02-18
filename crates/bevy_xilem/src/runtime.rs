@@ -63,6 +63,8 @@ pub struct MasonryRuntime {
     active_window: Option<Entity>,
     pointer_info: PointerInfo,
     pointer_state: PointerState,
+    viewport_width: f64,
+    viewport_height: f64,
 }
 
 impl FromWorld for MasonryRuntime {
@@ -88,6 +90,7 @@ impl FromWorld for MasonryRuntime {
             scale_factor: 1.0,
             test_font: None,
         };
+        let initial_viewport = (options.size.width as f64, options.size.height as f64);
 
         let mut render_root =
             RenderRoot::new(initial_root_widget.new_widget.erased(), |_| {}, options);
@@ -111,6 +114,8 @@ impl FromWorld for MasonryRuntime {
                 pointer_type: PointerType::Mouse,
             },
             pointer_state: PointerState::default(),
+            viewport_width: initial_viewport.0,
+            viewport_height: initial_viewport.1,
         }
     }
 }
@@ -123,6 +128,11 @@ fn focus_fallback_widget(render_root: &RenderRoot) -> Option<WidgetId> {
 }
 
 impl MasonryRuntime {
+    #[must_use]
+    pub fn viewport_size(&self) -> (f64, f64) {
+        (self.viewport_width.max(1.0), self.viewport_height.max(1.0))
+    }
+
     pub fn rebuild_root_view(&mut self, next_view: UiView) {
         self.render_root.edit_base_layer(|mut root| {
             let mut root = root.downcast::<Passthrough>();
@@ -250,6 +260,9 @@ impl MasonryRuntime {
         if !self.accepts_window(window) {
             return Handled::No;
         }
+
+        self.viewport_width = width.max(1.0) as f64;
+        self.viewport_height = height.max(1.0) as f64;
 
         self.render_root
             .handle_window_event(WindowEvent::Resize(PhysicalSize::new(
