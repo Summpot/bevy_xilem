@@ -12,7 +12,7 @@ use bevy_xilem::{
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPool},
     bevy_text::TextPlugin,
-    resolve_style, run_app_with_window_options, spawn_in_overlay_root,
+    init_logging, resolve_style, run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
         view::label,
@@ -567,6 +567,8 @@ fn drain_i18n_events(world: &mut World) {
 }
 
 fn build_i18n_app() -> App {
+    init_logging();
+
     ensure_task_pool_initialized();
 
     let mut app = App::new();

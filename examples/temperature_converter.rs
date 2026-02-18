@@ -6,7 +6,8 @@ use bevy_xilem::{
     apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    resolve_style, resolve_style_for_classes, run_app_with_window_options, text_input,
+    init_logging, resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    text_input,
     xilem::{
         view::{CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label},
         winit::{dpi::LogicalSize, error::EventLoopError},
@@ -327,6 +328,8 @@ fn drain_temperature_events(world: &mut World) {
 }
 
 fn build_bevy_temperature_app() -> App {
+    init_logging();
+
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(TemperatureState::default())

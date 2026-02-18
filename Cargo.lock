@@ -1105,6 +1105,7 @@ dependencies = [
  "rfd",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "unic-langid",
  "vello",
  "xilem",

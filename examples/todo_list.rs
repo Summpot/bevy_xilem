@@ -9,7 +9,7 @@ use bevy_xilem::{
         hierarchy::{ChildOf, Children},
         prelude::*,
     },
-    button, checkbox, emit_ui_action, resolve_style, resolve_style_for_classes,
+    button, checkbox, emit_ui_action, init_logging, resolve_style, resolve_style_for_classes,
     resolve_style_for_entity_classes, run_app, text_input,
     xilem::{
         Color, InsertNewline,
@@ -598,6 +598,8 @@ fn drain_todo_events_and_mutate_world(world: &mut World) {
 }
 
 fn build_bevy_todo_app() -> App {
+    init_logging();
+
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(ActiveFilter(FilterType::All))

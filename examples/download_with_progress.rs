@@ -12,7 +12,7 @@ use bevy_xilem::{
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPoolBuilder},
-    button, emit_ui_action, resolve_style, resolve_style_for_classes, rfd,
+    button, emit_ui_action, init_logging, resolve_style, resolve_style_for_classes, rfd,
     run_app_with_window_options, spawn_in_overlay_root, switch, text_input,
     xilem::{
         core::fork,
@@ -660,6 +660,8 @@ fn drain_download_events(world: &mut World) {
 }
 
 fn build_download_app() -> App {
+    init_logging();
+
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(DownloadState::default())

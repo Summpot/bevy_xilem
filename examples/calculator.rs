@@ -6,7 +6,7 @@ use bevy_xilem::{
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    button, resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    button, init_logging, resolve_style, resolve_style_for_classes, run_app_with_window_options,
     xilem::{
         view::{FlexExt as _, flex_col, flex_row, label},
         winit::{dpi::LogicalSize, error::EventLoopError},
@@ -624,6 +624,8 @@ fn drain_calc_events(world: &mut World) {
 }
 
 fn build_bevy_calculator_app() -> App {
+    init_logging();
+
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(CalculatorEngine::default())

@@ -11,7 +11,7 @@ use bevy_xilem::{
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    button, emit_ui_action, resolve_style, resolve_style_for_classes,
+    button, emit_ui_action, init_logging, resolve_style, resolve_style_for_classes,
     resolve_style_for_entity_classes, run_app_with_window_options, slider,
     xilem::{
         Color,
@@ -518,6 +518,8 @@ fn drain_timer_events_and_tick(world: &mut World) {
 }
 
 fn build_bevy_timer_app() -> App {
+    init_logging();
+
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(TimerState::default())

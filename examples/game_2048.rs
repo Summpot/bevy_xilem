@@ -11,7 +11,8 @@ use bevy_xilem::{
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_input::{ButtonInput, keyboard::KeyCode},
     bevy_window::WindowResized,
-    button, emit_ui_action, resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    button, emit_ui_action, init_logging, resolve_style, resolve_style_for_classes,
+    run_app_with_window_options,
     xilem::{
         Color,
         masonry::layout::Length,
@@ -1830,6 +1831,8 @@ fn apply_keyboard_game_input(world: &mut World) {
 }
 
 fn build_2048_app() -> App {
+    init_logging();
+
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(ButtonInput::<KeyCode>::default())

@@ -7,8 +7,8 @@ use bevy_xilem::{
     UiRoot, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    button, resolve_style, resolve_style_for_entity_classes, run_app_with_window_options,
-    spawn_in_overlay_root, switch,
+    button, init_logging, resolve_style, resolve_style_for_entity_classes,
+    run_app_with_window_options, spawn_in_overlay_root, switch,
     xilem::{
         Color,
         style::Style as _,
@@ -1180,6 +1180,8 @@ fn drain_gallery_events(world: &mut World) {
 }
 
 fn build_theme_gallery_app() -> App {
+    init_logging();
+
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(GalleryState::default())

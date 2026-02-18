@@ -6,7 +6,7 @@ use bevy_xilem::{
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPool},
     bevy_text::{Font, TextPlugin},
-    run_app_with_window_options,
+    init_logging, run_app_with_window_options,
     xilem::{
         Color,
         winit::{dpi::LogicalSize, error::EventLoopError},
@@ -133,6 +133,8 @@ fn setup_cjk_styles(mut style_sheet: ResMut<StyleSheet>) {
 }
 
 fn build_cjk_app() -> App {
+    init_logging();
+
     ensure_task_pool_initialized();
 
     let mut app = App::new();

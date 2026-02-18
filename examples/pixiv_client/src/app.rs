@@ -15,8 +15,8 @@ use bevy_xilem::{
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
     bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim},
     bevy_window::WindowResized,
-    button, resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
-    run_app_with_window_options, text_input,
+    button, init_logging, resolve_style, resolve_style_for_classes,
+    resolve_style_for_entity_classes, run_app_with_window_options, text_input,
     xilem::{
         Color,
         masonry::layout::{Dim, Length},
@@ -2279,6 +2279,8 @@ fn apply_image_results(world: &mut World) {
 }
 
 fn build_app() -> App {
+    init_logging();
+
     ensure_task_pool_initialized();
 
     let mut app = App::new();

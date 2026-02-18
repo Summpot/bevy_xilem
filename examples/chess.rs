@@ -10,7 +10,7 @@ use bevy_xilem::{
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    button, button_with_child, checkbox, resolve_style, resolve_style_for_classes,
+    button, button_with_child, checkbox, init_logging, resolve_style, resolve_style_for_classes,
     run_app_with_window_options, slider,
     xilem::{
         Color,
@@ -844,6 +844,8 @@ fn drain_events_and_tick(world: &mut World) {
 }
 
 fn build_bevy_chess_app() -> App {
+    init_logging();
+
     let game = engine::new_game();
     let ui = ChessUiResource::from_game(&game);
 
