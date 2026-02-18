@@ -3,7 +3,7 @@ use std::{fmt::Debug, sync::Arc};
 use bevy_ecs::{
     entity::Entity,
     message::MessageReader,
-    prelude::{FromWorld, NonSendMut, Query, ResMut, With, World},
+    prelude::{Added, FromWorld, NonSendMut, Query, ResMut, With, World},
 };
 use bevy_input::{
     ButtonState,
@@ -358,7 +358,7 @@ fn map_mouse_button(button: MouseButton) -> Option<PointerButton> {
 
 /// PreUpdate input bridge: consume Bevy window/input messages and inject them into Masonry.
 pub fn inject_bevy_input_into_masonry(
-    mut runtime: NonSendMut<MasonryRuntime>,
+    runtime: Option<NonSendMut<MasonryRuntime>>,
     mut overlay_routing: ResMut<OverlayPointerRoutingState>,
     mut cursor_moved: MessageReader<CursorMoved>,
     mut cursor_left: MessageReader<CursorLeft>,
@@ -367,6 +367,10 @@ pub fn inject_bevy_input_into_masonry(
     mut window_resized: MessageReader<WindowResized>,
     mut window_scale_factor_changed: MessageReader<WindowScaleFactorChanged>,
 ) {
+    let Some(mut runtime) = runtime else {
+        return;
+    };
+
     for event in cursor_moved.read() {
         runtime.handle_cursor_moved(event.window, event.position.x, event.position.y);
     }
@@ -407,10 +411,20 @@ pub fn inject_bevy_input_into_masonry(
 
 /// Attach Masonry runtime viewport state to the primary Bevy winit window once available.
 pub fn initialize_masonry_runtime_from_primary_window(
-    mut runtime: NonSendMut<MasonryRuntime>,
+    runtime: Option<NonSendMut<MasonryRuntime>>,
+    added_primary_window_query: Query<Entity, (With<PrimaryWindow>, Added<PrimaryWindow>)>,
     primary_window_query: Query<Entity, With<PrimaryWindow>>,
 ) {
-    let Ok(primary_window_entity) = primary_window_query.single() else {
+    let Some(mut runtime) = runtime else {
+        return;
+    };
+
+    let primary_window_entity = added_primary_window_query
+        .iter()
+        .next()
+        .or_else(|| primary_window_query.iter().next());
+
+    let Some(primary_window_entity) = primary_window_entity else {
         return;
     };
 
@@ -432,10 +446,18 @@ pub fn initialize_masonry_runtime_from_primary_window(
 
 /// PostUpdate rebuild step: diff synthesized root against retained Masonry tree.
 pub fn rebuild_masonry_runtime(world: &mut World) {
-    let roots = world.resource::<SynthesizedUiViews>().roots.clone();
+    let Some(roots) = world
+        .get_resource::<SynthesizedUiViews>()
+        .map(|views| views.roots.clone())
+    else {
+        return;
+    };
+
     let next_root = compose_runtime_root(&roots);
 
-    world
-        .non_send_resource_mut::<MasonryRuntime>()
-        .rebuild_root_view(next_root);
+    let Some(mut runtime) = world.get_non_send_resource_mut::<MasonryRuntime>() else {
+        return;
+    };
+
+    runtime.rebuild_root_view(next_root);
 }

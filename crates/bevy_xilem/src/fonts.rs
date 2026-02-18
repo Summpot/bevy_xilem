@@ -88,9 +88,13 @@ pub fn collect_bevy_font_assets(
 ///
 /// This is the bridge between Bevy-side app setup and Xilem/Masonry font shaping.
 pub fn sync_fonts_to_xilem(
-    mut runtime: NonSendMut<MasonryRuntime>,
+    runtime: Option<NonSendMut<MasonryRuntime>>,
     mut bridge: ResMut<XilemFontBridge>,
 ) {
+    let Some(mut runtime) = runtime else {
+        return;
+    };
+
     let pending = bridge.take_pending_fonts();
     if pending.is_empty() {
         return;

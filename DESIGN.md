@@ -391,7 +391,15 @@ It also registers built-in projectors.
 - `run_app_with_window_options(bevy_app, title, configure_window)`
 
 These helpers configure Bevy's primary `Window` component (title/size/resizable hints)
-and then call Bevy's native `App::run()`.
+and ensure native Bevy window-loop ownership is active before calling `App::run()`.
+
+Specifically, if missing, they install the same windowing path used by
+`bevy::DefaultPlugins` for desktop apps:
+
+- `AccessibilityPlugin` (provides accessibility resources required by winit startup systems)
+- `InputPlugin` (initializes keyboard/mouse message streams consumed by winit bridge systems)
+- `WindowPlugin` (configured with primary-window title/size/resizable hints)
+- `WinitPlugin` (sets Bevy's winit event-loop runner)
 
 No custom Xilem runner/event loop is started.
 

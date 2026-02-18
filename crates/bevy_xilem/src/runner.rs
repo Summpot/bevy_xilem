@@ -1,5 +1,7 @@
+use bevy_a11y::AccessibilityPlugin;
 use bevy_app::App;
-use bevy_window::{PrimaryWindow, Window};
+use bevy_input::InputPlugin;
+use bevy_window::{PrimaryWindow, Window, WindowPlugin};
 use xilem::winit::{dpi::Size, error::EventLoopError};
 
 /// Compatibility window options applied to Bevy's primary window before `App::run()`.
@@ -40,7 +42,7 @@ fn size_to_logical(size: Size) -> (f32, f32) {
     }
 }
 
-fn apply_window_options(window: &mut Window, title: &str, options: BevyWindowOptions) {
+fn apply_window_options(window: &mut Window, title: &str, options: &BevyWindowOptions) {
     window.title = title.to_string();
 
     if let Some(resizable) = options.resizable {
@@ -59,7 +61,49 @@ fn apply_window_options(window: &mut Window, title: &str, options: BevyWindowOpt
     }
 }
 
-fn configure_primary_window(app: &mut App, title: &str, options: BevyWindowOptions) {
+fn build_primary_window(title: &str, options: &BevyWindowOptions) -> Window {
+    let mut window = Window::default();
+    apply_window_options(&mut window, title, options);
+    window
+}
+
+fn primary_window_exists(app: &mut App) -> bool {
+    let mut query = app
+        .world_mut()
+        .query_filtered::<&Window, bevy_ecs::query::With<PrimaryWindow>>();
+    query.iter(app.world_mut()).next().is_some()
+}
+
+fn ensure_native_windowing_plugins(app: &mut App, primary_window: &Window) {
+    let had_primary_window = primary_window_exists(app);
+
+    // Bevy's native window lifecycle depends on the same core plugin stack used
+    // by `bevy::DefaultPlugins` for windowed apps.
+    if !app.is_plugin_added::<AccessibilityPlugin>() {
+        app.add_plugins(AccessibilityPlugin);
+    }
+
+    if !app.is_plugin_added::<InputPlugin>() {
+        app.add_plugins(InputPlugin);
+    }
+
+    if !app.is_plugin_added::<WindowPlugin>() {
+        app.add_plugins(WindowPlugin {
+            primary_window: if had_primary_window {
+                None
+            } else {
+                Some(primary_window.clone())
+            },
+            ..Default::default()
+        });
+    }
+
+    if !app.is_plugin_added::<bevy_winit::WinitPlugin>() {
+        app.add_plugins(bevy_winit::WinitPlugin::default());
+    }
+}
+
+fn configure_primary_window(app: &mut App, title: &str, options: &BevyWindowOptions) {
     let mut query = app
         .world_mut()
         .query_filtered::<&mut Window, bevy_ecs::query::With<PrimaryWindow>>();
@@ -69,8 +113,7 @@ fn configure_primary_window(app: &mut App, title: &str, options: BevyWindowOptio
         return;
     }
 
-    let mut window = Window::default();
-    apply_window_options(&mut window, title, options);
+    let window = build_primary_window(title, options);
     app.world_mut().spawn((window, PrimaryWindow));
 }
 
@@ -92,7 +135,9 @@ pub fn run_app_with_window_options(
 ) -> Result<(), EventLoopError> {
     let title = window_title.into();
     let options = configure_window(BevyWindowOptions::default());
-    configure_primary_window(&mut bevy_app, &title, options);
+    let primary_window = build_primary_window(&title, &options);
+    ensure_native_windowing_plugins(&mut bevy_app, &primary_window);
+    configure_primary_window(&mut bevy_app, &title, &options);
 
     let _ = bevy_app.run();
     Ok(())
@@ -111,7 +156,7 @@ mod tests {
             .with_min_inner_size(PhysicalSize::new(320, 200))
             .with_resizable(false);
 
-        apply_window_options(&mut window, "Test", options);
+        apply_window_options(&mut window, "Test", &options);
 
         assert_eq!(window.title, "Test");
         assert_eq!(window.width(), 640.0);

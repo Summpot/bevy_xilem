@@ -6,6 +6,7 @@ license.workspace = true
 readme = "../../README.md"
 
 [dependencies]
+bevy_a11y.workspace = true
 bevy_app.workspace = true
 bevy_asset.workspace = true
 bevy_ecs.workspace = true

@@ -134,6 +134,14 @@ fn synthesize_entity(
 
 /// Bevy system that synthesizes all roots and updates [`SynthesizedUiViews`] + [`UiSynthesisStats`].
 pub fn synthesize_ui(world: &mut World) {
+    if !world.contains_non_send::<crate::runtime::MasonryRuntime>()
+        || !world.contains_resource::<UiProjectorRegistry>()
+        || !world.contains_resource::<SynthesizedUiViews>()
+        || !world.contains_resource::<UiSynthesisStats>()
+    {
+        return;
+    }
+
     let roots = gather_ui_roots(world);
     let (synthesized, stats) = world.resource_scope(|world, registry: Mut<UiProjectorRegistry>| {
         synthesize_roots_with_stats(world, &registry, roots)

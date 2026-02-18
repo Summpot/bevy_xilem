@@ -858,7 +858,9 @@ pub fn sync_overlay_positions(world: &mut World) {
     };
 
     let hit_boxes = {
-        let runtime = world.non_send_resource::<MasonryRuntime>();
+        let Some(runtime) = world.get_non_send_resource::<MasonryRuntime>() else {
+            return;
+        };
         let root = runtime.render_root.get_layer_root(0);
         let mut boxes = Vec::new();
         collect_entity_hit_boxes(root, &mut boxes);
