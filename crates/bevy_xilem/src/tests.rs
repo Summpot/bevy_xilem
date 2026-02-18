@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{Arc, Once},
+    time::Duration,
+};
 
 use crate::{
     AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, Hovered, Pressed, ProjectionCtx,
@@ -28,6 +31,16 @@ enum TestAction {
 
 fn project_test_root(_: &TestRoot, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(ecs_button(ctx.entity, TestAction::Clicked, "Click"))
+}
+
+fn init_test_tracing() {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::new("bevy_xilem=debug"))
+            .with_test_writer()
+            .try_init();
+    });
 }
 
 #[test]
@@ -820,6 +833,33 @@ fn sync_overlay_positions_uses_dynamic_primary_window_size_and_updates_bounds() 
 }
 
 #[test]
+fn sync_overlay_positions_works_without_primary_window_marker() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(1280.0, 720.0);
+    app.world_mut().spawn((window,));
+
+    let dialog = app
+        .world_mut()
+        .spawn((crate::UiDialog::new("title", "body"),))
+        .id();
+
+    app.update();
+
+    let computed = *app
+        .world()
+        .get::<crate::OverlayComputedPosition>(dialog)
+        .expect("dialog should have computed position without PrimaryWindow marker");
+
+    assert!(computed.width > 1.0);
+    assert!(computed.height > 1.0);
+    assert!(computed.x > 0.0);
+    assert!(computed.y > 0.0);
+}
+
+#[test]
 fn native_dismiss_overlays_on_click_closes_only_outside_bounds_and_anchor() {
     let mut world = World::new();
     world.insert_resource(ButtonInput::<MouseButton>::default());
@@ -876,6 +916,73 @@ fn native_dismiss_overlays_on_click_closes_only_outside_bounds_and_anchor() {
 
     crate::native_dismiss_overlays_on_click(&mut world);
     assert!(world.get_entity(dropdown).is_err());
+}
+
+#[test]
+fn native_dismiss_overlays_on_click_works_without_primary_window_marker() {
+    let mut world = World::new();
+    world.insert_resource(ButtonInput::<MouseButton>::default());
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    window.set_cursor_position(Some(Vec2::new(790.0, 590.0)));
+    world.spawn((window,));
+
+    {
+        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
+        input.press(MouseButton::Left);
+    }
+
+    let dialog = world
+        .spawn((
+            crate::UiDialog::new("title", "body"),
+            crate::OverlayConfig {
+                placement: crate::OverlayPlacement::Center,
+                anchor: None,
+                auto_flip: false,
+            },
+            crate::OverlayBounds {
+                rect: Rect::from_corners(Vec2::new(100.0, 100.0), Vec2::new(300.0, 260.0)),
+            },
+            crate::AutoDismiss,
+        ))
+        .id();
+
+    crate::native_dismiss_overlays_on_click(&mut world);
+
+    assert!(world.get_entity(dialog).is_err());
+}
+
+#[test]
+fn native_dismiss_overlays_on_click_logs_when_window_missing() {
+    init_test_tracing();
+
+    let mut world = World::new();
+    world.insert_resource(ButtonInput::<MouseButton>::default());
+
+    {
+        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
+        input.press(MouseButton::Left);
+    }
+
+    let dialog = world
+        .spawn((
+            crate::UiDialog::new("title", "body"),
+            crate::OverlayConfig {
+                placement: crate::OverlayPlacement::Center,
+                anchor: None,
+                auto_flip: false,
+            },
+            crate::OverlayBounds {
+                rect: Rect::from_corners(Vec2::new(100.0, 100.0), Vec2::new(300.0, 260.0)),
+            },
+            crate::AutoDismiss,
+        ))
+        .id();
+
+    crate::native_dismiss_overlays_on_click(&mut world);
+
+    assert!(world.get_entity(dialog).is_ok());
 }
 
 #[test]

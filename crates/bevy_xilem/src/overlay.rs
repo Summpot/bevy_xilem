@@ -12,7 +12,7 @@ use bevy_input::{
     mouse::{MouseButton, MouseButtonInput},
 };
 use bevy_math::{Rect, Vec2};
-use bevy_window::{PrimaryWindow, Window};
+use bevy_window::Window;
 use masonry::core::{Widget, WidgetRef};
 
 use crate::{
@@ -730,8 +730,9 @@ pub fn sync_overlay_positions(world: &mut World) {
     }
 
     let (viewport_width, viewport_height) = {
-        let mut window_query = world.query_filtered::<&Window, With<PrimaryWindow>>();
+        let mut window_query = world.query::<&Window>();
         let Some(window) = window_query.iter(world).next() else {
+            tracing::error!("sync_overlay_positions could not find any Window entity");
             return;
         };
 
@@ -833,7 +834,8 @@ pub fn sync_overlay_positions(world: &mut World) {
             height,
         };
         tracing::debug!(
-            "Calculated overlay rect: {:?}, Auto-flip triggered: {}",
+            "Calculated overlay rect for {:?}: {:?}, Auto-flip triggered: {}",
+            entity,
             final_rect,
             did_flip
         );
@@ -855,6 +857,15 @@ pub fn sync_overlay_positions(world: &mut World) {
                 placement: chosen_placement,
             });
         }
+
+        tracing::debug!(
+            "Applied overlay position to projection state for {:?}: x={}, y={}, w={}, h={}",
+            entity,
+            x,
+            y,
+            width,
+            height
+        );
 
         let bounds_rect = Rect::from_corners(
             Vec2::new(x as f32, y as f32),
@@ -905,16 +916,21 @@ pub fn native_dismiss_overlays_on_click(world: &mut World) {
         return;
     }
 
+    tracing::debug!("Mouse clicked! Searching for window...");
+
     let cursor_pos = {
-        let mut window_query = world.query_filtered::<&Window, With<PrimaryWindow>>();
+        let mut window_query = world.query::<&Window>();
         let Some(window) = window_query.iter(world).next() else {
-            return;
-        };
-        let Some(cursor_pos) = window.cursor_position() else {
+            tracing::error!("Could not find a Window!");
             return;
         };
 
-        tracing::debug!("Native click detected at: {:?}", cursor_pos);
+        let Some(cursor_pos) = window.cursor_position() else {
+            tracing::debug!("Cursor is out of window bounds.");
+            return;
+        };
+
+        tracing::debug!("Native click at: {:?}", cursor_pos);
         cursor_pos
     };
 

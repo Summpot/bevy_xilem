@@ -64,7 +64,6 @@ impl Plugin for BevyXilemPlugin {
                     ensure_overlay_root,
                     reparent_overlay_entities,
                     ensure_overlay_defaults,
-                    native_dismiss_overlays_on_click,
                     handle_overlay_actions,
                     mark_style_dirty,
                     sync_style_targets,
@@ -74,17 +73,22 @@ impl Plugin for BevyXilemPlugin {
             )
             .add_systems(
                 Update,
-                animate_style_transitions.after(AnimationSystem::AnimationUpdate),
+                native_dismiss_overlays_on_click
+                    .after(ensure_overlay_defaults)
+                    .before(handle_overlay_actions),
             )
             .add_systems(
-                PostUpdate,
-                (
-                    sync_overlay_positions,
-                    synthesize_ui,
-                    rebuild_masonry_runtime,
-                )
-                    .chain(),
-            );
+                Update,
+                animate_style_transitions.after(AnimationSystem::AnimationUpdate),
+            )
+            .add_systems(PostUpdate, (synthesize_ui, rebuild_masonry_runtime).chain());
+
+        // Run overlay placement after Masonry's retained tree has been rebuilt,
+        // so anchor/widget geometry is up-to-date for this frame.
+        app.add_systems(
+            PostUpdate,
+            sync_overlay_positions.after(rebuild_masonry_runtime),
+        );
 
         let mut registry = app.world_mut().resource_mut::<UiProjectorRegistry>();
         register_builtin_projectors(&mut registry);

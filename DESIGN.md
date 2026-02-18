@@ -183,8 +183,10 @@ Overlay placement policy:
 
 - `sync_overlay_positions` runs in `PostUpdate` and computes final positions for all entities
   with `OverlayConfig`.
-- The system reads dynamic `PrimaryWindow` logical width/height every frame and anchor widget
-  rectangles gathered from Masonry widget geometry.
+- The system reads dynamic logical width/height from the first available Bevy `Window`
+  every frame and anchor widget rectangles gathered from Masonry widget geometry.
+- Placement sync is ordered after Masonry retained-tree rebuild so anchor/widget geometry is
+  up-to-date before collision and auto-flip resolution.
 - Collision handling computes visible area and supports automatic flipping when preferred
   placement would overflow (notably bottom → top for near-bottom dropdowns).
 - Final clamped coordinates are written to `OverlayComputedPosition`, and overlay projectors
@@ -203,7 +205,7 @@ Overlay runtime flow:
 Pointer routing + click-outside:
 
 - `native_dismiss_overlays_on_click` runs in `Update` and uses native Bevy mouse state
-  (`ButtonInput<MouseButton>`) plus `PrimaryWindow::cursor_position`.
+  (`ButtonInput<MouseButton>`) plus cursor position from the first available Bevy `Window`.
 - Outside clicks are resolved against stored `OverlayBounds` and optional anchor rectangles
   (`OverlayAnchorRect`) to keep trigger clicks from self-dismissing a just-opened dropdown.
 - `AutoDismiss` overlays (dialogs/dropdowns) are closed directly in ECS without relying on
@@ -336,9 +338,11 @@ and registers tweening support with:
 and registers systems:
 
 - `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> bubble_ui_pointer_events -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
-- `Update`: `ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> native_dismiss_overlays_on_click -> handle_overlay_actions -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
-  (with `reparent_overlay_entities` inserted after `ensure_overlay_root`)
-- `PostUpdate`: `sync_overlay_positions -> synthesize_ui -> rebuild_masonry_runtime` (chained)
+- `Update`: `ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> handle_overlay_actions -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
+  with `native_dismiss_overlays_on_click` explicitly registered in `Update` between defaults
+  and action handling
+- `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime`, followed by
+  `sync_overlay_positions` after runtime rebuild
 
 Transition execution details:
 
