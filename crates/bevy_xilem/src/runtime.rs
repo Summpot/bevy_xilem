@@ -3,12 +3,13 @@ use std::{fmt::Debug, sync::Arc};
 use bevy_ecs::{
     entity::Entity,
     message::MessageReader,
-    prelude::{Added, FromWorld, NonSendMut, Query, ResMut, With, World},
+    prelude::{Added, FromWorld, NonSendMut, Query, Res, ResMut, With, World},
 };
 use bevy_input::{
     ButtonState,
     mouse::{MouseButton, MouseButtonInput, MouseScrollUnit, MouseWheel},
 };
+use bevy_time::Time;
 use bevy_window::{
     CursorLeft, CursorMoved, PrimaryWindow, WindowResized, WindowScaleFactorChanged,
 };
@@ -21,10 +22,12 @@ use masonry::{
         WindowEvent,
     },
     dpi::{PhysicalPosition, PhysicalSize},
+    peniko::Color,
     theme::default_property_set,
+    vello::{Renderer, wgpu},
     widgets::Passthrough,
 };
-use masonry_winit::app::{ExistingWindowMetrics, existing_window_metrics};
+use masonry_winit::app::{ExistingWindowMetrics, ExternalWindowSurface, existing_window_metrics};
 use xilem::style::Style as _;
 use xilem_core::{ProxyError, RawProxy, SendMessage, View, ViewId};
 use xilem_masonry::{
@@ -70,6 +73,8 @@ pub struct MasonryRuntime {
     pointer_state: PointerState,
     viewport_width: f64,
     viewport_height: f64,
+    window_surface: Option<ExternalWindowSurface>,
+    renderer: Option<Renderer>,
 }
 
 impl FromWorld for MasonryRuntime {
@@ -122,6 +127,8 @@ impl FromWorld for MasonryRuntime {
             pointer_state: PointerState::default(),
             viewport_width: initial_viewport.0,
             viewport_height: initial_viewport.1,
+            window_surface: None,
+            renderer: None,
         }
     }
 }
@@ -140,20 +147,7 @@ impl MasonryRuntime {
     }
 
     pub fn attach_to_window(&mut self, window: Entity, metrics: ExistingWindowMetrics) {
-        self.active_window = Some(window);
-        self.window_scale_factor = metrics.scale_factor.max(f64::EPSILON);
-        self.viewport_width = metrics.logical_size.width.max(1.0);
-        self.viewport_height = metrics.logical_size.height.max(1.0);
-
-        let _ = self
-            .render_root
-            .handle_window_event(WindowEvent::Rescale(self.window_scale_factor));
-        let _ = self
-            .render_root
-            .handle_window_event(WindowEvent::Resize(PhysicalSize::new(
-                metrics.physical_size.width.max(1),
-                metrics.physical_size.height.max(1),
-            )));
+        self.sync_window_metrics(window, metrics);
     }
 
     #[must_use]
@@ -330,6 +324,79 @@ impl MasonryRuntime {
                 physical_height,
             )))
     }
+
+    pub fn ensure_external_surface(&mut self, window: Arc<xilem::winit::window::Window>) -> bool {
+        if self.window_surface.is_some() {
+            return true;
+        }
+
+        match ExternalWindowSurface::new(window, wgpu::PresentMode::AutoVsync) {
+            Ok(surface) => {
+                self.window_surface = Some(surface);
+                true
+            }
+            Err(error) => {
+                tracing::error!("failed to initialize external Masonry surface: {error}");
+                false
+            }
+        }
+    }
+
+    pub fn paint_frame(&mut self, delta: std::time::Duration) {
+        let _ = self
+            .render_root
+            .handle_window_event(WindowEvent::AnimFrame(delta));
+        let logical_size = self.render_root.size();
+        let (scene, _tree_update) = self.render_root.redraw();
+
+        let Some(surface) = self.window_surface.as_mut() else {
+            return;
+        };
+
+        let _ = surface.sync_window_metrics();
+        surface.render_scene(
+            &mut self.renderer,
+            scene,
+            logical_size.width.max(1),
+            logical_size.height.max(1),
+            Color::BLACK,
+        );
+    }
+
+    fn sync_window_metrics(&mut self, window: Entity, metrics: ExistingWindowMetrics) {
+        let window_changed = self.active_window != Some(window);
+        if window_changed {
+            self.active_window = Some(window);
+            self.window_surface = None;
+            self.renderer = None;
+        }
+
+        let next_scale = metrics.scale_factor.max(f64::EPSILON);
+        let next_viewport_width = metrics.logical_size.width.max(1.0);
+        let next_viewport_height = metrics.logical_size.height.max(1.0);
+        let needs_rescale = (self.window_scale_factor - next_scale).abs() > f64::EPSILON;
+        let needs_resize = (self.viewport_width - next_viewport_width).abs() > f64::EPSILON
+            || (self.viewport_height - next_viewport_height).abs() > f64::EPSILON;
+
+        self.window_scale_factor = next_scale;
+        self.viewport_width = next_viewport_width;
+        self.viewport_height = next_viewport_height;
+
+        if window_changed || needs_rescale {
+            let _ = self
+                .render_root
+                .handle_window_event(WindowEvent::Rescale(self.window_scale_factor));
+        }
+
+        if window_changed || needs_resize || needs_rescale {
+            let _ = self
+                .render_root
+                .handle_window_event(WindowEvent::Resize(PhysicalSize::new(
+                    metrics.physical_size.width.max(1),
+                    metrics.physical_size.height.max(1),
+                )));
+        }
+    }
 }
 
 fn compose_runtime_root(roots: &[UiView]) -> UiView {
@@ -460,4 +527,41 @@ pub fn rebuild_masonry_runtime(world: &mut World) {
     };
 
     runtime.rebuild_root_view(next_root);
+}
+
+/// Last-stage paint pass: submit Masonry scene through Vello and present to the primary window.
+pub fn paint_masonry_ui(
+    runtime: Option<NonSendMut<MasonryRuntime>>,
+    primary_window_query: Query<Entity, With<PrimaryWindow>>,
+    time: Res<Time>,
+) {
+    let Some(mut runtime) = runtime else {
+        return;
+    };
+
+    let Some(primary_window_entity) = primary_window_query.iter().next() else {
+        return;
+    };
+
+    let Some((window, metrics)) = bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
+        let winit_windows = winit_windows.borrow();
+        winit_windows
+            .get_window(primary_window_entity)
+            .map(|window| {
+                let cloned = window.clone_window();
+                let metrics = existing_window_metrics(&cloned);
+                (cloned, metrics)
+            })
+    }) else {
+        return;
+    };
+
+    runtime.attach_to_window(primary_window_entity, metrics);
+
+    if !runtime.ensure_external_surface(window.clone()) {
+        return;
+    }
+
+    runtime.paint_frame(time.delta());
+    window.request_redraw();
 }

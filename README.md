@@ -11,6 +11,7 @@ You describe UI from ECS components (via projectors), handle user interactions t
 - Bevy-first update loop and scheduling
 - ECS-driven UI projection (`Component -> UiView`)
 - Typed UI action queue (`UiEventQueue`) for interaction handling
+- Explicit Masonry/Vello paint pass in `Last` (render + present without Bevy render plugins)
 - Ergonomic ECS control helpers (`button`, `checkbox`, `slider`, `text_input`, ...)
 - Built-in synchronous i18n/l10n via `AppI18n` + `LocalizeText`
 - Bevy-native run helpers (`run_app*`) that configure the primary window and auto-enable Bevy's native window plugins (`AccessibilityPlugin` + `InputPlugin` + `WindowPlugin` + `WinitPlugin`) before `App::run()`
@@ -218,6 +219,7 @@ Legacy `ecs_*` names are still available for compatibility.
 2. A Bevy system drains typed actions in `PreUpdate`
 3. Your app mutates ECS state/resources
 4. `bevy_xilem` synthesizes and rebuilds UI in `PostUpdate`
+5. `bevy_xilem` paints/presents the retained Masonry scene in `Last`
 
 This keeps interaction handling explicit and ECS-friendly.
 

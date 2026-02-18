@@ -1,4 +1,4 @@
-use bevy_app::{App, Plugin, PostUpdate, PreUpdate, Update};
+use bevy_app::{App, Last, Plugin, PostUpdate, PreUpdate, Update};
 use bevy_asset::AssetEvent;
 use bevy_ecs::schedule::IntoScheduleConfigs;
 use bevy_input::mouse::{MouseButtonInput, MouseWheel};
@@ -20,7 +20,7 @@ use crate::{
     projection::{UiProjectorRegistry, register_builtin_projectors},
     runtime::{
         MasonryRuntime, initialize_masonry_runtime_from_primary_window,
-        inject_bevy_input_into_masonry, rebuild_masonry_runtime,
+        inject_bevy_input_into_masonry, paint_masonry_ui, rebuild_masonry_runtime,
     },
     styling::{
         StyleSheet, animate_style_transitions, mark_style_dirty, sync_style_targets,
@@ -92,6 +92,8 @@ impl Plugin for BevyXilemPlugin {
             PostUpdate,
             sync_overlay_positions.after(rebuild_masonry_runtime),
         );
+
+        app.add_systems(Last, paint_masonry_ui);
 
         let mut registry = app.world_mut().resource_mut::<UiProjectorRegistry>();
         register_builtin_projectors(&mut registry);

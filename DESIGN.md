@@ -56,6 +56,20 @@ and translates them to Masonry events:
 
 which are injected into `MasonryRuntime.render_root`.
 
+### 3.5) Explicit Masonry/Vello paint pass (Last)
+
+Because Bevy's renderer plugins are intentionally not required for the retained UI path,
+`bevy_xilem` performs an explicit Vello paint/present pass in `Last`:
+
+- `RenderRoot::redraw()` produces the current scene.
+- `ExternalWindowSurface` (from `masonry_winit`) owns persistent surface/device state bound
+  to the Bevy primary window.
+- the pass renders to an intermediate texture, blits to the swapchain surface, and presents.
+- the primary window requests another redraw to keep UI animations and visual updates flowing.
+
+This avoids the "window opens but no pixels are drawn" failure mode when only
+window/input plugins are active.
+
 ### 4) Zero-closure ECS button path
 
 To remove user-facing closure boilerplate:
@@ -366,6 +380,7 @@ and registers systems:
 - `Update`: `ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> handle_overlay_actions -> sync_overlay_stack_lifecycle -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime`, followed by
   `sync_overlay_positions` after runtime rebuild
+- `Last`: `paint_masonry_ui` (explicit Masonry/Vello render + present pass)
 
 Transition execution details:
 
