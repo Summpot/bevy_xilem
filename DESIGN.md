@@ -154,6 +154,8 @@ Universal placement model:
   - `anchor: Some(entity)` anchors to another UI entity (dropdowns/tooltips).
 - `OverlayComputedPosition { x, y, width, height, placement }` stores runtime-resolved
   placement after collision checks.
+- `OverlayBounds { rect }` stores runtime-computed screen-space bounds for native Bevy
+  click-outside hit tests.
 
 Built-in floating widgets:
 
@@ -181,12 +183,14 @@ Overlay placement policy:
 
 - `sync_overlay_positions` runs in `PostUpdate` and computes final positions for all entities
   with `OverlayConfig`.
-- The system uses `PrimaryWindow` bounds (with runtime viewport fallback) and anchor widget
+- The system reads dynamic `PrimaryWindow` logical width/height every frame and anchor widget
   rectangles gathered from Masonry widget geometry.
 - Collision handling computes visible area and supports automatic flipping when preferred
   placement would overflow (notably bottom → top for near-bottom dropdowns).
 - Final clamped coordinates are written to `OverlayComputedPosition`, and overlay projectors
   read these values when rendering transformed surfaces.
+- The same pass also writes `OverlayBounds` for each overlay surface so dismissal logic can run
+  without depending on Xilem/Masonry internal event routing.
 
 Overlay runtime flow:
 
@@ -198,13 +202,14 @@ Overlay runtime flow:
 
 Pointer routing + click-outside:
 
-- `dismiss_overlays_on_click` performs global pointer routing with overlay-first hit testing.
-- Overlay hit boxes are collected from retained Masonry geometry and split by
-  `UiOverlayRoot` ancestry (overlay first, main-root fallback).
-- Outside clicks close `AutoDismiss` overlays (dropdown/dialog) and suppress combo-trigger
-  reopen races on the same click.
-- `bubble_ui_pointer_events` emits `UiPointerEvent` and walks up `ChildOf` parent chains
-  until roots or `StopUiPointerPropagation`.
+- `native_dismiss_overlays_on_click` runs in `Update` and uses native Bevy mouse state
+  (`ButtonInput<MouseButton>`) plus `PrimaryWindow::cursor_position`.
+- Outside clicks are resolved against stored `OverlayBounds` and optional anchor rectangles
+  (`OverlayAnchorRect`) to keep trigger clicks from self-dismissing a just-opened dropdown.
+- `AutoDismiss` overlays (dialogs/dropdowns) are closed directly in ECS without relying on
+  Xilem internal message cursors.
+- `bubble_ui_pointer_events` remains available for ECS pointer-bubbling paths and walks up
+  `ChildOf` parent chains until roots or `StopUiPointerPropagation`.
 
 ### 5.6) Font Bridge (Bevy assets/fonts → Masonry/Parley)
 
@@ -330,8 +335,8 @@ and registers tweening support with:
 
 and registers systems:
 
-- `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> dismiss_overlays_on_click -> bubble_ui_pointer_events -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
-- `Update`: `ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> handle_overlay_actions -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
+- `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> bubble_ui_pointer_events -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
+- `Update`: `ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> native_dismiss_overlays_on_click -> handle_overlay_actions -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
   (with `reparent_overlay_entities` inserted after `ensure_overlay_root`)
 - `PostUpdate`: `sync_overlay_positions -> synthesize_ui -> rebuild_masonry_runtime` (chained)
 

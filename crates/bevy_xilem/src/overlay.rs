@@ -1,24 +1,25 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use bevy_ecs::{
     bundle::Bundle,
     entity::Entity,
     hierarchy::{ChildOf, Children},
-    message::{MessageCursor, Messages},
+    message::MessageCursor,
     prelude::*,
 };
 use bevy_input::{
-    ButtonState,
+    ButtonInput,
     mouse::{MouseButton, MouseButtonInput},
 };
+use bevy_math::{Rect, Vec2};
 use bevy_window::{PrimaryWindow, Window};
 use masonry::core::{Widget, WidgetRef};
 
 use crate::{
-    AnchoredTo, AppI18n, AutoDismiss, OverlayAnchorRect, OverlayComputedPosition, OverlayConfig,
-    OverlayPlacement, StopUiPointerPropagation, UiComboBox, UiComboBoxChanged, UiDialog,
-    UiDropdownMenu, UiEventQueue, UiInteractionEvent, UiOverlayRoot, UiPointerEvent,
-    UiPointerHitEvent, UiPointerPhase, UiRoot, events::UiEvent, runtime::MasonryRuntime,
+    AnchoredTo, AppI18n, AutoDismiss, OverlayAnchorRect, OverlayBounds, OverlayComputedPosition,
+    OverlayConfig, OverlayPlacement, StopUiPointerPropagation, UiComboBox, UiComboBoxChanged,
+    UiDialog, UiDropdownMenu, UiEventQueue, UiInteractionEvent, UiOverlayRoot, UiPointerEvent,
+    UiPointerHitEvent, UiRoot, events::UiEvent, runtime::MasonryRuntime,
     styling::resolve_style_for_classes,
 };
 
@@ -44,28 +45,6 @@ pub struct OverlayPointerRoutingState {
 }
 
 impl OverlayPointerRoutingState {
-    fn begin_frame(&mut self) {
-        self.suppressed_presses.clear();
-    }
-
-    fn suppress_pair(&mut self, window: Entity, button: MouseButton) {
-        if !self
-            .suppressed_presses
-            .iter()
-            .any(|(w, b)| *w == window && *b == button)
-        {
-            self.suppressed_presses.push((window, button));
-        }
-
-        if !self
-            .suppressed_releases
-            .iter()
-            .any(|(w, b)| *w == window && *b == button)
-        {
-            self.suppressed_releases.push((window, button));
-        }
-    }
-
     /// Returns true if this exact pressed event should be blocked and consumes the block entry.
     pub(crate) fn take_suppressed_press(&mut self, window: Entity, button: MouseButton) -> bool {
         if let Some(index) = self
@@ -418,53 +397,6 @@ fn is_point_in_rect(rect: OverlayAnchorRect, x: f64, y: f64) -> bool {
     x >= rect.left && x <= rect.left + rect.width && y >= rect.top && y <= rect.top + rect.height
 }
 
-fn is_descendant_of(world: &World, mut entity: Entity, ancestor: Entity) -> bool {
-    if entity == ancestor {
-        return true;
-    }
-
-    while let Some(child_of) = world.get::<ChildOf>(entity) {
-        let parent = child_of.parent();
-        if parent == ancestor {
-            return true;
-        }
-        entity = parent;
-    }
-
-    false
-}
-
-fn is_overlay_entity(world: &World, entity: Entity, overlay_roots: &[Entity]) -> bool {
-    overlay_roots
-        .iter()
-        .copied()
-        .any(|overlay_root| is_descendant_of(world, entity, overlay_root))
-}
-
-fn topmost_hit_entity(
-    world: &World,
-    hit_boxes: &[EntityHitBox],
-    overlay_roots: &[Entity],
-    x: f64,
-    y: f64,
-    overlay_only: bool,
-) -> Option<Entity> {
-    hit_boxes.iter().rev().find_map(|hit| {
-        let in_overlay = is_overlay_entity(world, hit.entity, overlay_roots);
-        let scope_matches = if overlay_only {
-            in_overlay
-        } else {
-            !in_overlay
-        };
-
-        if scope_matches && is_point_in_rect(hit.rect, x, y) {
-            Some(hit.entity)
-        } else {
-            None
-        }
-    })
-}
-
 fn translate_text(world: &World, key: Option<&str>, fallback: &str) -> String {
     match key {
         Some(key) => world.get_resource::<AppI18n>().map_or_else(
@@ -799,18 +731,15 @@ pub fn sync_overlay_positions(world: &mut World) {
 
     let (viewport_width, viewport_height) = {
         let mut window_query = world.query_filtered::<&Window, With<PrimaryWindow>>();
-        if let Some(window) = window_query.iter(world).next() {
-            (window.width() as f64, window.height() as f64)
-        } else {
-            world
-                .get_non_send_resource::<MasonryRuntime>()
-                .map(|runtime| runtime.viewport_size())
-                .unwrap_or((1024.0, 768.0))
-        }
-    };
+        let Some(window) = window_query.iter(world).next() else {
+            return;
+        };
 
-    let window_size = (viewport_width, viewport_height);
-    tracing::debug!("Primary window size: {:?}", window_size);
+        let window_width = window.width() as f64;
+        let window_height = window.height() as f64;
+        tracing::debug!("Dynamic Window Size: {}x{}", window_width, window_height);
+        (window_width, window_height)
+    };
 
     let hit_boxes = {
         let runtime = world.non_send_resource::<MasonryRuntime>();
@@ -927,6 +856,19 @@ pub fn sync_overlay_positions(world: &mut World) {
             });
         }
 
+        let bounds_rect = Rect::from_corners(
+            Vec2::new(x as f32, y as f32),
+            Vec2::new((x + width) as f32, (y + height) as f32),
+        );
+
+        if let Some(mut bounds) = world.get_mut::<OverlayBounds>(entity) {
+            bounds.rect = bounds_rect;
+        } else {
+            world
+                .entity_mut(entity)
+                .insert(OverlayBounds { rect: bounds_rect });
+        }
+
         if let Some(anchor) = config.anchor
             && let Some(anchor_rect) = anchor_rects.get(&anchor).copied()
         {
@@ -950,209 +892,94 @@ pub fn sync_dropdown_positions(world: &mut World) {
     sync_overlay_positions(world);
 }
 
-/// Global click router:
-/// - overlay-first hit test,
-/// - click-outside dismissal for autodismiss overlays,
-/// - suppression hints for the input bridge,
-/// - and emission of pre-bubble pointer hits.
-pub fn dismiss_overlays_on_click(world: &mut World) {
-    if world.get_resource::<OverlayPointerRoutingState>().is_none() {
-        world.insert_resource(OverlayPointerRoutingState::default());
-    }
-    if world.get_resource::<OverlayMouseButtonCursor>().is_none() {
-        world.insert_resource(OverlayMouseButtonCursor::default());
-    }
+/// Native Bevy click-outside dismissal using cursor + [`OverlayBounds`] intersection tests.
+pub fn native_dismiss_overlays_on_click(world: &mut World) {
+    let left_just_pressed = {
+        let Some(mouse_input) = world.get_resource::<ButtonInput<MouseButton>>() else {
+            return;
+        };
+        mouse_input.just_pressed(MouseButton::Left)
+    };
 
-    let events = world.resource_scope(|world, mut cursor: Mut<OverlayMouseButtonCursor>| {
-        let messages = world.resource::<Messages<MouseButtonInput>>();
-        cursor.0.read(messages).cloned().collect::<Vec<_>>()
-    });
-
-    if events.is_empty() {
+    if !left_just_pressed {
         return;
     }
 
-    world
-        .resource_mut::<OverlayPointerRoutingState>()
-        .begin_frame();
+    let cursor_pos = {
+        let mut window_query = world.query_filtered::<&Window, With<PrimaryWindow>>();
+        let Some(window) = window_query.iter(world).next() else {
+            return;
+        };
+        let Some(cursor_pos) = window.cursor_position() else {
+            return;
+        };
 
-    let overlay_roots = {
-        let mut query = world.query_filtered::<Entity, With<UiOverlayRoot>>();
-        query.iter(world).collect::<Vec<_>>()
+        tracing::debug!("Native click detected at: {:?}", cursor_pos);
+        cursor_pos
     };
 
-    let hit_boxes = {
-        let runtime = world.non_send_resource::<MasonryRuntime>();
-        let root = runtime.render_root.get_layer_root(0);
-        let mut boxes = Vec::new();
-        collect_entity_hit_boxes(root, &mut boxes);
-        boxes
+    let overlays = {
+        let mut query = world.query::<(
+            Entity,
+            &OverlayConfig,
+            Option<&AutoDismiss>,
+            Option<&OverlayBounds>,
+            Option<&OverlayAnchorRect>,
+        )>();
+
+        query
+            .iter(world)
+            .map(|(entity, config, autodismiss, bounds, anchor_rect)| {
+                (
+                    entity,
+                    *config,
+                    autodismiss.is_some(),
+                    bounds.map(|bounds| bounds.rect),
+                    anchor_rect.copied(),
+                )
+            })
+            .collect::<Vec<_>>()
     };
 
-    for event in events {
-        if event.button != MouseButton::Left {
+    if overlays.is_empty() {
+        return;
+    }
+
+    let cursor_x = cursor_pos.x as f64;
+    let cursor_y = cursor_pos.y as f64;
+    let mut overlays_to_close = Vec::new();
+
+    for (entity, config, auto_dismiss, bounds, anchor_rect) in overlays {
+        if !auto_dismiss || world.get_entity(entity).is_err() {
             continue;
         }
 
-        let Some(window) = world.get::<Window>(event.window) else {
-            continue;
-        };
-        let Some(cursor) = window.cursor_position() else {
-            continue;
-        };
+        let clicked_inside_overlay = bounds.is_some_and(|rect| rect.contains(cursor_pos));
+        let clicked_inside_anchor = config.anchor.is_some()
+            && anchor_rect.is_some_and(|rect| is_point_in_rect(rect, cursor_x, cursor_y));
 
-        let x = cursor.x as f64;
-        let y = cursor.y as f64;
-        let pointer_pos = (x, y);
-        tracing::debug!(
-            "Global pointer click detected at screen position: {:?}",
-            pointer_pos
-        );
-
-        let overlay_hit = topmost_hit_entity(world, &hit_boxes, &overlay_roots, x, y, true);
-        let main_hit = topmost_hit_entity(world, &hit_boxes, &overlay_roots, x, y, false);
-        tracing::debug!(
-            "Hit-test testing UiOverlayRoot... Result: {:?}",
-            overlay_hit
-        );
-        tracing::debug!("Hit-test testing UiRoot... Result: {:?}", main_hit);
-
-        let phase = match event.state {
-            ButtonState::Pressed => UiPointerPhase::Pressed,
-            ButtonState::Released => UiPointerPhase::Released,
-        };
-
-        let clicked_entity = overlay_hit.or(main_hit);
-        let is_inside_overlay =
-            clicked_entity.is_some_and(|entity| is_overlay_entity(world, entity, &overlay_roots));
-        tracing::debug!(
-            "Evaluating dismissal. Clicked entity: {:?}. Is it inside Overlay tree? {}",
-            clicked_entity,
-            is_inside_overlay
-        );
-
-        if let Some(target) = clicked_entity {
-            world.resource::<UiEventQueue>().push(UiEvent::typed(
-                target,
-                UiPointerHitEvent {
-                    target,
-                    position: (x, y),
-                    button: event.button,
-                    phase,
-                },
-            ));
-        }
-
-        if event.state != ButtonState::Pressed {
-            continue;
-        }
-
-        let dialogs = {
-            let mut query =
-                world.query::<(Entity, &OverlayComputedPosition, Option<&AutoDismiss>)>();
-            query
-                .iter(world)
-                .filter_map(|(entity, computed, autodismiss)| {
-                    world.get::<UiDialog>(entity).is_some().then_some((
-                        entity,
-                        *computed,
-                        autodismiss.is_some(),
-                    ))
-                })
-                .collect::<Vec<_>>()
-        };
-
-        let dropdowns = {
-            let mut query = world.query::<(
-                Entity,
-                &OverlayComputedPosition,
-                &AnchoredTo,
-                Option<&AutoDismiss>,
-            )>();
-            query
-                .iter(world)
-                .filter_map(|(entity, computed, anchored_to, autodismiss)| {
-                    world.get::<UiDropdownMenu>(entity).is_some().then_some((
-                        entity,
-                        *computed,
-                        anchored_to.0,
-                        autodismiss.is_some(),
-                    ))
-                })
-                .collect::<Vec<_>>()
-        };
-
-        if dialogs.is_empty() && dropdowns.is_empty() {
-            continue;
-        }
-
-        let inside_dialog_surface = dialogs.iter().any(|(_, computed, _)| {
-            is_point_in_rect(
-                OverlayAnchorRect {
-                    left: computed.x,
-                    top: computed.y,
-                    width: computed.width,
-                    height: computed.height,
-                },
-                x,
-                y,
-            )
-        });
-
-        let inside_dropdown_surface = dropdowns.iter().any(|(_, computed, _, _)| {
-            is_point_in_rect(
-                OverlayAnchorRect {
-                    left: computed.x,
-                    top: computed.y,
-                    width: computed.width,
-                    height: computed.height,
-                },
-                x,
-                y,
-            )
-        });
-
-        if inside_dialog_surface || inside_dropdown_surface {
-            continue;
-        }
-
-        let mut closed_modal_dialog = false;
-        for (dialog_entity, _computed, autodismiss) in &dialogs {
-            if *autodismiss {
-                closed_modal_dialog = true;
-                if world.get_entity(*dialog_entity).is_ok() {
-                    despawn_entity_tree(world, *dialog_entity);
-                }
-            }
-        }
-
-        let open_dropdown_anchors = dropdowns
-            .iter()
-            .filter_map(|(_, _, anchor, autodismiss)| autodismiss.then_some(*anchor))
-            .collect::<HashSet<_>>();
-
-        for (dropdown_entity, _computed, _anchor, autodismiss) in &dropdowns {
-            if *autodismiss && world.get_entity(*dropdown_entity).is_ok() {
-                close_dropdown(world, *dropdown_entity);
-            }
-        }
-
-        // Clicking an open combo trigger should only close, never re-open in the same click.
-        let click_on_open_combo_trigger = main_hit.is_some_and(|entity| {
-            open_dropdown_anchors.contains(&entity)
-                && world
-                    .get::<UiComboBox>(entity)
-                    .is_some_and(|combo| combo.is_open)
-        });
-
-        // Dialog backdrop clicks are modal (consume). Dropdown outside clicks stay pass-through,
-        // except for trigger toggles that must be consumed to avoid reopen races.
-        if closed_modal_dialog || click_on_open_combo_trigger {
-            world
-                .resource_mut::<OverlayPointerRoutingState>()
-                .suppress_pair(event.window, event.button);
+        if !clicked_inside_overlay && !clicked_inside_anchor {
+            overlays_to_close.push(entity);
         }
     }
+
+    for entity in overlays_to_close {
+        if world.get_entity(entity).is_err() {
+            continue;
+        }
+
+        tracing::debug!("Click outside detected! Despawning overlay {:?}", entity);
+        if world.get::<UiDropdownMenu>(entity).is_some() {
+            close_dropdown(world, entity);
+        } else {
+            despawn_entity_tree(world, entity);
+        }
+    }
+}
+
+/// Backward-compatible alias kept for existing callsites.
+pub fn dismiss_overlays_on_click(world: &mut World) {
+    native_dismiss_overlays_on_click(world);
 }
 
 /// Bubble pointer hits up the ECS parent hierarchy, emitting [`UiPointerEvent`] entries.

@@ -10,8 +10,10 @@ use crate::{
 };
 use bevy_app::App;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use bevy_input::mouse::MouseButton;
+use bevy_input::{ButtonInput, mouse::MouseButton};
+use bevy_math::{Rect, Vec2};
 use bevy_tweening::Lens;
+use bevy_window::{PrimaryWindow, Window};
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TestRoot;
@@ -758,6 +760,122 @@ fn ensure_overlay_defaults_assigns_dialog_and_dropdown_configs() {
     assert_eq!(dropdown_config.anchor, Some(combo));
     assert!(dropdown_config.auto_flip);
     assert!(world.get::<crate::AutoDismiss>(dropdown).is_some());
+}
+
+#[test]
+fn sync_overlay_positions_uses_dynamic_primary_window_size_and_updates_bounds() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(1024.0, 768.0);
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let dialog = app
+        .world_mut()
+        .spawn((crate::UiDialog::new("title", "body"),))
+        .id();
+
+    app.update();
+
+    let initial = *app
+        .world()
+        .get::<crate::OverlayComputedPosition>(dialog)
+        .expect("dialog should have computed position");
+    let initial_bounds = app
+        .world()
+        .get::<crate::OverlayBounds>(dialog)
+        .expect("dialog should have overlay bounds");
+
+    assert!(initial_bounds.rect.min.x >= 0.0);
+    assert!(initial_bounds.rect.min.y >= 0.0);
+    assert!(initial_bounds.rect.max.x <= 1024.0 + f32::EPSILON);
+    assert!(initial_bounds.rect.max.y <= 768.0 + f32::EPSILON);
+
+    {
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<&mut Window, With<PrimaryWindow>>();
+        let mut primary_window = query
+            .single_mut(world)
+            .expect("primary window should exist");
+        primary_window.resolution.set(1600.0, 900.0);
+    }
+
+    app.update();
+
+    let resized = *app
+        .world()
+        .get::<crate::OverlayComputedPosition>(dialog)
+        .expect("dialog should still have computed position");
+    let resized_bounds = app
+        .world()
+        .get::<crate::OverlayBounds>(dialog)
+        .expect("dialog should still have overlay bounds");
+
+    assert!(resized.x > initial.x);
+    assert_eq!(initial.width, resized.width);
+    assert_eq!(initial.height, resized.height);
+    assert!(resized_bounds.rect.max.x <= 1600.0 + f32::EPSILON);
+    assert!(resized_bounds.rect.max.y <= 900.0 + f32::EPSILON);
+}
+
+#[test]
+fn native_dismiss_overlays_on_click_closes_only_outside_bounds_and_anchor() {
+    let mut world = World::new();
+    world.insert_resource(ButtonInput::<MouseButton>::default());
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    window.set_cursor_position(Some(Vec2::new(240.0, 120.0)));
+    world.spawn((window, PrimaryWindow));
+
+    {
+        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
+        input.press(MouseButton::Left);
+    }
+
+    let anchor = world.spawn_empty().id();
+    let dropdown = world
+        .spawn((
+            crate::UiDropdownMenu,
+            crate::AnchoredTo(anchor),
+            crate::OverlayConfig {
+                placement: crate::OverlayPlacement::BottomStart,
+                anchor: Some(anchor),
+                auto_flip: true,
+            },
+            crate::OverlayBounds {
+                rect: Rect::from_corners(Vec2::new(100.0, 100.0), Vec2::new(200.0, 200.0)),
+            },
+            crate::OverlayAnchorRect {
+                left: 220.0,
+                top: 100.0,
+                width: 80.0,
+                height: 30.0,
+            },
+            crate::AutoDismiss,
+        ))
+        .id();
+
+    crate::native_dismiss_overlays_on_click(&mut world);
+    assert!(world.get_entity(dropdown).is_ok());
+
+    {
+        let mut window_query = world.query_filtered::<&mut Window, With<PrimaryWindow>>();
+        let mut primary_window = window_query
+            .single_mut(&mut world)
+            .expect("primary window should exist");
+        primary_window.set_cursor_position(Some(Vec2::new(500.0, 500.0)));
+    }
+    {
+        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
+        input.release(MouseButton::Left);
+        input.clear();
+        input.press(MouseButton::Left);
+    }
+
+    crate::native_dismiss_overlays_on_click(&mut world);
+    assert!(world.get_entity(dropdown).is_err());
 }
 
 #[test]

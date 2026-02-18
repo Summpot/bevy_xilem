@@ -64,6 +64,7 @@ pub use bevy_app;
 pub use bevy_asset;
 pub use bevy_ecs;
 pub use bevy_input;
+pub use bevy_math;
 pub use bevy_tasks;
 pub use bevy_text;
 pub use bevy_tweening;
@@ -94,7 +95,7 @@ pub mod prelude {
     pub use crate::{
         AppBevyXilemExt, AppI18n, AutoDismiss, BevyXilemPlugin, BevyXilemRuntime, BuiltinUiAction,
         ColorStyle, ComputedStyle, CurrentColorStyle, EcsButtonView, Hovered, LayoutStyle,
-        LocalizeText, MasonryRuntime, OverlayComputedPosition, OverlayConfig,
+        LocalizeText, MasonryRuntime, OverlayBounds, OverlayComputedPosition, OverlayConfig,
         OverlayMouseButtonCursor, OverlayPlacement, OverlayPointerRoutingState, OverlayUiAction,
         Pressed, ProjectionCtx, PseudoClass, Selector, StopUiPointerPropagation, StyleClass,
         StyleDirty, StyleRule, StyleSetter, StyleSheet, StyleTransition, SyncAssetSource,
@@ -107,9 +108,9 @@ pub mod prelude {
         dismiss_overlays_on_click, ecs_button, ecs_button_with_child, ecs_checkbox, ecs_slider,
         ecs_switch, ecs_text_button, ecs_text_input, emit_ui_action, ensure_overlay_root,
         ensure_overlay_root_entity, gather_ui_roots, handle_overlay_actions,
-        inject_bevy_input_into_masonry, mark_style_dirty, rebuild_masonry_runtime,
-        register_builtin_projectors, resolve_localized_text, resolve_style,
-        resolve_style_for_classes, resolve_style_for_entity_classes, run_app,
+        inject_bevy_input_into_masonry, mark_style_dirty, native_dismiss_overlays_on_click,
+        rebuild_masonry_runtime, register_builtin_projectors, resolve_localized_text,
+        resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes, run_app,
         run_app_with_window_options, slider, spawn_in_overlay_root, switch,
         sync_dropdown_positions, sync_fonts_to_xilem, sync_overlay_positions, synthesize_roots,
         synthesize_roots_with_stats, synthesize_ui, synthesize_world, text_button, text_input,
@@ -118,8 +119,8 @@ pub mod prelude {
     };
 
     pub use crate::{
-        bevy_app, bevy_asset, bevy_ecs, bevy_input, bevy_tasks, bevy_text, bevy_tweening,
-        bevy_window, rfd, xilem, xilem_masonry,
+        bevy_app, bevy_asset, bevy_ecs, bevy_input, bevy_math, bevy_tasks, bevy_text,
+        bevy_tweening, bevy_window, rfd, xilem, xilem_masonry,
     };
 }
 

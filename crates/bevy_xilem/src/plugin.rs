@@ -12,9 +12,9 @@ use crate::{
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
     i18n::AppI18n,
     overlay::{
-        OverlayMouseButtonCursor, OverlayPointerRoutingState, bubble_ui_pointer_events,
-        dismiss_overlays_on_click, ensure_overlay_defaults, ensure_overlay_root,
-        handle_overlay_actions, reparent_overlay_entities, sync_overlay_positions,
+        OverlayPointerRoutingState, bubble_ui_pointer_events, ensure_overlay_defaults,
+        ensure_overlay_root, handle_overlay_actions, native_dismiss_overlays_on_click,
+        reparent_overlay_entities, sync_overlay_positions,
     },
     projection::{UiProjectorRegistry, register_builtin_projectors},
     runtime::{MasonryRuntime, inject_bevy_input_into_masonry, rebuild_masonry_runtime},
@@ -40,7 +40,6 @@ impl Plugin for BevyXilemPlugin {
             .init_resource::<XilemFontBridge>()
             .init_resource::<AppI18n>()
             .init_resource::<OverlayPointerRoutingState>()
-            .init_resource::<OverlayMouseButtonCursor>()
             .init_non_send_resource::<MasonryRuntime>()
             .add_message::<CursorMoved>()
             .add_message::<CursorLeft>()
@@ -53,7 +52,6 @@ impl Plugin for BevyXilemPlugin {
                 (
                     collect_bevy_font_assets,
                     sync_fonts_to_xilem,
-                    dismiss_overlays_on_click,
                     bubble_ui_pointer_events,
                     inject_bevy_input_into_masonry,
                     sync_ui_interaction_markers,
@@ -66,6 +64,7 @@ impl Plugin for BevyXilemPlugin {
                     ensure_overlay_root,
                     reparent_overlay_entities,
                     ensure_overlay_defaults,
+                    native_dismiss_overlays_on_click,
                     handle_overlay_actions,
                     mark_style_dirty,
                     sync_style_targets,

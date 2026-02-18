@@ -1,4 +1,5 @@
 use bevy_ecs::{entity::Entity, prelude::Component};
+use bevy_math::Rect;
 
 /// Marker component for UI tree roots.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -155,6 +156,12 @@ pub struct OverlayComputedPosition {
     pub width: f64,
     pub height: f64,
     pub placement: OverlayPlacement,
+}
+
+/// Runtime-computed screen bounds for overlay hit-testing.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
+pub struct OverlayBounds {
+    pub rect: Rect,
 }
 
 /// Marker for overlays that should close on outside click.
