@@ -23,7 +23,7 @@ use unic_langid::LanguageIdentifier;
 
 #[derive(Resource, Debug, Clone, Copy)]
 struct I18nRuntime {
-    toggle_button: Entity,
+    locale_combo: Entity,
     edge_button: Entity,
     combo_box: Entity,
     show_modal_button: Entity,
@@ -206,17 +206,21 @@ fn setup_i18n_world(mut commands: Commands) {
         ChildOf(root),
     ));
 
-    let toggle_button = commands
+    let locale_combo = commands
         .spawn((
-            UiButton::new("Change Language"),
-            LocalizeText::new("toggle_language"),
-            StyleClass(vec!["i18n.toggle".to_string()]),
+            UiComboBox::new(vec![
+                UiComboOption::new("en-US", "English"),
+                UiComboOption::new("zh-CN", "简体中文"),
+                UiComboOption::new("ja-JP", "日本語"),
+            ])
+            .with_placeholder("Language"),
+            StyleClass(vec!["i18n.combo".to_string()]),
             ChildOf(root),
         ))
         .id();
 
     commands.insert_resource(I18nRuntime {
-        toggle_button,
+        locale_combo,
         edge_button,
         combo_box,
         show_modal_button,
@@ -499,20 +503,6 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
     );
 }
 
-fn next_locale(current: &LanguageIdentifier) -> LanguageIdentifier {
-    if current.language.as_str() == "ja" {
-        parse_locale("en-US")
-    } else if current.language.as_str() == "zh"
-        && current
-            .region
-            .is_some_and(|region| region.as_str().eq_ignore_ascii_case("CN"))
-    {
-        parse_locale("ja-JP")
-    } else {
-        parse_locale("zh-CN")
-    }
-}
-
 fn ensure_overlay_root_entity(world: &mut World) -> Entity {
     let existing = {
         let mut query = world.query_filtered::<Entity, With<UiOverlayRoot>>();
@@ -531,16 +521,6 @@ fn drain_i18n_events(world: &mut World) {
 
     for event in events {
         if !matches!(event.action, BuiltinUiAction::Clicked) {
-            continue;
-        }
-
-        if event.entity == runtime.toggle_button {
-            let next = {
-                let current = world.resource::<AppI18n>().active_locale.clone();
-                next_locale(&current)
-            };
-
-            world.resource_mut::<AppI18n>().set_active_locale(next);
             continue;
         }
 
@@ -572,6 +552,14 @@ fn drain_i18n_events(world: &mut World) {
         .drain_actions::<UiComboBoxChanged>();
 
     for event in combo_events {
+        if event.action.combo == runtime.locale_combo {
+            let next_locale = parse_locale(event.action.value.as_str());
+            world
+                .resource_mut::<AppI18n>()
+                .set_active_locale(next_locale);
+            continue;
+        }
+
         if event.action.combo != runtime.combo_box {
             continue;
         }

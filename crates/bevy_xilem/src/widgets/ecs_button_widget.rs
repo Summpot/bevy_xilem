@@ -125,7 +125,6 @@ where
             PointerEvent::Down(..) => {
                 ctx.request_focus();
                 ctx.capture_pointer();
-                ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
                 ctx.request_render();
             }
             PointerEvent::Up(PointerButtonEvent { button, .. }) => {
@@ -181,13 +180,11 @@ where
         match event {
             Update::HoveredChanged(hovered) => {
                 if self.set_hovered(*hovered) {
-                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
                     ctx.request_render();
                 }
             }
             Update::ActiveChanged(active) => {
                 if self.set_pressed(*active) {
-                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
                     ctx.request_render();
                 }
             }
@@ -195,7 +192,6 @@ where
                 let hover_changed = self.set_hovered(false);
                 let pressed_changed = self.set_pressed(false);
                 if hover_changed || pressed_changed {
-                    ctx.submit_action::<Self::Action>(EcsButtonWidgetAction::StateChanged);
                     ctx.request_render();
                 }
             }

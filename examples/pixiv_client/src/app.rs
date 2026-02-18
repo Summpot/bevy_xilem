@@ -8,8 +8,8 @@ use bevy_text::TextPlugin;
 use bevy_xilem::{
     AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx,
     ResolvedStyle, StyleClass, StyleSetter, StyleSheet, StyleTransition, SyncAssetSource,
-    SyncTextSource, TextStyle, UiEventQueue, UiRoot, UiView, apply_label_style,
-    apply_text_input_style, apply_widget_style,
+    SyncTextSource, TextStyle, UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue, UiRoot,
+    UiView, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
@@ -52,20 +52,6 @@ const PIXIV_WEB_REDIRECT_FALLBACK: &str =
 fn parse_locale(tag: &str) -> LanguageIdentifier {
     tag.parse()
         .unwrap_or_else(|_| panic!("locale `{tag}` should parse"))
-}
-
-fn next_locale(current: &LanguageIdentifier) -> LanguageIdentifier {
-    if current.language.as_str() == "ja" {
-        parse_locale("en-US")
-    } else if current.language.as_str() == "zh"
-        && current
-            .region
-            .is_some_and(|region| region.as_str().eq_ignore_ascii_case("CN"))
-    {
-        parse_locale("ja-JP")
-    } else {
-        parse_locale("zh-CN")
-    }
 }
 
 fn locale_badge(locale: &LanguageIdentifier) -> &'static str {
@@ -193,7 +179,7 @@ impl Default for ViewportMetrics {
 #[derive(Resource, Debug, Clone, Copy)]
 struct PixivControls {
     toggle_sidebar: Entity,
-    toggle_locale: Entity,
+    locale_combo: Entity,
     home_tab: Entity,
     rankings_tab: Entity,
     search_tab: Entity,
@@ -300,7 +286,6 @@ enum ImageKind {
 #[derive(Debug, Clone)]
 enum AppAction {
     ToggleSidebar,
-    CycleLocale,
     SetTab(NavTab),
     SetSearchText(String),
     SubmitSearch,
@@ -652,7 +637,7 @@ fn setup(mut commands: Commands) {
             &mut commands,
             &["pixiv.button", "pixiv.button.sidebar"],
         ),
-        toggle_locale: spawn_control_entity(
+        locale_combo: spawn_control_entity(
             &mut commands,
             &["pixiv.button", "pixiv.button.sidebar"],
         ),
@@ -692,10 +677,22 @@ fn setup(mut commands: Commands) {
         ))
         .id();
 
-    commands.spawn((
-        PixivSidebar,
-        StyleClass(vec!["pixiv.sidebar".to_string()]),
-        ChildOf(root),
+    let sidebar = commands
+        .spawn((
+            PixivSidebar,
+            StyleClass(vec!["pixiv.sidebar".to_string()]),
+            ChildOf(root),
+        ))
+        .id();
+
+    commands.entity(controls.locale_combo).insert((
+        UiComboBox::new(vec![
+            UiComboOption::new("en-US", "English"),
+            UiComboOption::new("zh-CN", "简体中文"),
+            UiComboOption::new("ja-JP", "日本語"),
+        ])
+        .with_placeholder("Language"),
+        ChildOf(sidebar),
     ));
 
     let main_column = commands.spawn((PixivMainColumn, ChildOf(root))).id();
@@ -990,10 +987,8 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let ui = ctx.world.resource::<UiState>();
     let controls = *ctx.world.resource::<PixivControls>();
-    let current_locale = ctx
-        .world
-        .get_resource::<AppI18n>()
-        .map_or_else(|| parse_locale("en-US"), |i18n| i18n.active_locale.clone());
+    let mut sidebar_children = ctx.children.into_iter();
+    let locale_combo_view = sidebar_children.next().unwrap_or_else(empty_ui);
 
     let mut items = Vec::new();
     items.push(
@@ -1010,19 +1005,7 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
         .into_any_flex(),
     );
 
-    items.push(
-        action_button(
-            ctx.world,
-            controls.toggle_locale,
-            AppAction::CycleLocale,
-            format!(
-                "{}: {}",
-                tr(ctx.world, "pixiv.sidebar.language", "Language"),
-                locale_badge(&current_locale)
-            ),
-        )
-        .into_any_flex(),
-    );
+    items.push(locale_combo_view.into_any_flex());
 
     if !ui.sidebar_collapsed {
         items.push(
@@ -1532,32 +1515,6 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
                     set_status_key(world, "pixiv.status.sidebar_expanded", "Sidebar expanded");
                 }
             }
-            AppAction::CycleLocale => {
-                let next = {
-                    let current = world.resource::<AppI18n>().active_locale.clone();
-                    next_locale(&current)
-                };
-
-                world
-                    .resource_mut::<AppI18n>()
-                    .set_active_locale(next.clone());
-                {
-                    let font_stack = {
-                        let i18n = world.resource::<AppI18n>();
-                        let stack = i18n.get_font_stack();
-                        (!stack.is_empty()).then_some(stack)
-                    };
-                    let mut style_sheet = world.resource_mut::<StyleSheet>();
-                    sync_font_stack_for_locale(&mut style_sheet, font_stack.as_deref());
-                }
-
-                let status_prefix = tr(
-                    world,
-                    "pixiv.status.locale_switched",
-                    "Language switched to",
-                );
-                set_status(world, format!("{status_prefix} {}", locale_badge(&next)));
-            }
             AppAction::SetTab(tab) => {
                 let status_line = match tab {
                     NavTab::Home => tr(world, "pixiv.status.loading_home", "Loading Home feed…"),
@@ -1813,6 +1770,39 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
                     .send(NetworkCommand::Refresh { refresh_token });
             }
         }
+    }
+
+    let combo_events = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<UiComboBoxChanged>();
+    let controls = *world.resource::<PixivControls>();
+
+    for event in combo_events {
+        if event.action.combo != controls.locale_combo {
+            continue;
+        }
+
+        let next = parse_locale(event.action.value.as_str());
+        world
+            .resource_mut::<AppI18n>()
+            .set_active_locale(next.clone());
+
+        {
+            let font_stack = {
+                let i18n = world.resource::<AppI18n>();
+                let stack = i18n.get_font_stack();
+                (!stack.is_empty()).then_some(stack)
+            };
+            let mut style_sheet = world.resource_mut::<StyleSheet>();
+            sync_font_stack_for_locale(&mut style_sheet, font_stack.as_deref());
+        }
+
+        let status_prefix = tr(
+            world,
+            "pixiv.status.locale_switched",
+            "Language switched to",
+        );
+        set_status(world, format!("{status_prefix} {}", locale_badge(&next)));
     }
 }
 
@@ -2412,8 +2402,10 @@ mod tests {
         schedule.run(&mut world);
 
         let tree = *world.resource::<PixivUiTree>();
+        let controls = *world.resource::<PixivControls>();
         assert!(world.get::<PixivHomeFeed>(tree.home_feed).is_some());
         assert!(world.get::<PixivOverlayTags>(tree.overlay_tags).is_some());
+        assert!(world.get::<UiComboBox>(controls.locale_combo).is_some());
     }
 
     #[test]

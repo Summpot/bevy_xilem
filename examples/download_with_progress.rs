@@ -7,8 +7,8 @@ use std::{
 
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
-    apply_label_style, apply_text_input_style, apply_widget_style,
+    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiDialog, UiEventQueue, UiOverlayRoot,
+    UiRoot, UiView, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPoolBuilder},
@@ -36,7 +36,6 @@ struct DownloadState {
     total_bytes: Option<u64>,
     status: String,
     active_target: Option<String>,
-    completed_dialog: Option<String>,
 }
 
 impl Default for DownloadState {
@@ -49,7 +48,6 @@ impl Default for DownloadState {
             total_bytes: None,
             status: "Idle".to_string(),
             active_target: None,
-            completed_dialog: None,
         }
     }
 }
@@ -59,7 +57,6 @@ enum DownloadEvent {
     SetUrl(String),
     SetUseSystemDialog(bool),
     StartDownload,
-    DismissDialog,
     Tick,
     ShowSystemDialog {
         title: String,
@@ -99,7 +96,40 @@ struct DownloadDialogModeRow;
 struct DownloadProgressPanel;
 
 #[derive(Component, Debug, Clone, Copy)]
-struct DownloadCompletionDialog;
+struct DownloadCompletionDialogModal;
+
+fn ensure_overlay_root_entity(world: &mut World) -> Entity {
+    let existing = {
+        let mut query = world.query_filtered::<Entity, With<UiOverlayRoot>>();
+        query.iter(world).next()
+    };
+
+    existing.unwrap_or_else(|| world.spawn((UiRoot, UiOverlayRoot)).id())
+}
+
+fn despawn_download_modal(world: &mut World) {
+    let dialogs = {
+        let mut query = world.query_filtered::<Entity, With<DownloadCompletionDialogModal>>();
+        query.iter(world).collect::<Vec<_>>()
+    };
+
+    for dialog in dialogs {
+        if world.get_entity(dialog).is_ok() {
+            let _ = world.despawn(dialog);
+        }
+    }
+}
+
+fn spawn_download_modal(world: &mut World, message: String) {
+    despawn_download_modal(world);
+    let overlay_root = ensure_overlay_root_entity(world);
+    world.spawn((
+        UiDialog::new("Download finished", message),
+        StyleClass(vec!["download.dialog".to_string()]),
+        DownloadCompletionDialogModal,
+        ChildOf(overlay_root),
+    ));
+}
 
 fn ensure_io_task_pool() {
     IoTaskPool::get_or_init(|| {
@@ -396,34 +426,6 @@ fn project_download_progress_panel(_: &DownloadProgressPanel, ctx: ProjectionCtx
     )))
 }
 
-fn project_download_completion_dialog(
-    _: &DownloadCompletionDialog,
-    ctx: ProjectionCtx<'_>,
-) -> UiView {
-    let title_style = resolve_style_for_classes(ctx.world, ["download.title"]);
-    let status_style = resolve_style_for_classes(ctx.world, ["download.status"]);
-    let button_style = resolve_style_for_classes(ctx.world, ["download.button"]);
-    let dialog_style = resolve_style_for_classes(ctx.world, ["download.dialog"]);
-    let state = ctx.world.resource::<DownloadState>();
-
-    let Some(message) = state.completed_dialog.clone() else {
-        return Arc::new(label(""));
-    };
-
-    Arc::new(apply_widget_style(
-        flex_col((
-            apply_label_style(label("Download finished"), &title_style),
-            apply_label_style(label(message), &status_style),
-            apply_widget_style(
-                button(ctx.entity, DownloadEvent::DismissDialog, "OK"),
-                &button_style,
-            ),
-        ))
-        .cross_axis_alignment(CrossAxisAlignment::Start),
-        &dialog_style,
-    ))
-}
-
 fn setup_download_world(mut commands: Commands) {
     let root = commands
         .spawn((
@@ -438,7 +440,6 @@ fn setup_download_world(mut commands: Commands) {
     commands.spawn((DownloadActionRow, ChildOf(root)));
     commands.spawn((DownloadDialogModeRow, ChildOf(root)));
     commands.spawn((DownloadProgressPanel, ChildOf(root)));
-    commands.spawn((DownloadCompletionDialog, ChildOf(root)));
 }
 
 fn setup_download_styles(mut style_sheet: ResMut<StyleSheet>) {
@@ -573,7 +574,7 @@ fn drain_download_events(world: &mut World) {
                 let mut state = world.resource_mut::<DownloadState>();
                 state.use_system_dialog = value;
                 if value {
-                    state.completed_dialog = None;
+                    despawn_download_modal(world);
                 }
             }
             DownloadEvent::StartDownload => {
@@ -587,18 +588,18 @@ fn drain_download_events(world: &mut World) {
                         state.downloaded_bytes = 0;
                         state.total_bytes = None;
                         state.active_target = None;
-                        state.completed_dialog = None;
                         state.status = "Starting download...".to_string();
                         (event.entity, state.url.clone(), true)
                     }
                 };
 
                 if should_start {
+                    despawn_download_modal(world);
+                }
+
+                if should_start {
                     spawn_download_worker(entity, url);
                 }
-            }
-            DownloadEvent::DismissDialog => {
-                world.resource_mut::<DownloadState>().completed_dialog = None;
             }
             DownloadEvent::Tick => {}
             DownloadEvent::ShowSystemDialog { title, description } => {
@@ -637,12 +638,10 @@ fn drain_download_events(world: &mut World) {
 
                     let message = format!("Saved to: {target}");
                     if state.use_system_dialog {
-                        state.completed_dialog = None;
                         state.status = "Download complete. Opening system dialog...".to_string();
                         (true, message)
                     } else {
                         state.status = "Download complete.".to_string();
-                        state.completed_dialog = Some(message.clone());
                         (false, message)
                     }
                 };
@@ -655,6 +654,8 @@ fn drain_download_events(world: &mut World) {
                             description: message,
                         },
                     );
+                } else {
+                    spawn_download_modal(world, message);
                 }
             }
             DownloadEvent::WorkerFailed(message) => {
@@ -676,7 +677,6 @@ fn build_download_app() -> App {
         .register_projector::<DownloadActionRow>(project_download_action_row)
         .register_projector::<DownloadDialogModeRow>(project_download_dialog_mode_row)
         .register_projector::<DownloadProgressPanel>(project_download_progress_panel)
-        .register_projector::<DownloadCompletionDialog>(project_download_completion_dialog)
         .add_systems(Startup, (setup_download_styles, setup_download_world))
         .add_systems(PreUpdate, drain_download_events);
 

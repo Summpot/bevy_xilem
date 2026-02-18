@@ -116,6 +116,12 @@ Style resolution helpers (`resolve_style`, `resolve_style_for_classes`) and appl
 Projectors now primarily consume `ComputedStyle` (through `resolve_style`) rather than
 re-running a full cascade per frame.
 
+Label text wrapping policy:
+
+- `apply_label_style` applies `LineBreaking::WordWrap` by default.
+- This prevents overflow/tofu-like clipping in constrained containers (such as modal body text)
+  while keeping font/color sizing controlled by resolved style.
+
 Style surface details:
 
 - `StyleSetter` and `ResolvedStyle` include optional `box_shadow` support.

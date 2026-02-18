@@ -210,6 +210,48 @@ fn estimate_dialog_surface_width_px(
         .clamp(DIALOG_SURFACE_MIN_WIDTH, DIALOG_SURFACE_MAX_WIDTH)
 }
 
+fn estimate_wrapped_lines(text: &str, font_size: f32, max_line_width: f64) -> usize {
+    let max_line_width = max_line_width.max(font_size as f64 * 2.0);
+    let mut total = 0_usize;
+
+    for raw_line in text.lines() {
+        let logical_line = if raw_line.is_empty() { " " } else { raw_line };
+        let width = estimate_text_width_px(logical_line, font_size);
+        let wrapped = (width / max_line_width).ceil() as usize;
+        total += wrapped.max(1);
+    }
+
+    total.max(1)
+}
+
+fn estimate_dialog_surface_height_px(
+    title: &str,
+    body: &str,
+    dialog_surface_width: f64,
+    title_size: f32,
+    body_size: f32,
+    dismiss_size: f32,
+    dismiss_padding: f64,
+    gap: f64,
+    horizontal_padding: f64,
+    vertical_padding: f64,
+) -> f64 {
+    let title_line_height = (title_size as f64 * 1.35).max(18.0);
+    let body_line_height = (body_size as f64 * 1.45).max(18.0);
+    let dismiss_height = (dismiss_size as f64 * 1.25 + dismiss_padding * 2.0).max(30.0);
+
+    let text_max_width = (dialog_surface_width - horizontal_padding * 2.0 - 8.0).max(120.0);
+    let title_lines = estimate_wrapped_lines(title, title_size, text_max_width);
+    let body_lines = estimate_wrapped_lines(body, body_size, text_max_width);
+
+    (vertical_padding * 2.0
+        + title_lines as f64 * title_line_height
+        + body_lines as f64 * body_line_height
+        + dismiss_height
+        + gap * 2.0)
+        .max(120.0)
+}
+
 fn estimate_dropdown_surface_width_px<'a>(
     anchor_width: f64,
     labels: impl IntoIterator<Item = &'a str>,
@@ -366,13 +408,26 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
         dialog_style.layout.padding.max(12.0),
     );
 
-    let backdrop = xilem_masonry::view::sized_box(apply_direct_widget_style(
-        ecs_button(ctx.entity, OverlayUiAction::DismissDialog, ""),
+    let dialog_gap = dialog_style.layout.gap.max(10.0);
+    let dialog_surface_height = estimate_dialog_surface_height_px(
+        &title,
+        &body,
+        dialog_surface_width,
+        title_style.text.size,
+        body_style.text.size,
+        dismiss_style.text.size,
+        dismiss_style.layout.padding.max(8.0),
+        dialog_gap,
+        dialog_style.layout.padding.max(12.0),
+        dialog_style.layout.padding.max(12.0),
+    );
+
+    let backdrop = apply_direct_widget_style(
+        ecs_button(ctx.entity, OverlayUiAction::DismissDialog, "")
+            .width(Dim::Stretch)
+            .height(Dim::Stretch),
         &backdrop_style,
-    ))
-    .width(Dim::Stretch)
-    .height(Dim::Stretch)
-    .alignment(UnitPoint::TOP_LEFT);
+    );
 
     let dialog_surface = xilem_masonry::view::sized_box(apply_widget_style(
         flex_col(vec![
@@ -384,10 +439,12 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
             )
             .into_any_flex(),
         ])
-        .gap(Length::px(dialog_style.layout.gap.max(10.0))),
+        .cross_axis_alignment(CrossAxisAlignment::Stretch)
+        .gap(Length::px(dialog_gap)),
         &dialog_style,
     ))
-    .fixed_width(Length::px(dialog_surface_width));
+    .fixed_width(Length::px(dialog_surface_width))
+    .fixed_height(Length::px(dialog_surface_height));
 
     let centered_surface_layer = flex_col((dialog_surface.into_any_flex(),))
         .main_axis_alignment(MainAxisAlignment::Center)
@@ -397,7 +454,7 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
 
     Arc::new(
         zstack((backdrop, centered_surface_layer))
-            .alignment(UnitPoint::CENTER)
+            .alignment(UnitPoint::TOP_LEFT)
             .width(Dim::Stretch)
             .height(Dim::Stretch),
     )
@@ -537,13 +594,12 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
         .translate((anchor_rect.left, anchor_rect.top + anchor_rect.height + 4.0));
 
     let backdrop_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.backdrop"]);
-    let backdrop = xilem_masonry::view::sized_box(apply_direct_widget_style(
-        ecs_button(ctx.entity, OverlayUiAction::DismissDropdown, ""),
+    let backdrop = apply_direct_widget_style(
+        ecs_button(ctx.entity, OverlayUiAction::DismissDropdown, "")
+            .width(Dim::Stretch)
+            .height(Dim::Stretch),
         &backdrop_style,
-    ))
-    .width(Dim::Stretch)
-    .height(Dim::Stretch)
-    .alignment(UnitPoint::TOP_LEFT);
+    );
 
     Arc::new(
         zstack((backdrop, dropdown_panel.alignment(UnitPoint::TOP_LEFT)))

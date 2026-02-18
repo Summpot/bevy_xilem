@@ -13,7 +13,7 @@ use masonry::theme;
 use xilem::{Color, style::Style as _};
 use xilem_masonry::masonry::parley::{FontFamily, GenericFamily, style::FontStack};
 use xilem_masonry::masonry::properties::{
-    Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, Padding,
+    Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, LineBreaking, Padding,
 };
 use xilem_masonry::{
     WidgetView,
@@ -1162,7 +1162,9 @@ pub fn apply_label_style(view: Label, style: &ResolvedStyle) -> impl WidgetView<
         styled = styled.font(font_stack);
     }
 
-    styled.color(style.colors.text.unwrap_or(Color::WHITE))
+    styled
+        .color(style.colors.text.unwrap_or(Color::WHITE))
+        .line_break_mode(LineBreaking::WordWrap)
 }
 
 /// Apply text + box styling to a text input view.
