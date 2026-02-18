@@ -1,4 +1,4 @@
-use bevy_ecs::{entity::Entity, prelude::Component};
+use bevy_ecs::{entity::Entity, prelude::Component, prelude::Resource};
 use bevy_math::Rect;
 
 /// Marker component for UI tree roots.
@@ -158,10 +158,30 @@ pub struct OverlayComputedPosition {
     pub placement: OverlayPlacement,
 }
 
+/// Centralized z-ordered overlay stack.
+///
+/// The last entry is the top-most overlay (highest z-index).
+#[derive(Resource, Debug, Clone, Default, PartialEq, Eq)]
+pub struct OverlayStack {
+    pub active_overlays: Vec<Entity>,
+}
+
+/// Behavioral state for an overlay instance.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct OverlayState {
+    /// `true` for modal layers (dialogs/sheets) that block interactions under them.
+    pub is_modal: bool,
+    /// Optional trigger/anchor entity that opened this overlay.
+    pub anchor: Option<Entity>,
+}
+
 /// Runtime-computed screen bounds for overlay hit-testing.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
 pub struct OverlayBounds {
-    pub rect: Rect,
+    /// The actual overlay surface bounds (dialog panel, dropdown menu panel, etc.).
+    pub content_rect: Rect,
+    /// Trigger bounds used to avoid immediately re-closing on trigger re-click.
+    pub trigger_rect: Option<Rect>,
 }
 
 /// Marker for overlays that should close on outside click.

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy_ecs::{
     bundle::Bundle,
@@ -12,14 +12,14 @@ use bevy_input::{
     mouse::{MouseButton, MouseButtonInput},
 };
 use bevy_math::{Rect, Vec2};
-use bevy_window::Window;
+use bevy_window::{PrimaryWindow, Window};
 use masonry::core::{Widget, WidgetRef};
 
 use crate::{
-    AnchoredTo, AppI18n, AutoDismiss, OverlayAnchorRect, OverlayBounds, OverlayComputedPosition,
-    OverlayConfig, OverlayPlacement, StopUiPointerPropagation, UiComboBox, UiComboBoxChanged,
-    UiDialog, UiDropdownMenu, UiEventQueue, UiInteractionEvent, UiOverlayRoot, UiPointerEvent,
-    UiPointerHitEvent, UiRoot, events::UiEvent, runtime::MasonryRuntime,
+    AnchoredTo, AppI18n, OverlayAnchorRect, OverlayBounds, OverlayComputedPosition, OverlayConfig,
+    OverlayPlacement, OverlayStack, OverlayState, StopUiPointerPropagation, UiComboBox,
+    UiComboBoxChanged, UiDialog, UiDropdownMenu, UiEventQueue, UiInteractionEvent, UiOverlayRoot,
+    UiPointerEvent, UiPointerHitEvent, UiRoot, events::UiEvent, runtime::MasonryRuntime,
     styling::resolve_style_for_classes,
 };
 
@@ -45,6 +45,14 @@ pub struct OverlayPointerRoutingState {
 }
 
 impl OverlayPointerRoutingState {
+    fn push_unique(entries: &mut Vec<(Entity, MouseButton)>, window: Entity, button: MouseButton) {
+        if !entries.iter().any(|(existing_window, existing_button)| {
+            *existing_window == window && *existing_button == button
+        }) {
+            entries.push((window, button));
+        }
+    }
+
     /// Returns true if this exact pressed event should be blocked and consumes the block entry.
     pub(crate) fn take_suppressed_press(&mut self, window: Entity, button: MouseButton) -> bool {
         if let Some(index) = self
@@ -72,11 +80,76 @@ impl OverlayPointerRoutingState {
             false
         }
     }
+
+    /// Mark the next `Pressed` event for this `(window, button)` pair as consumed.
+    pub(crate) fn suppress_press(&mut self, window: Entity, button: MouseButton) {
+        Self::push_unique(&mut self.suppressed_presses, window, button);
+    }
+
+    /// Mark the next `Released` event for this `(window, button)` pair as consumed.
+    pub(crate) fn suppress_release(&mut self, window: Entity, button: MouseButton) {
+        Self::push_unique(&mut self.suppressed_releases, window, button);
+    }
+
+    /// Suppress both press and release for a globally consumed click.
+    pub(crate) fn suppress_click(&mut self, window: Entity, button: MouseButton) {
+        self.suppress_press(window, button);
+        self.suppress_release(window, button);
+    }
 }
 
 /// Message cursor resource used by the world-exclusive click-outside router.
 #[derive(Resource, Default)]
 pub struct OverlayMouseButtonCursor(pub MessageCursor<MouseButtonInput>);
+
+fn remove_overlay_from_stack(world: &mut World, entity: Entity) {
+    let Some(mut stack) = world.get_resource_mut::<OverlayStack>() else {
+        return;
+    };
+
+    stack.active_overlays.retain(|current| *current != entity);
+}
+
+fn push_overlay_to_stack(world: &mut World, entity: Entity) {
+    let Some(mut stack) = world.get_resource_mut::<OverlayStack>() else {
+        return;
+    };
+
+    stack.active_overlays.retain(|current| *current != entity);
+    stack.active_overlays.push(entity);
+}
+
+/// Keep [`OverlayStack`] synchronized with live overlay entities.
+pub fn sync_overlay_stack_lifecycle(world: &mut World) {
+    if !world.contains_resource::<OverlayStack>() {
+        world.insert_resource(OverlayStack::default());
+    }
+
+    let mut live_overlays = {
+        let mut query = world.query_filtered::<Entity, With<OverlayState>>();
+        query.iter(world).collect::<Vec<_>>()
+    };
+
+    live_overlays.sort_by_key(|entity| entity.index());
+    let live_set = live_overlays.iter().copied().collect::<HashSet<_>>();
+
+    {
+        let mut stack = world.resource_mut::<OverlayStack>();
+        stack
+            .active_overlays
+            .retain(|entity| live_set.contains(entity));
+    }
+
+    for entity in live_overlays {
+        let already_tracked = world
+            .resource::<OverlayStack>()
+            .active_overlays
+            .contains(&entity);
+        if !already_tracked {
+            push_overlay_to_stack(world, entity);
+        }
+    }
+}
 
 fn first_overlay_root(world: &mut World) -> Option<Entity> {
     let mut query = world.query_filtered::<Entity, With<UiOverlayRoot>>();
@@ -97,7 +170,16 @@ pub fn ensure_overlay_root_entity(world: &mut World) -> Entity {
 /// This is the recommended entrypoint for app-level modal/dropdown/tooltips.
 pub fn spawn_in_overlay_root<B: Bundle>(world: &mut World, bundle: B) -> Entity {
     let overlay_root = ensure_overlay_root_entity(world);
-    world.spawn((bundle, ChildOf(overlay_root))).id()
+    let entity = world.spawn((bundle, ChildOf(overlay_root))).id();
+
+    if world.get::<OverlayState>(entity).is_some()
+        || world.get::<UiDialog>(entity).is_some()
+        || world.get::<UiDropdownMenu>(entity).is_some()
+    {
+        push_overlay_to_stack(world, entity);
+    }
+
+    entity
 }
 
 fn collect_dropdowns_for_combo(world: &mut World, combo: Entity) -> Vec<Entity> {
@@ -129,6 +211,7 @@ fn close_dropdown(world: &mut World, dropdown_entity: Entity) {
         .map(|anchored| anchored.0);
 
     despawn_entity_tree(world, dropdown_entity);
+    remove_overlay_from_stack(world, dropdown_entity);
 
     if let Some(anchor) = anchor
         && let Some(mut combo_box) = world.get_mut::<UiComboBox>(anchor)
@@ -155,7 +238,7 @@ pub fn ensure_overlay_root(world: &mut World) {
     world.spawn((UiRoot, UiOverlayRoot));
 }
 
-/// Ensure built-in overlays have a default placement and autodismiss policy.
+/// Ensure built-in overlays have default placement, behavior, and bounds metadata.
 pub fn ensure_overlay_defaults(world: &mut World) {
     let dialogs = {
         let mut query = world.query_filtered::<Entity, With<UiDialog>>();
@@ -170,13 +253,19 @@ pub fn ensure_overlay_defaults(world: &mut World) {
                 auto_flip: false,
             });
         }
+        if world.get::<OverlayState>(dialog).is_none() {
+            world.entity_mut(dialog).insert(OverlayState {
+                is_modal: true,
+                anchor: None,
+            });
+        }
         if world.get::<OverlayComputedPosition>(dialog).is_none() {
             world
                 .entity_mut(dialog)
                 .insert(OverlayComputedPosition::default());
         }
-        if world.get::<AutoDismiss>(dialog).is_none() {
-            world.entity_mut(dialog).insert(AutoDismiss);
+        if world.get::<OverlayBounds>(dialog).is_none() {
+            world.entity_mut(dialog).insert(OverlayBounds::default());
         }
     }
 
@@ -202,10 +291,21 @@ pub fn ensure_overlay_defaults(world: &mut World) {
             });
         }
 
+        if world.get::<OverlayState>(dropdown).is_none() {
+            world.entity_mut(dropdown).insert(OverlayState {
+                is_modal: false,
+                anchor,
+            });
+        }
+
         if world.get::<OverlayComputedPosition>(dropdown).is_none() {
             world
                 .entity_mut(dropdown)
                 .insert(OverlayComputedPosition::default());
+        }
+
+        if world.get::<OverlayBounds>(dropdown).is_none() {
+            world.entity_mut(dropdown).insert(OverlayBounds::default());
         }
 
         if world.get::<OverlayAnchorRect>(dropdown).is_none() {
@@ -213,11 +313,9 @@ pub fn ensure_overlay_defaults(world: &mut World) {
                 .entity_mut(dropdown)
                 .insert(OverlayAnchorRect::default());
         }
-
-        if world.get::<AutoDismiss>(dropdown).is_none() {
-            world.entity_mut(dropdown).insert(AutoDismiss);
-        }
     }
+
+    sync_overlay_stack_lifecycle(world);
 }
 
 /// Move built-in overlay entities under [`UiOverlayRoot`], creating one if needed.
@@ -268,6 +366,7 @@ pub fn handle_overlay_actions(world: &mut World) {
             OverlayUiAction::DismissDialog => {
                 if world.get::<UiDialog>(event.entity).is_some() {
                     despawn_entity_tree(world, event.entity);
+                    remove_overlay_from_stack(world, event.entity);
                 }
             }
             OverlayUiAction::ToggleCombo => {
@@ -297,6 +396,11 @@ pub fn handle_overlay_actions(world: &mut World) {
                     (
                         UiDropdownMenu,
                         AnchoredTo(event.entity),
+                        OverlayState {
+                            is_modal: false,
+                            anchor: Some(event.entity),
+                        },
+                        OverlayBounds::default(),
                         OverlayAnchorRect::default(),
                         OverlayConfig {
                             placement,
@@ -304,7 +408,6 @@ pub fn handle_overlay_actions(world: &mut World) {
                             auto_flip,
                         },
                         OverlayComputedPosition::default(),
-                        AutoDismiss,
                     ),
                 );
 
@@ -352,6 +455,8 @@ pub fn handle_overlay_actions(world: &mut World) {
             }
         }
     }
+
+    sync_overlay_stack_lifecycle(world);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -391,10 +496,6 @@ fn collect_entity_hit_boxes(widget: WidgetRef<'_, dyn Widget>, out: &mut Vec<Ent
             height: size.height,
         },
     });
-}
-
-fn is_point_in_rect(rect: OverlayAnchorRect, x: f64, y: f64) -> bool {
-    x >= rect.left && x <= rect.left + rect.width && y >= rect.top && y <= rect.top + rect.height
 }
 
 fn translate_text(world: &World, key: Option<&str>, fallback: &str) -> String {
@@ -713,10 +814,10 @@ fn clamp_overlay_origin(
 /// projectors apply to overlay surfaces.
 pub fn sync_overlay_positions(world: &mut World) {
     let overlays = {
-        let mut query = world.query::<(Entity, &OverlayConfig)>();
+        let mut query = world.query::<(Entity, &OverlayState, Option<&OverlayConfig>)>();
         query
             .iter(world)
-            .map(|(entity, config)| (entity, *config))
+            .map(|(entity, state, config)| (entity, *state, config.copied()))
             .collect::<Vec<_>>()
     };
 
@@ -730,10 +831,18 @@ pub fn sync_overlay_positions(world: &mut World) {
     }
 
     let (viewport_width, viewport_height) = {
-        let mut window_query = world.query::<&Window>();
-        let Some(window) = window_query.iter(world).next() else {
-            tracing::error!("sync_overlay_positions could not find any Window entity");
-            return;
+        let mut primary_window_query = world.query_filtered::<&Window, With<PrimaryWindow>>();
+        let primary_window = primary_window_query.iter(world).next();
+
+        let window = if let Some(window) = primary_window {
+            window
+        } else {
+            let mut window_query = world.query::<&Window>();
+            let Some(window) = window_query.iter(world).next() else {
+                tracing::error!("sync_overlay_positions could not find any Window entity");
+                return;
+            };
+            window
         };
 
         let window_width = window.width() as f64;
@@ -755,24 +864,35 @@ pub fn sync_overlay_positions(world: &mut World) {
         anchor_rects.insert(hit.entity, hit.rect);
     }
 
-    let mut stale_dropdowns = Vec::new();
+    let mut stale_overlays = Vec::new();
 
-    for (entity, config) in overlays {
+    for (entity, state, config) in overlays {
         if world.get_entity(entity).is_err() {
             continue;
         }
 
+        let preferred_placement =
+            config
+                .map(|cfg| cfg.placement)
+                .unwrap_or(if state.anchor.is_some() {
+                    OverlayPlacement::BottomStart
+                } else {
+                    OverlayPlacement::Center
+                });
+        let auto_flip = config
+            .map(|cfg| cfg.auto_flip)
+            .unwrap_or(state.anchor.is_some());
+        let anchor_entity = state.anchor.or(config.and_then(|cfg| cfg.anchor));
+
         let (width, height) = overlay_size_for_entity(world, entity, &anchor_rects);
 
-        let (anchor_rect, anchor_gap) = if let Some(anchor) = config.anchor {
+        let (anchor_rect, anchor_gap) = if let Some(anchor) = anchor_entity {
             let Some(anchor_rect) = anchor_rects.get(&anchor).copied() else {
                 tracing::warn!(
                     "Anchor entity {:?} geometry resolution failed (missing GlobalTransform/Node/hit-box)",
                     anchor
                 );
-                if world.get::<UiDropdownMenu>(entity).is_some() {
-                    stale_dropdowns.push(entity);
-                }
+                stale_overlays.push(entity);
                 continue;
             };
             tracing::debug!(
@@ -793,14 +913,19 @@ pub fn sync_overlay_positions(world: &mut World) {
             )
         };
 
-        let mut chosen_placement = config.placement;
+        let mut chosen_placement = preferred_placement;
         let mut did_flip = false;
-        let (mut x, mut y) =
-            overlay_origin_for_placement(config.placement, anchor_rect, width, height, anchor_gap);
+        let (mut x, mut y) = overlay_origin_for_placement(
+            preferred_placement,
+            anchor_rect,
+            width,
+            height,
+            anchor_gap,
+        );
 
-        if config.auto_flip
+        if auto_flip
             && overflows_bottom(y, height, viewport_height)
-            && let Some(flipped) = flip_placement(config.placement)
+            && let Some(flipped) = flip_placement(preferred_placement)
         {
             let (fx, fy) =
                 overlay_origin_for_placement(flipped, anchor_rect, width, height, anchor_gap);
@@ -872,15 +997,29 @@ pub fn sync_overlay_positions(world: &mut World) {
             Vec2::new((x + width) as f32, (y + height) as f32),
         );
 
+        let trigger_rect = anchor_entity
+            .and_then(|anchor| anchor_rects.get(&anchor).copied())
+            .map(|anchor_rect| {
+                Rect::from_corners(
+                    Vec2::new(anchor_rect.left as f32, anchor_rect.top as f32),
+                    Vec2::new(
+                        (anchor_rect.left + anchor_rect.width) as f32,
+                        (anchor_rect.top + anchor_rect.height) as f32,
+                    ),
+                )
+            });
+
         if let Some(mut bounds) = world.get_mut::<OverlayBounds>(entity) {
-            bounds.rect = bounds_rect;
+            bounds.content_rect = bounds_rect;
+            bounds.trigger_rect = trigger_rect;
         } else {
-            world
-                .entity_mut(entity)
-                .insert(OverlayBounds { rect: bounds_rect });
+            world.entity_mut(entity).insert(OverlayBounds {
+                content_rect: bounds_rect,
+                trigger_rect,
+            });
         }
 
-        if let Some(anchor) = config.anchor
+        if let Some(anchor) = anchor_entity
             && let Some(anchor_rect) = anchor_rects.get(&anchor).copied()
         {
             if let Some(mut cached_anchor) = world.get_mut::<OverlayAnchorRect>(entity) {
@@ -891,11 +1030,18 @@ pub fn sync_overlay_positions(world: &mut World) {
         }
     }
 
-    for stale in stale_dropdowns {
+    for stale in stale_overlays {
         if world.get_entity(stale).is_ok() {
-            close_dropdown(world, stale);
+            if world.get::<UiDropdownMenu>(stale).is_some() {
+                close_dropdown(world, stale);
+            } else {
+                despawn_entity_tree(world, stale);
+                remove_overlay_from_stack(world, stale);
+            }
         }
     }
+
+    sync_overlay_stack_lifecycle(world);
 }
 
 /// Backward-compatible alias kept for existing callsites.
@@ -903,8 +1049,22 @@ pub fn sync_dropdown_positions(world: &mut World) {
     sync_overlay_positions(world);
 }
 
-/// Native Bevy click-outside dismissal using cursor + [`OverlayBounds`] intersection tests.
-pub fn native_dismiss_overlays_on_click(world: &mut World) {
+fn primary_window_cursor(world: &mut World) -> Option<(Entity, Vec2)> {
+    let mut primary_window_query = world.query_filtered::<(Entity, &Window), With<PrimaryWindow>>();
+    if let Some((window_entity, window)) = primary_window_query.iter(world).next()
+        && let Some(cursor) = window.cursor_position()
+    {
+        return Some((window_entity, cursor));
+    }
+
+    let mut window_query = world.query::<(Entity, &Window)>();
+    let (window_entity, window) = window_query.iter(world).next()?;
+    let cursor = window.cursor_position()?;
+    Some((window_entity, cursor))
+}
+
+/// Centralized native Bevy click interception for layered overlay dismissal + blocking.
+pub fn handle_global_overlay_clicks(world: &mut World) {
     let left_just_pressed = {
         let Some(mouse_input) = world.get_resource::<ButtonInput<MouseButton>>() else {
             return;
@@ -916,81 +1076,73 @@ pub fn native_dismiss_overlays_on_click(world: &mut World) {
         return;
     }
 
-    tracing::debug!("Mouse clicked! Searching for window...");
+    sync_overlay_stack_lifecycle(world);
 
-    let cursor_pos = {
-        let mut window_query = world.query::<&Window>();
-        let Some(window) = window_query.iter(world).next() else {
-            tracing::error!("Could not find a Window!");
+    let top_overlay_entity = {
+        let stack = world.resource::<OverlayStack>();
+        let Some(top_overlay) = stack.active_overlays.last().copied() else {
             return;
         };
-
-        let Some(cursor_pos) = window.cursor_position() else {
-            tracing::debug!("Cursor is out of window bounds.");
-            return;
-        };
-
-        tracing::debug!("Native click at: {:?}", cursor_pos);
-        cursor_pos
+        top_overlay
     };
 
-    let overlays = {
-        let mut query = world.query::<(
-            Entity,
-            &OverlayConfig,
-            Option<&AutoDismiss>,
-            Option<&OverlayBounds>,
-            Option<&OverlayAnchorRect>,
-        )>();
-
-        query
-            .iter(world)
-            .map(|(entity, config, autodismiss, bounds, anchor_rect)| {
-                (
-                    entity,
-                    *config,
-                    autodismiss.is_some(),
-                    bounds.map(|bounds| bounds.rect),
-                    anchor_rect.copied(),
-                )
-            })
-            .collect::<Vec<_>>()
-    };
-
-    if overlays.is_empty() {
+    if world.get_entity(top_overlay_entity).is_err() {
+        sync_overlay_stack_lifecycle(world);
         return;
     }
 
-    let cursor_x = cursor_pos.x as f64;
-    let cursor_y = cursor_pos.y as f64;
-    let mut overlays_to_close = Vec::new();
+    let Some((window_entity, cursor)) = primary_window_cursor(world) else {
+        return;
+    };
 
-    for (entity, config, auto_dismiss, bounds, anchor_rect) in overlays {
-        if !auto_dismiss || world.get_entity(entity).is_err() {
-            continue;
-        }
+    let (clicked_content, clicked_trigger) = {
+        let Some(bounds) = world.get::<OverlayBounds>(top_overlay_entity) else {
+            return;
+        };
+        let clicked_content = bounds.content_rect.contains(cursor);
+        let clicked_trigger = bounds
+            .trigger_rect
+            .is_some_and(|rect| rect.contains(cursor));
+        (clicked_content, clicked_trigger)
+    };
 
-        let clicked_inside_overlay = bounds.is_some_and(|rect| rect.contains(cursor_pos));
-        let clicked_inside_anchor = config.anchor.is_some()
-            && anchor_rect.is_some_and(|rect| is_point_in_rect(rect, cursor_x, cursor_y));
-
-        if !clicked_inside_overlay && !clicked_inside_anchor {
-            overlays_to_close.push(entity);
-        }
+    if clicked_content || clicked_trigger {
+        return;
     }
 
-    for entity in overlays_to_close {
-        if world.get_entity(entity).is_err() {
-            continue;
-        }
+    let is_modal = world
+        .get::<OverlayState>(top_overlay_entity)
+        .is_some_and(|state| state.is_modal);
 
-        tracing::debug!("Click outside detected! Despawning overlay {:?}", entity);
-        if world.get::<UiDropdownMenu>(entity).is_some() {
-            close_dropdown(world, entity);
+    if world.get::<UiDropdownMenu>(top_overlay_entity).is_some() {
+        close_dropdown(world, top_overlay_entity);
+    } else {
+        despawn_entity_tree(world, top_overlay_entity);
+        remove_overlay_from_stack(world, top_overlay_entity);
+    }
+
+    if let Some(mut routing) = world.get_resource_mut::<OverlayPointerRoutingState>() {
+        // Consuming the native click avoids accidental click-through to lower layers.
+        routing.suppress_click(window_entity, MouseButton::Left);
+        if is_modal {
+            tracing::debug!(
+                "Closed modal overlay {:?} from outside click and consumed pointer",
+                top_overlay_entity
+            );
         } else {
-            despawn_entity_tree(world, entity);
+            tracing::debug!(
+                "Closed non-modal overlay {:?} from outside click and consumed pointer",
+                top_overlay_entity
+            );
         }
     }
+
+    sync_overlay_stack_lifecycle(world);
+}
+
+/// Backward-compatible alias kept for existing callsites.
+pub fn native_dismiss_overlays_on_click(world: &mut World) {
+    handle_global_overlay_clicks(world);
 }
 
 /// Backward-compatible alias kept for existing callsites.

@@ -144,18 +144,27 @@ Hit-testing invariant:
 - `ensure_overlay_root` guarantees one overlay root exists when regular `UiRoot` exists.
 - Overlay root is synthesized as an independent root and rendered on top through root stacking.
 
+Centralized layering model:
+
+- `OverlayStack { active_overlays: Vec<Entity> }` is the single z-order source of truth.
+  - Order is bottom → top.
+  - `active_overlays.last()` is always the top-most interactive overlay.
+- `sync_overlay_stack_lifecycle` keeps the stack synchronized with live entities and prunes stale entries.
+- Built-in overlay creation paths (`spawn_in_overlay_root`, combo dropdown open) register overlays into the stack.
+
 Universal placement model:
 
 - `OverlayPlacement` defines canonical positions used by all floating surfaces:
   `Center`, `Top`, `Bottom`, `Left`, `Right`, `TopStart`, `TopEnd`,
   `BottomStart`, `BottomEnd`, `LeftStart`, `RightStart`.
-- `OverlayConfig { placement, anchor, auto_flip }` is attached to overlay entities.
-  - `anchor: None` anchors to the window (dialogs).
-  - `anchor: Some(entity)` anchors to another UI entity (dropdowns/tooltips).
+- `OverlayState { is_modal, anchor }` is attached to each active overlay.
+  - `is_modal: true` for modal surfaces (dialogs).
+  - `anchor: Some(entity)` for anchored overlays (dropdowns/tooltips).
+- `OverlayConfig { placement, anchor, auto_flip }` remains the placement policy component.
 - `OverlayComputedPosition { x, y, width, height, placement }` stores runtime-resolved
   placement after collision checks.
-- `OverlayBounds { rect }` stores runtime-computed screen-space bounds for native Bevy
-  click-outside hit tests.
+- `OverlayBounds { content_rect, trigger_rect }` stores runtime-computed bounds for
+  click-outside and trigger-protection behavior.
 
 Built-in floating widgets:
 
@@ -163,7 +172,7 @@ Built-in floating widgets:
 - `UiComboBox` (anchor control)
 - `UiDropdownMenu` (floating list in overlay layer)
 - `AnchoredTo(Entity)` + `OverlayAnchorRect` for anchor tracking
-- `AutoDismiss` marker for overlays that close on outside click.
+- `OverlayState` / `OverlayBounds` for behavior + hit-testing.
 
 Overlay ownership and lifecycle policy:
 
@@ -182,8 +191,9 @@ Modal backdrop dismissal policy:
 Overlay placement policy:
 
 - `sync_overlay_positions` runs in `PostUpdate` and computes final positions for all entities
-  with `OverlayConfig`.
-- The system reads dynamic logical width/height from the first available Bevy `Window`
+  with `OverlayState`.
+- The system reads dynamic logical width/height from `PrimaryWindow`
+  (falling back to the first window when absent in tests/headless cases)
   every frame and anchor widget rectangles gathered from Masonry widget geometry.
 - Placement sync is ordered after Masonry retained-tree rebuild so anchor/widget geometry is
   up-to-date before collision and auto-flip resolution.
@@ -191,8 +201,9 @@ Overlay placement policy:
   placement would overflow (notably bottom → top for near-bottom dropdowns).
 - Final clamped coordinates are written to `OverlayComputedPosition`, and overlay projectors
   read these values when rendering transformed surfaces.
-- The same pass also writes `OverlayBounds` for each overlay surface so dismissal logic can run
-  without depending on Xilem/Masonry internal event routing.
+- The same pass writes:
+  - `OverlayBounds.content_rect` for the overlay panel,
+  - `OverlayBounds.trigger_rect` (when anchored) for immediate re-click protection.
 
 Overlay runtime flow:
 
@@ -202,14 +213,23 @@ Overlay runtime flow:
   - `UiDialog` → `{ Center, None, auto_flip: false }`
   - `UiDropdownMenu` (from combo) → `{ BottomStart, Some(combo), auto_flip: true }`
 
+Layered dismissal / blocking flow:
+
+- `handle_global_overlay_clicks` runs in `PreUpdate` before Masonry input injection.
+- On left click:
+  1. Read top-most overlay from `OverlayStack`.
+  2. If click is inside `content_rect` or `trigger_rect`, do nothing (allow normal UI handling).
+  3. If outside, close only that top-most overlay.
+- Closed clicks are consumed through pointer-routing suppression, preventing click-through into
+  lower layers in the same frame.
+- This supports nested overlays (for example combo dropdown inside a modal dialog) with
+  deterministic one-layer-at-a-time dismissal.
+
 Pointer routing + click-outside:
 
-- `native_dismiss_overlays_on_click` runs in `Update` and uses native Bevy mouse state
-  (`ButtonInput<MouseButton>`) plus cursor position from the first available Bevy `Window`.
-- Outside clicks are resolved against stored `OverlayBounds` and optional anchor rectangles
-  (`OverlayAnchorRect`) to keep trigger clicks from self-dismissing a just-opened dropdown.
-- `AutoDismiss` overlays (dialogs/dropdowns) are closed directly in ECS without relying on
-  Xilem internal message cursors.
+- `handle_global_overlay_clicks` is the canonical implementation; the
+  `native_dismiss_overlays_on_click` name remains as a compatibility alias.
+- Outside clicks are resolved against `OverlayBounds` from the centralized overlay stack.
 - `bubble_ui_pointer_events` remains available for ECS pointer-bubbling paths and walks up
   `ChildOf` parent chains until roots or `StopUiPointerPropagation`.
 
@@ -329,6 +349,7 @@ regular UI content.
 - `StyleSheet`
 - `XilemFontBridge`
 - `AppI18n`
+- `OverlayStack`
 - `MasonryRuntime`
 
 and registers tweening support with:
@@ -337,10 +358,8 @@ and registers tweening support with:
 
 and registers systems:
 
-- `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> bubble_ui_pointer_events -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
-- `Update`: `ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> handle_overlay_actions -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
-  with `native_dismiss_overlays_on_click` explicitly registered in `Update` between defaults
-  and action handling
+- `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> bubble_ui_pointer_events -> handle_global_overlay_clicks -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
+- `Update`: `ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> handle_overlay_actions -> sync_overlay_stack_lifecycle -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime`, followed by
   `sync_overlay_positions` after runtime rebuild
 

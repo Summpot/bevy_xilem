@@ -14,8 +14,9 @@ use xilem_masonry::{
 
 use crate::{
     ecs::{
-        AnchoredTo, LocalizeText, OverlayAnchorRect, OverlayComputedPosition, UiButton, UiComboBox,
-        UiDialog, UiDropdownMenu, UiFlexColumn, UiFlexRow, UiLabel, UiOverlayRoot,
+        AnchoredTo, LocalizeText, OverlayAnchorRect, OverlayBounds, OverlayComputedPosition,
+        UiButton, UiComboBox, UiDialog, UiDropdownMenu, UiFlexColumn, UiFlexRow, UiLabel,
+        UiOverlayRoot,
     },
     i18n::{AppI18n, resolve_localized_text},
     overlay::OverlayUiAction,
@@ -840,11 +841,17 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
         })
         .unwrap_or_default();
 
-    let anchor_rect = ctx
+    let anchor_width = ctx
         .world
-        .get::<OverlayAnchorRect>(ctx.entity)
-        .copied()
-        .unwrap_or_default();
+        .get::<OverlayBounds>(ctx.entity)
+        .and_then(|bounds| bounds.trigger_rect)
+        .map(|rect| (rect.max.x - rect.min.x) as f64)
+        .or_else(|| {
+            ctx.world
+                .get::<OverlayAnchorRect>(ctx.entity)
+                .map(|anchor_rect| anchor_rect.width)
+        })
+        .unwrap_or(160.0);
 
     let computed_position = ctx
         .world
@@ -853,7 +860,7 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
         .unwrap_or_default();
 
     let estimated_dropdown_width = estimate_dropdown_surface_width_px(
-        anchor_rect.width.max(1.0),
+        anchor_width.max(1.0),
         translated_options.iter().map(String::as_str),
         item_style.text.size,
         item_style.layout.padding * 2.0 + menu_style.layout.padding * 2.0,

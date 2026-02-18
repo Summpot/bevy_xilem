@@ -8,13 +8,14 @@ use bevy_tweening::{AnimationSystem, TweeningPlugin};
 use bevy_window::{CursorLeft, CursorMoved, WindowResized};
 
 use crate::{
+    OverlayStack,
     events::UiEventQueue,
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
     i18n::AppI18n,
     overlay::{
         OverlayPointerRoutingState, bubble_ui_pointer_events, ensure_overlay_defaults,
-        ensure_overlay_root, handle_overlay_actions, native_dismiss_overlays_on_click,
-        reparent_overlay_entities, sync_overlay_positions,
+        ensure_overlay_root, handle_global_overlay_clicks, handle_overlay_actions,
+        reparent_overlay_entities, sync_overlay_positions, sync_overlay_stack_lifecycle,
     },
     projection::{UiProjectorRegistry, register_builtin_projectors},
     runtime::{MasonryRuntime, inject_bevy_input_into_masonry, rebuild_masonry_runtime},
@@ -39,6 +40,7 @@ impl Plugin for BevyXilemPlugin {
             .init_resource::<StyleSheet>()
             .init_resource::<XilemFontBridge>()
             .init_resource::<AppI18n>()
+            .init_resource::<OverlayStack>()
             .init_resource::<OverlayPointerRoutingState>()
             .init_non_send_resource::<MasonryRuntime>()
             .add_message::<CursorMoved>()
@@ -53,6 +55,7 @@ impl Plugin for BevyXilemPlugin {
                     collect_bevy_font_assets,
                     sync_fonts_to_xilem,
                     bubble_ui_pointer_events,
+                    handle_global_overlay_clicks,
                     inject_bevy_input_into_masonry,
                     sync_ui_interaction_markers,
                 )
@@ -65,17 +68,12 @@ impl Plugin for BevyXilemPlugin {
                     reparent_overlay_entities,
                     ensure_overlay_defaults,
                     handle_overlay_actions,
+                    sync_overlay_stack_lifecycle,
                     mark_style_dirty,
                     sync_style_targets,
                 )
                     .chain()
                     .before(AnimationSystem::AnimationUpdate),
-            )
-            .add_systems(
-                Update,
-                native_dismiss_overlays_on_click
-                    .after(ensure_overlay_defaults)
-                    .before(handle_overlay_actions),
             )
             .add_systems(
                 Update,

@@ -761,7 +761,12 @@ fn ensure_overlay_defaults_assigns_dialog_and_dropdown_configs() {
     assert_eq!(dialog_config.placement, crate::OverlayPlacement::Center);
     assert_eq!(dialog_config.anchor, None);
     assert!(!dialog_config.auto_flip);
-    assert!(world.get::<crate::AutoDismiss>(dialog).is_some());
+    let dialog_state = world
+        .get::<crate::OverlayState>(dialog)
+        .expect("dialog should receive overlay state");
+    assert!(dialog_state.is_modal);
+    assert_eq!(dialog_state.anchor, None);
+    assert!(world.get::<crate::OverlayBounds>(dialog).is_some());
 
     let dropdown_config = world
         .get::<crate::OverlayConfig>(dropdown)
@@ -772,7 +777,12 @@ fn ensure_overlay_defaults_assigns_dialog_and_dropdown_configs() {
     );
     assert_eq!(dropdown_config.anchor, Some(combo));
     assert!(dropdown_config.auto_flip);
-    assert!(world.get::<crate::AutoDismiss>(dropdown).is_some());
+    let dropdown_state = world
+        .get::<crate::OverlayState>(dropdown)
+        .expect("dropdown should receive overlay state");
+    assert!(!dropdown_state.is_modal);
+    assert_eq!(dropdown_state.anchor, Some(combo));
+    assert!(world.get::<crate::OverlayBounds>(dropdown).is_some());
 }
 
 #[test]
@@ -800,10 +810,10 @@ fn sync_overlay_positions_uses_dynamic_primary_window_size_and_updates_bounds() 
         .get::<crate::OverlayBounds>(dialog)
         .expect("dialog should have overlay bounds");
 
-    assert!(initial_bounds.rect.min.x >= 0.0);
-    assert!(initial_bounds.rect.min.y >= 0.0);
-    assert!(initial_bounds.rect.max.x <= 1024.0 + f32::EPSILON);
-    assert!(initial_bounds.rect.max.y <= 768.0 + f32::EPSILON);
+    assert!(initial_bounds.content_rect.min.x >= 0.0);
+    assert!(initial_bounds.content_rect.min.y >= 0.0);
+    assert!(initial_bounds.content_rect.max.x <= 1024.0 + f32::EPSILON);
+    assert!(initial_bounds.content_rect.max.y <= 768.0 + f32::EPSILON);
 
     {
         let world = app.world_mut();
@@ -828,8 +838,8 @@ fn sync_overlay_positions_uses_dynamic_primary_window_size_and_updates_bounds() 
     assert!(resized.x > initial.x);
     assert_eq!(initial.width, resized.width);
     assert_eq!(initial.height, resized.height);
-    assert!(resized_bounds.rect.max.x <= 1600.0 + f32::EPSILON);
-    assert!(resized_bounds.rect.max.y <= 900.0 + f32::EPSILON);
+    assert!(resized_bounds.content_rect.max.x <= 1600.0 + f32::EPSILON);
+    assert!(resized_bounds.content_rect.max.y <= 900.0 + f32::EPSILON);
 }
 
 #[test]
@@ -863,6 +873,7 @@ fn sync_overlay_positions_works_without_primary_window_marker() {
 fn native_dismiss_overlays_on_click_closes_only_outside_bounds_and_anchor() {
     let mut world = World::new();
     world.insert_resource(ButtonInput::<MouseButton>::default());
+    world.insert_resource(crate::OverlayStack::default());
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -879,21 +890,17 @@ fn native_dismiss_overlays_on_click_closes_only_outside_bounds_and_anchor() {
         .spawn((
             crate::UiDropdownMenu,
             crate::AnchoredTo(anchor),
-            crate::OverlayConfig {
-                placement: crate::OverlayPlacement::BottomStart,
+            crate::OverlayState {
+                is_modal: false,
                 anchor: Some(anchor),
-                auto_flip: true,
             },
             crate::OverlayBounds {
-                rect: Rect::from_corners(Vec2::new(100.0, 100.0), Vec2::new(200.0, 200.0)),
+                content_rect: Rect::from_corners(Vec2::new(100.0, 100.0), Vec2::new(200.0, 200.0)),
+                trigger_rect: Some(Rect::from_corners(
+                    Vec2::new(220.0, 100.0),
+                    Vec2::new(300.0, 130.0),
+                )),
             },
-            crate::OverlayAnchorRect {
-                left: 220.0,
-                top: 100.0,
-                width: 80.0,
-                height: 30.0,
-            },
-            crate::AutoDismiss,
         ))
         .id();
 
@@ -919,9 +926,98 @@ fn native_dismiss_overlays_on_click_closes_only_outside_bounds_and_anchor() {
 }
 
 #[test]
+fn native_dismiss_overlays_on_click_closes_nested_topmost_overlay_first() {
+    let mut world = World::new();
+    world.insert_resource(ButtonInput::<MouseButton>::default());
+    world.insert_resource(crate::OverlayStack::default());
+    world.insert_resource(crate::OverlayPointerRoutingState::default());
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    window.set_cursor_position(Some(Vec2::new(500.0, 180.0)));
+    world.spawn((window, PrimaryWindow));
+
+    let dialog = world
+        .spawn((
+            crate::UiDialog::new("modal", "body"),
+            crate::OverlayState {
+                is_modal: true,
+                anchor: None,
+            },
+            crate::OverlayBounds {
+                content_rect: Rect::from_corners(Vec2::new(150.0, 120.0), Vec2::new(650.0, 500.0)),
+                trigger_rect: None,
+            },
+        ))
+        .id();
+
+    let combo_anchor = world.spawn_empty().id();
+
+    let dropdown = world
+        .spawn((
+            crate::UiDropdownMenu,
+            crate::AnchoredTo(combo_anchor),
+            crate::OverlayState {
+                is_modal: false,
+                anchor: Some(combo_anchor),
+            },
+            crate::OverlayBounds {
+                content_rect: Rect::from_corners(Vec2::new(200.0, 220.0), Vec2::new(360.0, 340.0)),
+                trigger_rect: Some(Rect::from_corners(
+                    Vec2::new(180.0, 160.0),
+                    Vec2::new(340.0, 196.0),
+                )),
+            },
+        ))
+        .id();
+
+    crate::sync_overlay_stack_lifecycle(&mut world);
+
+    {
+        let stack = world.resource::<crate::OverlayStack>();
+        assert_eq!(stack.active_overlays, vec![dialog, dropdown]);
+    }
+
+    {
+        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
+        input.press(MouseButton::Left);
+    }
+
+    crate::native_dismiss_overlays_on_click(&mut world);
+
+    assert!(world.get_entity(dropdown).is_err());
+    assert!(world.get_entity(dialog).is_ok());
+    {
+        let stack = world.resource::<crate::OverlayStack>();
+        assert_eq!(stack.active_overlays, vec![dialog]);
+    }
+
+    {
+        let mut query = world.query_filtered::<&mut Window, With<PrimaryWindow>>();
+        let mut primary = query
+            .single_mut(&mut world)
+            .expect("primary window should exist");
+        primary.set_cursor_position(Some(Vec2::new(60.0, 60.0)));
+    }
+    {
+        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
+        input.release(MouseButton::Left);
+        input.clear();
+        input.press(MouseButton::Left);
+    }
+
+    crate::native_dismiss_overlays_on_click(&mut world);
+
+    assert!(world.get_entity(dialog).is_err());
+    let stack = world.resource::<crate::OverlayStack>();
+    assert!(stack.active_overlays.is_empty());
+}
+
+#[test]
 fn native_dismiss_overlays_on_click_works_without_primary_window_marker() {
     let mut world = World::new();
     world.insert_resource(ButtonInput::<MouseButton>::default());
+    world.insert_resource(crate::OverlayStack::default());
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
@@ -936,15 +1032,14 @@ fn native_dismiss_overlays_on_click_works_without_primary_window_marker() {
     let dialog = world
         .spawn((
             crate::UiDialog::new("title", "body"),
-            crate::OverlayConfig {
-                placement: crate::OverlayPlacement::Center,
+            crate::OverlayState {
+                is_modal: true,
                 anchor: None,
-                auto_flip: false,
             },
             crate::OverlayBounds {
-                rect: Rect::from_corners(Vec2::new(100.0, 100.0), Vec2::new(300.0, 260.0)),
+                content_rect: Rect::from_corners(Vec2::new(100.0, 100.0), Vec2::new(300.0, 260.0)),
+                trigger_rect: None,
             },
-            crate::AutoDismiss,
         ))
         .id();
 
@@ -968,15 +1063,14 @@ fn native_dismiss_overlays_on_click_logs_when_window_missing() {
     let dialog = world
         .spawn((
             crate::UiDialog::new("title", "body"),
-            crate::OverlayConfig {
-                placement: crate::OverlayPlacement::Center,
+            crate::OverlayState {
+                is_modal: true,
                 anchor: None,
-                auto_flip: false,
             },
             crate::OverlayBounds {
-                rect: Rect::from_corners(Vec2::new(100.0, 100.0), Vec2::new(300.0, 260.0)),
+                content_rect: Rect::from_corners(Vec2::new(100.0, 100.0), Vec2::new(300.0, 260.0)),
+                trigger_rect: None,
             },
-            crate::AutoDismiss,
         ))
         .id();
 
