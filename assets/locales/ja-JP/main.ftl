@@ -1,6 +1,17 @@
 hello_world = こんにちは、世界！
 han_unification_test = 骨 门 关 直
 toggle_language = 言語を切り替え
+showcase-edge-button = 端クリック判定ボタン
+showcase-show-modal = モーダルを表示
+showcase-dialog-title = オーバーレイルートのモーダル
+showcase-dialog-body = このダイアログはポータルレイヤーで描画され、外側クリックで閉じられます。
+showcase-dialog-close = 閉じる
+showcase-combo-placeholder = フォント構成を選択
+showcase-combo-option-inter = Inter のみ
+showcase-combo-option-sc = Inter + Noto Sans CJK SC
+showcase-combo-option-jp = Inter + Noto Sans CJK JP
+showcase-status-edge-clicks = 端クリック回数
+showcase-status-combo-value = コンボ値
 
 # Pixiv クライアント
 pixiv-sidebar-expand = 展開

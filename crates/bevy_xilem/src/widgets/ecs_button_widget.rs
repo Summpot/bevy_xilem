@@ -49,6 +49,11 @@ impl<A> EcsButtonWidget<A> {
             pressed: false,
         }
     }
+
+    #[must_use]
+    pub const fn entity(&self) -> Entity {
+        self.entity
+    }
 }
 
 impl<A> EcsButtonWidget<A>

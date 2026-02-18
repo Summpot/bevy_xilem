@@ -1,6 +1,17 @@
 hello_world = 你好，世界！
 han_unification_test = 骨 门 关 直
 toggle_language = 切换语言
+showcase-edge-button = 边缘点击测试按钮
+showcase-show-modal = 显示模态框
+showcase-dialog-title = 通过覆盖层根节点显示模态框
+showcase-dialog-body = 此对话框渲染在门户层中，点击外部即可关闭。
+showcase-dialog-close = 关闭
+showcase-combo-placeholder = 选择字体配置
+showcase-combo-option-inter = 仅 Inter
+showcase-combo-option-sc = Inter + Noto Sans CJK SC
+showcase-combo-option-jp = Inter + Noto Sans CJK JP
+showcase-status-edge-clicks = 边缘点击次数
+showcase-status-combo-value = 下拉值
 
 # Pixiv 客户端
 pixiv-sidebar-expand = 展开

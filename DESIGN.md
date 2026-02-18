@@ -115,6 +115,35 @@ Style resolution helpers (`resolve_style`, `resolve_style_for_classes`) and appl
 Projectors now primarily consume `ComputedStyle` (through `resolve_style`) rather than
 re-running a full cascade per frame.
 
+Hit-testing invariant:
+
+- Layout-affecting style properties for controls (notably padding/border/background) are applied
+  on the target control widget itself (instead of only through a purely visual outer wrapper).
+- This ensures Masonry's layout and pointer hit-testing use the same structural box model as what
+  users see on screen.
+
+### 5.8) Overlay/Portal layer architecture
+
+`bevy_xilem` now includes a built-in ECS overlay model for floating UI:
+
+- `UiOverlayRoot` marker component defines a global portal root.
+- `ensure_overlay_root` guarantees one overlay root exists when regular `UiRoot` exists.
+- Overlay root is synthesized as an independent root and rendered on top through root stacking.
+
+Built-in floating widgets:
+
+- `UiDialog` (modal with full-screen backdrop)
+- `UiComboBox` (anchor control)
+- `UiDropdownMenu` (floating list in overlay layer)
+- `AnchoredTo(Entity)` + `OverlayAnchorRect` for anchor tracking
+
+Overlay runtime flow:
+
+- Built-in overlay actions (`OverlayUiAction`) are drained by `handle_overlay_actions`.
+- Combo open/close spawns/despawns dropdown entities under `UiOverlayRoot`.
+- `sync_dropdown_positions` queries Masonry's latest window-space widget bounds and updates
+  `OverlayAnchorRect` so dropdowns follow anchors during resize/scroll/layout changes.
+
 ### 5.6) Font Bridge (Bevy assets/fonts → Masonry/Parley)
 
 `bevy_xilem` now includes an internal font bridge resource (`XilemFontBridge`) and
@@ -216,6 +245,10 @@ so user code no longer needs to allocate/store a dedicated node-id component.
   4. store `SynthesizedUiViews`
   5. rebuild retained Masonry root in `MasonryRuntime`
 
+When multiple `UiRoot` entities exist (for example main root + overlay root),
+`MasonryRuntime` composes them into a stacked root so overlay content is rendered above
+regular UI content.
+
 ## Plugin wiring
 
 `BevyXilemPlugin` initializes:
@@ -236,7 +269,7 @@ and registers tweening support with:
 and registers systems:
 
 - `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
-- `Update`: `mark_style_dirty -> sync_style_targets -> animate_style_transitions`
+- `Update`: `ensure_overlay_root -> handle_overlay_actions -> sync_dropdown_positions -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime` (chained)
 
 Transition execution details:

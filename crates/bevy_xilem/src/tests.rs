@@ -3,8 +3,9 @@ use std::{sync::Arc, time::Duration};
 use crate::{
     AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, Hovered, Pressed, ProjectionCtx,
     Selector, StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue,
-    UiProjectorRegistry, UiRoot, UiView, ecs_button, register_builtin_projectors, resolve_style,
-    resolve_style_for_entity_classes, synthesize_roots_with_stats,
+    UiProjectorRegistry, UiRoot, UiView, ecs_button, ensure_overlay_root, handle_overlay_actions,
+    register_builtin_projectors, resolve_style, resolve_style_for_entity_classes,
+    synthesize_roots_with_stats,
 };
 use bevy_app::App;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
@@ -36,7 +37,7 @@ fn plugin_wires_synthesis_and_runtime() {
     app.update();
 
     let synthesized = app.world().resource::<crate::SynthesizedUiViews>();
-    assert_eq!(synthesized.roots.len(), 1);
+    assert_eq!(synthesized.roots.len(), 2);
 
     let _runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
 }
@@ -604,4 +605,80 @@ fn resolve_localized_text_falls_back_when_cache_is_missing() {
 
     assert_eq!(with_fallback, "Fallback");
     assert_eq!(without_fallback, "hello_world");
+}
+
+#[test]
+fn ensure_overlay_root_spawns_once() {
+    let mut world = World::new();
+    world.spawn((UiRoot,));
+
+    ensure_overlay_root(&mut world);
+    ensure_overlay_root(&mut world);
+
+    let mut overlay_query = world.query_filtered::<Entity, With<crate::UiOverlayRoot>>();
+    let overlays = overlay_query.iter(&world).collect::<Vec<_>>();
+
+    assert_eq!(overlays.len(), 1);
+    assert!(world.get::<UiRoot>(overlays[0]).is_some());
+}
+
+#[test]
+fn overlay_actions_toggle_and_select_combo_box() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let overlay_root = world.spawn((UiRoot, crate::UiOverlayRoot)).id();
+    let combo = world
+        .spawn((crate::UiComboBox::new(vec![
+            crate::UiComboOption::new("one", "One"),
+            crate::UiComboOption::new("two", "Two"),
+        ]),))
+        .id();
+
+    world
+        .resource::<UiEventQueue>()
+        .push_typed(combo, crate::OverlayUiAction::ToggleCombo);
+
+    handle_overlay_actions(&mut world);
+
+    let mut dropdown_query = world.query::<(Entity, &crate::AnchoredTo, &crate::UiDropdownMenu)>();
+    let dropdowns = dropdown_query
+        .iter(&world)
+        .filter_map(|(entity, anchored_to, _)| (anchored_to.0 == combo).then_some(entity))
+        .collect::<Vec<_>>();
+
+    assert_eq!(dropdowns.len(), 1);
+    let dropdown = dropdowns[0];
+    assert!(
+        world
+            .get::<bevy_ecs::hierarchy::ChildOf>(dropdown)
+            .is_some()
+    );
+    assert_eq!(
+        world
+            .get::<bevy_ecs::hierarchy::ChildOf>(dropdown)
+            .expect("dropdown should be parented")
+            .parent(),
+        overlay_root
+    );
+    assert!(
+        world
+            .get::<crate::UiComboBox>(combo)
+            .expect("combo should exist")
+            .is_open
+    );
+
+    world.resource::<UiEventQueue>().push_typed(
+        dropdown,
+        crate::OverlayUiAction::SelectComboItem { index: 1 },
+    );
+
+    handle_overlay_actions(&mut world);
+
+    let combo_after = world
+        .get::<crate::UiComboBox>(combo)
+        .expect("combo should exist");
+    assert_eq!(combo_after.selected, 1);
+    assert!(!combo_after.is_open);
+    assert!(world.get_entity(dropdown).is_err());
 }

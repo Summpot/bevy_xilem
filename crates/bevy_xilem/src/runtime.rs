@@ -10,6 +10,7 @@ use bevy_input::{
     mouse::{MouseButton, MouseButtonInput, MouseScrollUnit, MouseWheel},
 };
 use bevy_window::{CursorLeft, CursorMoved, WindowResized};
+use masonry::layout::{Dim, UnitPoint};
 use masonry::{
     app::{RenderRoot, RenderRootOptions, WindowSizePolicy},
     core::{
@@ -21,8 +22,12 @@ use masonry::{
     theme::default_property_set,
     widgets::Passthrough,
 };
+use xilem::style::Style as _;
 use xilem_core::{ProxyError, RawProxy, SendMessage, View, ViewId};
-use xilem_masonry::{ViewCtx, view::label};
+use xilem_masonry::{
+    ViewCtx,
+    view::{label, zstack},
+};
 
 use crate::{
     events::{UiEventQueue, install_global_ui_event_queue},
@@ -254,6 +259,19 @@ impl MasonryRuntime {
     }
 }
 
+fn compose_runtime_root(roots: &[UiView]) -> UiView {
+    match roots {
+        [] => Arc::new(label("bevy_xilem: no synthesized root")),
+        [root] => root.clone(),
+        _ => Arc::new(
+            zstack(roots.to_vec())
+                .alignment(UnitPoint::TOP_LEFT)
+                .width(Dim::Stretch)
+                .height(Dim::Stretch),
+        ),
+    }
+}
+
 fn map_mouse_button(button: MouseButton) -> Option<PointerButton> {
     match button {
         MouseButton::Left => Some(PointerButton::Primary),
@@ -297,12 +315,8 @@ pub fn inject_bevy_input_into_masonry(
 
 /// PostUpdate rebuild step: diff synthesized root against retained Masonry tree.
 pub fn rebuild_masonry_runtime(world: &mut World) {
-    let next_root = world
-        .resource::<SynthesizedUiViews>()
-        .roots
-        .first()
-        .cloned()
-        .unwrap_or_else(|| Arc::new(label("bevy_xilem: no synthesized root")));
+    let roots = world.resource::<SynthesizedUiViews>().roots.clone();
+    let next_root = compose_runtime_root(&roots);
 
     world
         .non_send_resource_mut::<MasonryRuntime>()

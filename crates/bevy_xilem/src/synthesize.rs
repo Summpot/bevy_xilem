@@ -4,7 +4,7 @@ use bevy_ecs::{hierarchy::Children, prelude::*};
 use xilem_masonry::view::{FlexExt as _, flex_col, label};
 
 use crate::{
-    ecs::UiRoot,
+    ecs::{UiOverlayRoot, UiRoot},
     projection::{UiProjectorRegistry, UiView},
 };
 
@@ -26,8 +26,15 @@ pub struct UiSynthesisStats {
 
 /// Collect all entities marked with [`UiRoot`].
 pub fn gather_ui_roots(world: &mut World) -> Vec<Entity> {
-    let mut query = world.query_filtered::<Entity, With<UiRoot>>();
-    query.iter(world).collect()
+    let mut query = world.query_filtered::<(Entity, Option<&UiOverlayRoot>), With<UiRoot>>();
+    let mut roots = query
+        .iter(world)
+        .map(|(entity, overlay)| (entity, overlay.is_some()))
+        .collect::<Vec<_>>();
+
+    // Keep deterministic ordering while ensuring overlays are synthesized last.
+    roots.sort_by_key(|(entity, is_overlay)| (*is_overlay, entity.to_bits()));
+    roots.into_iter().map(|(entity, _)| entity).collect()
 }
 
 /// Synthesize Xilem Masonry views and stats for provided roots.

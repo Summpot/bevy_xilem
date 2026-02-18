@@ -8,9 +8,13 @@ use bevy_ecs::{
     prelude::*,
 };
 use bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim};
+use masonry::core::HasProperty;
 use masonry::theme;
 use xilem::{Color, style::Style as _};
 use xilem_masonry::masonry::parley::{FontFamily, GenericFamily, style::FontStack};
+use xilem_masonry::masonry::properties::{
+    Background, BorderColor, BorderWidth, CornerRadius, Padding,
+};
 use xilem_masonry::{
     WidgetView,
     view::{Label, TextInput, sized_box},
@@ -677,6 +681,29 @@ where
 {
     sized_box(view)
         .padding(style.layout.padding)
+        .corner_radius(style.layout.corner_radius)
+        .border(
+            style.colors.border.unwrap_or(Color::TRANSPARENT),
+            style.layout.border_width,
+        )
+        .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
+}
+
+/// Apply style directly on the target widget.
+///
+/// This should be preferred for interactive controls to ensure visual bounds
+/// and hit-testing bounds remain identical.
+pub fn apply_direct_widget_style<V>(view: V, style: &ResolvedStyle) -> impl WidgetView<(), ()>
+where
+    V: WidgetView<(), ()>,
+    V::Widget: Sized
+        + HasProperty<Padding>
+        + HasProperty<CornerRadius>
+        + HasProperty<BorderColor>
+        + HasProperty<BorderWidth>
+        + HasProperty<Background>,
+{
+    view.padding(style.layout.padding)
         .corner_radius(style.layout.corner_radius)
         .border(
             style.colors.border.unwrap_or(Color::TRANSPARENT),

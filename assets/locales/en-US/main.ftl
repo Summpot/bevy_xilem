@@ -1,6 +1,17 @@
 hello_world = Hello, world!
 han_unification_test = 骨 门 关 直
 toggle_language = Switch language
+showcase-edge-button = Edge-hit test button
+showcase-show-modal = Show modal
+showcase-dialog-title = Modal dialog via overlay root
+showcase-dialog-body = This dialog is rendered in the portal layer, with click-outside to close.
+showcase-dialog-close = Close
+showcase-combo-placeholder = Select font profile
+showcase-combo-option-inter = Inter only
+showcase-combo-option-sc = Inter + Noto Sans CJK SC
+showcase-combo-option-jp = Inter + Noto Sans CJK JP
+showcase-status-edge-clicks = Edge clicks
+showcase-status-combo-value = Combo value
 
 # Pixiv client
 pixiv-sidebar-expand = Expand
