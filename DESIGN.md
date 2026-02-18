@@ -125,41 +125,40 @@ two-stage sync pipeline to register custom font bytes into Masonry's font databa
   queues bytes from Bevy's `Assets<Font>`.
 - **Bridge flush:** `sync_fonts_to_xilem` registers queued bytes into Masonry/Parley.
 
-- App-level API is exposed through `AppBevyXilemExt`:
-  - `.register_xilem_font_bytes(&[u8])`
-  - `.register_xilem_font_path("assets/fonts/<font>.ttf|otf")`
-- Registered fonts are deduplicated and flushed during `PreUpdate`.
+- App-level synchronous API is exposed through `AppBevyXilemExt`:
+  - `SyncAssetSource::{Bytes(&[u8]), FilePath(&str)}`
+  - `.register_xilem_font(SyncAssetSource::...)`
+- Registration is fail-fast for missing files and flushes into the active
+  Masonry runtime font database immediately during app setup.
+- Legacy helpers (`register_xilem_font_bytes` / `register_xilem_font_path`) remain as
+  thin compatibility wrappers over the new API.
 - Styles can provide a per-node font stack (`Vec<String>`), which is mapped to
   Parley `FontStack` fallback order.
 - This enables stylesheet-level `font_family` usage for custom CJK fonts without
   requiring projector-level ad-hoc font wiring.
 
-### 5.7) i18n/l10n bridge (`bevy_fluent`) + data-driven locale font fallback
+### 5.7) Synchronous i18n registry + data-driven locale font fallback
 
-`bevy_xilem` now integrates `bevy_fluent` for ECS-side text localization and ties
-locale state into projector text/font resolution.
+`bevy_xilem` now uses an in-memory Fluent registry without async asset loading.
 
-- `BevyXilemPlugin` initializes i18n resources and, when Bevy's asset plugins
-  are available in the app, also installs `FluentPlugin`:
-  - `ActiveLocale(LanguageIdentifier)` — app-selected locale source of truth
-  - `LocalizationAssetRoot` (default `"locales"`)
-  - `LocalizationFolderHandle`
-  - `LocalizationCache`
-- `Update` stage now runs i18n systems:
-  - `load_localization_assets`
-  - `sync_fluent_locale_from_active_locale`
-  - `refresh_localization_cache`
-- New ECS component `LocalizeText { key }` marks entities whose text should be looked up
-  from Fluent bundles.
-- Built-in `UiLabel`/`UiButton` projectors resolve text through cache-backed Fluent lookup,
-  with fallback to original hardcoded text.
+- `BevyXilemPlugin` initializes:
+  - `AppI18n { active_locale, bundles }`
+  - `LocaleFontRegistry { default_font_stack, locale_mappings }`
+- App-level synchronous API is exposed through `AppBevyXilemExt`:
+  - `SyncTextSource::{String(&str), FilePath(&str)}`
+  - `.register_i18n_bundle(locale, SyncTextSource::...)`
+- Bundle parsing is fail-fast (invalid locale tags, missing files, or invalid FTL all panic
+  during setup).
+- `LocalizeText { key }` is resolved through `AppI18n::translate(key)` with key fallback.
+- Built-in `UiLabel`/`UiButton` projectors apply locale font fallback based on
+  `AppI18n.active_locale` when explicit style font stacks are absent.
 
 To address Han Unification and locale-specific typography needs without hardcoding app assets,
 `bevy_xilem` now uses a configurable resource:
 
 - `LocaleFontRegistry { default_font_stack, locale_mappings }`
 
-Built-in label projection reads `ActiveLocale` and applies fallback `font_family` only when an
+Built-in projection reads `AppI18n.active_locale` and applies fallback `font_family` only when an
 explicit style stack is absent:
 
 - if `locale_mappings` contains the active locale tag, that stack is used;
@@ -238,25 +237,17 @@ so user code no longer needs to allocate/store a dedicated node-id component.
 - `UiEventQueue`
 - `StyleSheet`
 - `XilemFontBridge`
-- `ActiveLocale`
+- `AppI18n`
 - `LocaleFontRegistry`
-- `LocalizationAssetRoot`
-- `LocalizationFolderHandle`
-- `LocalizationCache`
 - `MasonryRuntime`
 
 and registers tweening support with:
 
 - `TweeningPlugin` (from crates.io `bevy_tweening` crate)
 
-and conditional localization asset support with:
-
-- `FluentPlugin` (from `bevy_fluent`, auto-added when Bevy asset plugins are present)
-
 and registers systems:
 
 - `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
-- `Update` (i18n): `load_localization_assets -> sync_fluent_locale_from_active_locale -> refresh_localization_cache`
 - `Update`: `mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime` (chained)
 

@@ -1,7 +1,6 @@
 use bevy_app::{App, Plugin, PostUpdate, PreUpdate, Update};
-use bevy_asset::{AssetEvent, AssetPlugin};
+use bevy_asset::AssetEvent;
 use bevy_ecs::schedule::IntoScheduleConfigs;
-use bevy_fluent::prelude::{FluentPlugin, Locale};
 use bevy_input::mouse::{MouseButtonInput, MouseWheel};
 use bevy_text::Font;
 use bevy_time::TimePlugin;
@@ -11,11 +10,7 @@ use bevy_window::{CursorLeft, CursorMoved, WindowResized};
 use crate::{
     events::UiEventQueue,
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
-    i18n::{
-        ActiveLocale, LocaleFontRegistry, LocalizationAssetRoot, LocalizationCache,
-        LocalizationFolderHandle, load_localization_assets, refresh_localization_cache,
-        sync_fluent_locale_from_active_locale,
-    },
+    i18n::{AppI18n, LocaleFontRegistry},
     projection::{UiProjectorRegistry, register_builtin_projectors},
     runtime::{MasonryRuntime, inject_bevy_input_into_masonry, rebuild_masonry_runtime},
     styling::{
@@ -38,11 +33,8 @@ impl Plugin for BevyXilemPlugin {
             .init_resource::<UiEventQueue>()
             .init_resource::<StyleSheet>()
             .init_resource::<XilemFontBridge>()
-            .init_resource::<ActiveLocale>()
+            .init_resource::<AppI18n>()
             .init_resource::<LocaleFontRegistry>()
-            .init_resource::<LocalizationAssetRoot>()
-            .init_resource::<LocalizationFolderHandle>()
-            .init_resource::<LocalizationCache>()
             .init_non_send_resource::<MasonryRuntime>()
             .add_message::<CursorMoved>()
             .add_message::<CursorLeft>()
@@ -62,15 +54,6 @@ impl Plugin for BevyXilemPlugin {
             )
             .add_systems(
                 Update,
-                (
-                    load_localization_assets,
-                    sync_fluent_locale_from_active_locale,
-                    refresh_localization_cache,
-                )
-                    .chain(),
-            )
-            .add_systems(
-                Update,
                 (mark_style_dirty, sync_style_targets)
                     .chain()
                     .before(AnimationSystem::AnimationUpdate),
@@ -80,15 +63,6 @@ impl Plugin for BevyXilemPlugin {
                 animate_style_transitions.after(AnimationSystem::AnimationUpdate),
             )
             .add_systems(PostUpdate, (synthesize_ui, rebuild_masonry_runtime).chain());
-
-        if app.is_plugin_added::<AssetPlugin>() && !app.is_plugin_added::<FluentPlugin>() {
-            app.add_plugins(FluentPlugin);
-        }
-
-        if app.world().get_resource::<Locale>().is_none() {
-            let locale = app.world().resource::<ActiveLocale>().0.clone();
-            app.insert_resource(Locale::new(locale));
-        }
 
         let mut registry = app.world_mut().resource_mut::<UiProjectorRegistry>();
         register_builtin_projectors(&mut registry);

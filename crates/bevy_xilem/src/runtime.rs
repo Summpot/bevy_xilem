@@ -62,6 +62,7 @@ pub struct MasonryRuntime {
 
 impl FromWorld for MasonryRuntime {
     fn from_world(world: &mut World) -> Self {
+        world.init_resource::<UiEventQueue>();
         let queue = world.resource::<UiEventQueue>().shared_queue();
         install_global_ui_event_queue(queue);
 

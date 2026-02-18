@@ -1,16 +1,13 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use crate::{
-    ActiveLocale, AppBevyXilemExt, BevyXilemPlugin, ColorStyle, Hovered, LocaleFontRegistry,
-    LocalizationCache, Pressed, ProjectionCtx, Selector, StyleRule, StyleSetter, StyleSheet,
-    UiEventQueue, UiProjectorRegistry, UiRoot, UiView, ecs_button, register_builtin_projectors,
-    resolve_style, resolve_style_for_entity_classes, synthesize_roots_with_stats,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, Hovered, LocaleFontRegistry, Pressed,
+    ProjectionCtx, Selector, StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue,
+    UiProjectorRegistry, UiRoot, UiView, ecs_button, register_builtin_projectors, resolve_style,
+    resolve_style_for_entity_classes, synthesize_roots_with_stats,
 };
 use bevy_app::App;
-use bevy_asset::{AssetPlugin, Assets};
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use bevy_fluent::prelude::BundleAsset;
-use bevy_tasks::{IoTaskPool, TaskPool};
 use bevy_tweening::Lens;
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -70,80 +67,34 @@ fn ui_event_queue_drains_typed_actions() {
 }
 
 #[test]
-fn plugin_adds_fluent_assets_when_asset_plugin_exists() {
+fn plugin_initializes_app_i18n_resource() {
     let mut app = App::new();
-    app.add_plugins((AssetPlugin::default(), BevyXilemPlugin));
+    app.add_plugins(BevyXilemPlugin);
 
-    assert!(app.world().contains_resource::<Assets<BundleAsset>>());
+    assert!(app.world().contains_resource::<AppI18n>());
 }
 
 #[test]
-fn localization_cache_resolves_showcase_hello_world_for_zh_cn() {
-    let _ = IoTaskPool::get_or_init(TaskPool::new);
-
-    let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("assets");
-    assert!(
-        assets_dir.join("locales/zh-CN/main.ftl").exists(),
-        "expected showcase locale file at {}",
-        assets_dir.join("locales/zh-CN/main.ftl").display()
+fn app_i18n_resolves_showcase_hello_world_for_zh_cn() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin).register_i18n_bundle(
+        "zh-CN",
+        SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
     );
 
-    let mut app = App::new();
-    app.add_plugins((
-        AssetPlugin {
-            file_path: assets_dir.to_string_lossy().into_owned(),
-            ..AssetPlugin::default()
-        },
-        BevyXilemPlugin,
-    ));
-    app.insert_resource(ActiveLocale::new(
-        "zh-CN"
-            .parse()
-            .expect("zh-CN locale identifier should parse"),
-    ));
-
-    let mut translated = None;
-    for _ in 0..300 {
-        app.update();
-
-        translated = app
-            .world()
-            .resource::<LocalizationCache>()
-            .content("hello_world");
-
-        if translated.is_some() {
-            break;
-        }
-
-        std::thread::sleep(Duration::from_millis(5));
-    }
-
-    assert_eq!(translated.as_deref(), Some("你好，世界！"));
+    assert_eq!(
+        app.world().resource::<AppI18n>().translate("hello_world"),
+        "你好，世界！"
+    );
 }
 
 #[test]
 fn resolve_localized_text_prefers_translation_over_uilabel_fallback() {
-    let _ = IoTaskPool::get_or_init(TaskPool::new);
-
-    let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("assets");
-
     let mut app = App::new();
-    app.add_plugins((
-        AssetPlugin {
-            file_path: assets_dir.to_string_lossy().into_owned(),
-            ..AssetPlugin::default()
-        },
-        BevyXilemPlugin,
-    ));
-    app.insert_resource(ActiveLocale::new(
-        "zh-CN"
-            .parse()
-            .expect("zh-CN locale identifier should parse"),
-    ));
+    app.add_plugins(BevyXilemPlugin).register_i18n_bundle(
+        "zh-CN",
+        SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
+    );
 
     let entity = app
         .world_mut()
@@ -153,42 +104,28 @@ fn resolve_localized_text_prefers_translation_over_uilabel_fallback() {
         ))
         .id();
 
-    let mut resolved = String::from("Hello world");
-    for _ in 0..300 {
-        app.update();
-
-        resolved = crate::resolve_localized_text(app.world(), entity, "Hello world");
-        if resolved == "你好，世界！" {
-            break;
-        }
-
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    let resolved = crate::resolve_localized_text(app.world(), entity, "Hello world");
 
     assert_eq!(resolved, "你好，世界！");
 }
 
 #[test]
 fn localized_text_updates_after_active_locale_change() {
-    let _ = IoTaskPool::get_or_init(TaskPool::new);
-
-    let assets_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join("assets");
-
     let mut app = App::new();
-    app.add_plugins((
-        AssetPlugin {
-            file_path: assets_dir.to_string_lossy().into_owned(),
-            ..AssetPlugin::default()
-        },
-        BevyXilemPlugin,
-    ));
-    app.insert_resource(ActiveLocale::new(
-        "en-US"
-            .parse()
-            .expect("en-US locale identifier should parse"),
-    ));
+    app.add_plugins(BevyXilemPlugin)
+        .insert_resource(AppI18n::new(
+            "en-US"
+                .parse()
+                .expect("en-US locale identifier should parse"),
+        ))
+        .register_i18n_bundle(
+            "en-US",
+            SyncTextSource::String(include_str!("../../../assets/locales/en-US/main.ftl")),
+        )
+        .register_i18n_bundle(
+            "zh-CN",
+            SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
+        );
 
     let entity = app
         .world_mut()
@@ -198,35 +135,17 @@ fn localized_text_updates_after_active_locale_change() {
         ))
         .id();
 
-    let mut resolved_en = String::from("Hello world");
-    for _ in 0..300 {
-        app.update();
-
-        resolved_en = crate::resolve_localized_text(app.world(), entity, "Hello world");
-        if resolved_en == "Hello, world!" {
-            break;
-        }
-
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    let resolved_en = crate::resolve_localized_text(app.world(), entity, "Hello world");
 
     assert_eq!(resolved_en, "Hello, world!");
 
-    app.world_mut().resource_mut::<ActiveLocale>().0 = "zh-CN"
-        .parse()
-        .expect("zh-CN locale identifier should parse");
+    app.world_mut().resource_mut::<AppI18n>().set_active_locale(
+        "zh-CN"
+            .parse()
+            .expect("zh-CN locale identifier should parse"),
+    );
 
-    let mut resolved_zh = resolved_en;
-    for _ in 0..300 {
-        app.update();
-
-        resolved_zh = crate::resolve_localized_text(app.world(), entity, "Hello world");
-        if resolved_zh == "你好，世界！" {
-            break;
-        }
-
-        std::thread::sleep(Duration::from_millis(5));
-    }
+    let resolved_zh = crate::resolve_localized_text(app.world(), entity, "Hello world");
 
     assert_eq!(resolved_zh, "你好，世界！");
 }
@@ -646,7 +565,7 @@ fn locale_font_registry_resolves_mapping_then_default() {
 #[test]
 fn locale_font_fallback_uses_registry_and_respects_explicit_style_font() {
     let mut world = World::new();
-    world.insert_resource(ActiveLocale::new(
+    world.insert_resource(AppI18n::new(
         "fr-FR"
             .parse()
             .expect("fr-FR locale identifier should parse"),

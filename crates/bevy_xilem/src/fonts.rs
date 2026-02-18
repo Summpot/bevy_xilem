@@ -50,6 +50,10 @@ impl XilemFontBridge {
         let data = fs::read(path)?;
         Ok(self.register_font_bytes(&data))
     }
+
+    pub fn take_pending_fonts(&mut self) -> Vec<Vec<u8>> {
+        std::mem::take(&mut self.pending_fonts)
+    }
 }
 
 /// Option A bridge: consume Bevy `AssetEvent<Font>` and queue loaded font bytes.
@@ -87,11 +91,11 @@ pub fn sync_fonts_to_xilem(
     mut runtime: NonSendMut<MasonryRuntime>,
     mut bridge: ResMut<XilemFontBridge>,
 ) {
-    if bridge.pending_fonts.is_empty() {
+    let pending = bridge.take_pending_fonts();
+    if pending.is_empty() {
         return;
     }
 
-    let pending = std::mem::take(&mut bridge.pending_fonts);
     for font_bytes in pending {
         runtime
             .render_root

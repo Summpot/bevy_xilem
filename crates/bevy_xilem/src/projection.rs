@@ -155,7 +155,8 @@ fn project_label(label_component: &UiLabel, ctx: ProjectionCtx<'_>) -> UiView {
 }
 
 fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
+    let mut style = resolve_style(ctx.world, ctx.entity);
+    apply_locale_font_family_fallback(ctx.world, &mut style);
     let label = resolve_localized_text(ctx.world, ctx.entity, &button_component.label);
     let localization_key = ctx
         .world

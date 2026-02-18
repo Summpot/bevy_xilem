@@ -1,14 +1,14 @@
 use std::{f32::consts::PI, process::Command, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
-use bevy_asset::{AssetPlugin, AssetServer, Assets, Handle, RenderAssetUsages};
+use bevy_asset::{AssetPlugin, Assets, Handle, RenderAssetUsages};
 use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_image::Image as BevyImage;
-use bevy_text::{Font, TextPlugin};
+use bevy_text::TextPlugin;
 use bevy_xilem::{
-    ActiveLocale, AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, LocaleFontRegistry,
-    LocalizationCache, ProjectionCtx, ResolvedStyle, StyleClass, StyleSetter, StyleSheet,
-    StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView, apply_label_style,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, LayoutStyle, LocaleFontRegistry,
+    ProjectionCtx, ResolvedStyle, StyleClass, StyleSetter, StyleSheet, StyleTransition,
+    SyncAssetSource, SyncTextSource, TextStyle, UiEventQueue, UiRoot, UiView, apply_label_style,
     apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -83,18 +83,24 @@ fn locale_badge(locale: &LanguageIdentifier) -> &'static str {
 }
 
 fn tr(world: &World, key: &str, fallback: &str) -> String {
-    let translated = world.get_resource::<LocalizationCache>().and_then(|cache| {
-        cache.content(key).or_else(|| {
-            if key.contains('.') {
-                let normalized = key.replace('.', "-");
-                cache.content(normalized.as_str())
-            } else {
-                None
-            }
-        })
-    });
+    let Some(i18n) = world.get_resource::<AppI18n>() else {
+        return fallback.to_string();
+    };
 
-    translated.unwrap_or_else(|| fallback.to_string())
+    let translated = i18n.translate(key);
+    if translated != key {
+        return translated;
+    }
+
+    if key.contains('.') {
+        let normalized = key.replace('.', "-");
+        let normalized_translated = i18n.translate(normalized.as_str());
+        if normalized_translated != normalized {
+            return normalized_translated;
+        }
+    }
+
+    fallback.to_string()
 }
 
 fn set_status(world: &mut World, message: impl Into<String>) {
@@ -445,11 +451,6 @@ struct ImageBridge {
     result_rx: Receiver<ImageResult>,
 }
 
-#[derive(Resource, Default)]
-struct PixivFontHandles {
-    handles: Vec<Handle<Font>>,
-}
-
 #[derive(Clone, Copy)]
 struct CardAnimLens {
     start: CardAnimState,
@@ -489,18 +490,18 @@ fn ensure_task_pool_initialized() {
 }
 
 fn register_bridge_fonts(app: &mut App) {
-    app.register_xilem_font_bytes(include_bytes!("../../../assets/fonts/Inter-Regular.otf"));
-    app.register_xilem_font_bytes(include_bytes!(
-        "../../../assets/fonts/NotoSansCJKsc-Regular.otf"
+    app.register_xilem_font(SyncAssetSource::FilePath("assets/fonts/Inter-Regular.otf"));
+    app.register_xilem_font(SyncAssetSource::FilePath(
+        "assets/fonts/NotoSansCJKsc-Regular.otf",
     ));
-    app.register_xilem_font_bytes(include_bytes!(
-        "../../../assets/fonts/NotoSansCJKjp-Regular.otf"
+    app.register_xilem_font(SyncAssetSource::FilePath(
+        "assets/fonts/NotoSansCJKjp-Regular.otf",
     ));
-    app.register_xilem_font_bytes(include_bytes!(
-        "../../../assets/fonts/NotoSansCJKtc-Regular.otf"
+    app.register_xilem_font(SyncAssetSource::FilePath(
+        "assets/fonts/NotoSansCJKtc-Regular.otf",
     ));
-    app.register_xilem_font_bytes(include_bytes!(
-        "../../../assets/fonts/NotoSansCJKkr-Regular.otf"
+    app.register_xilem_font(SyncAssetSource::FilePath(
+        "assets/fonts/NotoSansCJKkr-Regular.otf",
     ));
 }
 
@@ -794,36 +795,15 @@ fn setup(mut commands: Commands) {
     let _ = cmd_tx.send(NetworkCommand::DiscoverIdp);
 }
 
-fn load_pixiv_fonts(asset_server: Res<AssetServer>, mut font_handles: ResMut<PixivFontHandles>) {
-    if !font_handles.handles.is_empty() {
-        return;
-    }
-
-    font_handles
-        .handles
-        .push(asset_server.load("fonts/Inter-Regular.otf"));
-    font_handles
-        .handles
-        .push(asset_server.load("fonts/NotoSansCJKsc-Regular.otf"));
-    font_handles
-        .handles
-        .push(asset_server.load("fonts/NotoSansCJKjp-Regular.otf"));
-    font_handles
-        .handles
-        .push(asset_server.load("fonts/NotoSansCJKtc-Regular.otf"));
-    font_handles
-        .handles
-        .push(asset_server.load("fonts/NotoSansCJKkr-Regular.otf"));
-}
-
 fn setup_styles(
     mut sheet: ResMut<StyleSheet>,
-    active_locale: Option<Res<ActiveLocale>>,
+    i18n: Option<Res<AppI18n>>,
     font_registry: Res<LocaleFontRegistry>,
 ) {
-    let locale = active_locale
-        .as_ref()
-        .map_or_else(|| parse_locale("en-US"), |current| current.0.clone());
+    let locale = i18n.as_ref().map_or_else(
+        || parse_locale("en-US"),
+        |current| current.active_locale.clone(),
+    );
     let default_fonts = font_registry.font_stack_for_locale(&locale);
 
     sheet.set_class(
@@ -1083,8 +1063,8 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
     let controls = *ctx.world.resource::<PixivControls>();
     let current_locale = ctx
         .world
-        .get_resource::<ActiveLocale>()
-        .map_or_else(|| parse_locale("en-US"), |locale| locale.0.clone());
+        .get_resource::<AppI18n>()
+        .map_or_else(|| parse_locale("en-US"), |i18n| i18n.active_locale.clone());
 
     let mut items = Vec::new();
     items.push(
@@ -1625,11 +1605,13 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
             }
             AppAction::CycleLocale => {
                 let next = {
-                    let current = world.resource::<ActiveLocale>().0.clone();
+                    let current = world.resource::<AppI18n>().active_locale.clone();
                     next_locale(&current)
                 };
 
-                world.resource_mut::<ActiveLocale>().0 = next.clone();
+                world
+                    .resource_mut::<AppI18n>()
+                    .set_active_locale(next.clone());
                 {
                     let font_stack = {
                         let registry = world.resource::<LocaleFontRegistry>();
@@ -2390,7 +2372,19 @@ fn build_app() -> App {
         TextPlugin::default(),
         BevyXilemPlugin,
     ))
-    .init_resource::<PixivFontHandles>()
+    .insert_resource(AppI18n::new(parse_locale("en-US")))
+    .register_i18n_bundle(
+        "en-US",
+        SyncTextSource::FilePath("assets/locales/en-US/main.ftl"),
+    )
+    .register_i18n_bundle(
+        "zh-CN",
+        SyncTextSource::FilePath("assets/locales/zh-CN/main.ftl"),
+    )
+    .register_i18n_bundle(
+        "ja-JP",
+        SyncTextSource::FilePath("assets/locales/ja-JP/main.ftl"),
+    )
     .insert_resource(configure_locale_font_registry())
     .register_projector::<PixivRoot>(project_root)
     .register_projector::<PixivSidebar>(project_sidebar)
@@ -2403,7 +2397,7 @@ fn build_app() -> App {
     .register_projector::<PixivDetailOverlay>(project_detail_overlay)
     .register_projector::<PixivOverlayTags>(project_overlay_tags)
     .register_projector::<OverlayTag>(project_overlay_tag)
-    .add_systems(Startup, (setup_styles, load_pixiv_fonts, setup))
+    .add_systems(Startup, (setup_styles, setup))
     .add_systems(PreUpdate, drain_ui_actions_and_dispatch)
     .add_systems(
         Update,

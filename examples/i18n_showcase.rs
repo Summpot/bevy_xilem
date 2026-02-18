@@ -2,15 +2,15 @@ use std::sync::Arc;
 
 use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_xilem::{
-    ActiveLocale, AppBevyXilemExt, BevyXilemPlugin, BuiltinUiAction, ColorStyle, LayoutStyle,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, BuiltinUiAction, ColorStyle, LayoutStyle,
     LocaleFontRegistry, LocalizeText, ProjectionCtx, StyleClass, StyleSetter, StyleSheet,
-    TextStyle, UiButton, UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiView, apply_label_style,
-    apply_widget_style,
+    SyncAssetSource, SyncTextSource, TextStyle, UiButton, UiEventQueue, UiFlexColumn, UiLabel,
+    UiRoot, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
-    bevy_asset::{AssetPlugin, AssetServer, Handle},
+    bevy_asset::AssetPlugin,
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPool},
-    bevy_text::{Font, TextPlugin},
+    bevy_text::TextPlugin,
     resolve_style, run_app_with_window_options,
     xilem::{
         Color,
@@ -19,11 +19,6 @@ use bevy_xilem::{
     },
 };
 use unic_langid::LanguageIdentifier;
-
-#[derive(Resource, Default)]
-struct DemoFontHandles {
-    handles: Vec<Handle<Font>>,
-}
 
 #[derive(Resource, Debug, Clone, Copy)]
 struct I18nRuntime {
@@ -40,12 +35,6 @@ fn parse_locale(tag: &str) -> LanguageIdentifier {
 
 fn ensure_task_pool_initialized() {
     let _ = IoTaskPool::get_or_init(TaskPool::new);
-}
-
-fn register_bridge_fonts(app: &mut App) {
-    app.register_xilem_font_bytes(include_bytes!("../assets/fonts/Inter-Regular.otf"));
-    app.register_xilem_font_bytes(include_bytes!("../assets/fonts/NotoSansCJKsc-Regular.otf"));
-    app.register_xilem_font_bytes(include_bytes!("../assets/fonts/NotoSansCJKjp-Regular.otf"));
 }
 
 fn configure_locale_font_registry() -> LocaleFontRegistry {
@@ -82,28 +71,12 @@ fn configure_locale_font_registry() -> LocaleFontRegistry {
         )
 }
 
-fn load_demo_fonts(asset_server: Res<AssetServer>, mut font_handles: ResMut<DemoFontHandles>) {
-    if !font_handles.handles.is_empty() {
-        return;
-    }
-
-    font_handles
-        .handles
-        .push(asset_server.load("fonts/Inter-Regular.otf"));
-    font_handles
-        .handles
-        .push(asset_server.load("fonts/NotoSansCJKsc-Regular.otf"));
-    font_handles
-        .handles
-        .push(asset_server.load("fonts/NotoSansCJKjp-Regular.otf"));
-}
-
 fn project_locale_badge(_: &LocaleBadge, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let locale_text = ctx
-        .world
-        .get_resource::<ActiveLocale>()
-        .map_or_else(|| "en-US".to_string(), |active| active.0.to_string());
+    let locale_text = ctx.world.get_resource::<AppI18n>().map_or_else(
+        || "en-US".to_string(),
+        |i18n| i18n.active_locale.to_string(),
+    );
 
     Arc::new(apply_widget_style(
         apply_label_style(label(format!("Active locale: {locale_text}")), &style),
@@ -270,11 +243,11 @@ fn drain_i18n_events(world: &mut World) {
         }
 
         let next = {
-            let current = world.resource::<ActiveLocale>().0.clone();
+            let current = world.resource::<AppI18n>().active_locale.clone();
             next_locale(&current)
         };
 
-        world.resource_mut::<ActiveLocale>().0 = next;
+        world.resource_mut::<AppI18n>().set_active_locale(next);
     }
 }
 
@@ -282,7 +255,6 @@ fn build_i18n_app() -> App {
     ensure_task_pool_initialized();
 
     let mut app = App::new();
-    register_bridge_fonts(&mut app);
 
     app.add_plugins((
         EmbeddedAssetPlugin {
@@ -292,14 +264,29 @@ fn build_i18n_app() -> App {
         TextPlugin::default(),
         BevyXilemPlugin,
     ))
-    .init_resource::<DemoFontHandles>()
-    .insert_resource(ActiveLocale::new(parse_locale("en-US")))
+    .insert_resource(AppI18n::new(parse_locale("en-US")))
+    .register_xilem_font(SyncAssetSource::FilePath("assets/fonts/Inter-Regular.otf"))
+    .register_xilem_font(SyncAssetSource::FilePath(
+        "assets/fonts/NotoSansCJKsc-Regular.otf",
+    ))
+    .register_xilem_font(SyncAssetSource::FilePath(
+        "assets/fonts/NotoSansCJKjp-Regular.otf",
+    ))
+    .register_i18n_bundle(
+        "en-US",
+        SyncTextSource::FilePath("assets/locales/en-US/main.ftl"),
+    )
+    .register_i18n_bundle(
+        "zh-CN",
+        SyncTextSource::FilePath("assets/locales/zh-CN/main.ftl"),
+    )
+    .register_i18n_bundle(
+        "ja-JP",
+        SyncTextSource::FilePath("assets/locales/ja-JP/main.ftl"),
+    )
     .insert_resource(configure_locale_font_registry())
     .register_projector::<LocaleBadge>(project_locale_badge)
-    .add_systems(
-        Startup,
-        (setup_i18n_styles, setup_i18n_world, load_demo_fonts),
-    )
+    .add_systems(Startup, (setup_i18n_styles, setup_i18n_world))
     .add_systems(PreUpdate, drain_i18n_events);
 
     app
