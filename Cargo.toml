@@ -18,6 +18,7 @@ bevy_text = { version = "0.18", default-features = false }
 bevy_tasks = { version = "0.18", default-features = false, features = ["multi_threaded"] }
 bevy_time = { version = "0.18", default-features = false, features = ["std"] }
 bevy_window = { version = "0.18", default-features = false, features = ["std"] }
+bevy_winit = { version = "0.18", default-features = false }
 bevy_tweening = { version = "0.15", default-features = false }
 bevy_embedded_assets = "0.15.0"
 crossbeam-queue = "0.3"
@@ -28,9 +29,41 @@ rfd = "0.17"
 fluent = "0.16"
 unic-langid = { version = "0.9", features = ["macros"] }
 masonry = { path = "third_party/xilem/masonry" }
+masonry_winit = { path = "third_party/xilem/masonry_winit" }
 xilem = { path = "third_party/xilem/xilem" }
 xilem_core = { path = "third_party/xilem/xilem_core" }
 xilem_masonry = { path = "third_party/xilem/xilem_masonry" }
 vello = "0.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[patch.crates-io]
+bevy = { path = "third_party/bevy" }
+bevy_a11y = { path = "third_party/bevy/crates/bevy_a11y" }
+bevy_android = { path = "third_party/bevy/crates/bevy_android" }
+bevy_app = { path = "third_party/bevy/crates/bevy_app" }
+bevy_asset = { path = "third_party/bevy/crates/bevy_asset" }
+bevy_asset_macros = { path = "third_party/bevy/crates/bevy_asset/macros" }
+bevy_color = { path = "third_party/bevy/crates/bevy_color" }
+bevy_derive = { path = "third_party/bevy/crates/bevy_derive" }
+bevy_diagnostic = { path = "third_party/bevy/crates/bevy_diagnostic" }
+bevy_ecs = { path = "third_party/bevy/crates/bevy_ecs" }
+bevy_ecs_macros = { path = "third_party/bevy/crates/bevy_ecs/macros" }
+bevy_image = { path = "third_party/bevy/crates/bevy_image" }
+bevy_input = { path = "third_party/bevy/crates/bevy_input" }
+bevy_input_focus = { path = "third_party/bevy/crates/bevy_input_focus" }
+bevy_internal = { path = "third_party/bevy/crates/bevy_internal" }
+bevy_log = { path = "third_party/bevy/crates/bevy_log" }
+bevy_macro_utils = { path = "third_party/bevy/crates/bevy_macro_utils" }
+bevy_math = { path = "third_party/bevy/crates/bevy_math" }
+bevy_platform = { path = "third_party/bevy/crates/bevy_platform" }
+bevy_ptr = { path = "third_party/bevy/crates/bevy_ptr" }
+bevy_reflect = { path = "third_party/bevy/crates/bevy_reflect" }
+bevy_reflect_derive = { path = "third_party/bevy/crates/bevy_reflect/derive" }
+bevy_tasks = { path = "third_party/bevy/crates/bevy_tasks" }
+bevy_text = { path = "third_party/bevy/crates/bevy_text" }
+bevy_time = { path = "third_party/bevy/crates/bevy_time" }
+bevy_transform = { path = "third_party/bevy/crates/bevy_transform" }
+bevy_utils = { path = "third_party/bevy/crates/bevy_utils" }
+bevy_window = { path = "third_party/bevy/crates/bevy_window" }
+bevy_winit = { path = "third_party/bevy/crates/bevy_winit" }

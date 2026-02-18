@@ -830,7 +830,7 @@ pub fn sync_overlay_positions(world: &mut World) {
         return;
     }
 
-    let (viewport_width, viewport_height) = {
+    let (viewport_width, viewport_height, viewport_scale_factor) = {
         let mut primary_window_query = world.query_filtered::<&Window, With<PrimaryWindow>>();
         let primary_window = primary_window_query.iter(world).next();
 
@@ -847,8 +847,14 @@ pub fn sync_overlay_positions(world: &mut World) {
 
         let window_width = window.width() as f64;
         let window_height = window.height() as f64;
-        tracing::debug!("Dynamic Window Size: {}x{}", window_width, window_height);
-        (window_width, window_height)
+        let window_scale_factor = window.scale_factor() as f64;
+        tracing::debug!(
+            "Dynamic Window Size: {}x{} (scale_factor={})",
+            window_width,
+            window_height,
+            window_scale_factor
+        );
+        (window_width, window_height, window_scale_factor)
     };
 
     let hit_boxes = {
@@ -950,6 +956,12 @@ pub fn sync_overlay_positions(world: &mut World) {
             height,
             viewport_width.max(1.0),
             viewport_height.max(1.0),
+        );
+
+        tracing::trace!(
+            "Overlay {:?} clamped in logical space with primary window scale_factor={}",
+            entity,
+            viewport_scale_factor
         );
 
         let final_rect = OverlayAnchorRect {

@@ -93,7 +93,7 @@ pub mod prelude {
     pub use bevy_ecs::hierarchy::{ChildOf, Children};
 
     pub use crate::{
-        AppBevyXilemExt, AppI18n, AutoDismiss, BevyXilemPlugin, BevyXilemRuntime, BuiltinUiAction,
+        AppBevyXilemExt, AppI18n, AutoDismiss, BevyWindowOptions, BevyXilemPlugin, BuiltinUiAction,
         ColorStyle, ComputedStyle, CurrentColorStyle, EcsButtonView, Hovered, LayoutStyle,
         LocalizeText, MasonryRuntime, OverlayBounds, OverlayComputedPosition, OverlayConfig,
         OverlayMouseButtonCursor, OverlayPlacement, OverlayPointerRoutingState, OverlayStack,

@@ -21,8 +21,8 @@ The framework now avoids the high-level `xilem::Xilem::new_simple` runner comple
 
 - Bevy owns scheduling and window/input message flow.
 - Masonry is driven as a retained UI runtime resource from Bevy systems.
-- `bevy_xilem` also provides a windowed bridge runner for GUI examples/apps,
-  while preserving Bevy-driven synthesis updates.
+- `bevy_xilem` does **not** run a separate Xilem/Masonry event loop.
+- GUI apps use Bevy's native `App::run()` and `bevy_winit` window lifecycle.
 
 ### 2) Headless retained runtime resource
 
@@ -32,8 +32,11 @@ The framework now avoids the high-level `xilem::Xilem::new_simple` runner comple
 - current synthesized root view
 - Xilem `ViewCtx` and `ViewState`
 - pointer state required for manual event injection
+- active Bevy primary-window attachment metrics (logical size + scale factor)
 
 `PostUpdate` applies synthesized root diffs directly with Xilem Core `View::rebuild`.
+`PreUpdate` lazily binds runtime viewport/scale to the Bevy-created primary window once
+`bevy_winit` exposes it.
 
 ### 3) Input injection bridge (PreUpdate)
 
@@ -44,11 +47,12 @@ The framework now avoids the high-level `xilem::Xilem::new_simple` runner comple
 - `MouseButtonInput`
 - `MouseWheel`
 - `WindowResized`
+- `WindowScaleFactorChanged`
 
 and translates them to Masonry events:
 
 - `PointerEvent::{Move,Leave,Down,Up,Scroll}`
-- `WindowEvent::Resize`
+- `WindowEvent::{Resize,Rescale}`
 
 which are injected into `MasonryRuntime.render_root`.
 
@@ -192,7 +196,7 @@ Overlay placement policy:
 
 - `sync_overlay_positions` runs in `PostUpdate` and computes final positions for all entities
   with `OverlayState`.
-- The system reads dynamic logical width/height from `PrimaryWindow`
+- The system reads dynamic logical width/height and scale factor from `PrimaryWindow`
   (falling back to the first window when absent in tests/headless cases)
   every frame and anchor widget rectangles gathered from Masonry widget geometry.
 - Placement sync is ordered after Masonry retained-tree rebuild so anchor/widget geometry is
@@ -358,7 +362,7 @@ and registers tweening support with:
 
 and registers systems:
 
-- `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> bubble_ui_pointer_events -> handle_global_overlay_clicks -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
+- `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> initialize_masonry_runtime_from_primary_window -> bubble_ui_pointer_events -> handle_global_overlay_clicks -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
 - `Update`: `ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> handle_overlay_actions -> sync_overlay_stack_lifecycle -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime`, followed by
   `sync_overlay_positions` after runtime rebuild
@@ -379,19 +383,17 @@ Transition execution details:
 
 It also registers built-in projectors.
 
-## Windowed example runner
+## Bevy-native run helpers
 
 `bevy_xilem` provides:
 
 - `run_app(bevy_app, title)`
 - `run_app_with_window_options(bevy_app, title, configure_window)`
 
-This bridge runs a GUI window through `Xilem::new` (not `Xilem::new_simple`) and,
-on each frame, advances the Bevy app, reads `SynthesizedUiViews`, and renders the
-current synthesized root view.
+These helpers configure Bevy's primary `Window` component (title/size/resizable hints)
+and then call Bevy's native `App::run()`.
 
-This keeps examples as normal GUI programs while retaining the new Bevy-first
-synthesis architecture.
+No custom Xilem runner/event loop is started.
 
 ## Built-in button behavior
 
@@ -416,13 +418,14 @@ provides a dual control-view naming scheme:
 
 Examples were rewritten to demonstrate this architecture with:
 
-- GUI windows via the bridge runner
+- GUI windows via Bevy's native `bevy_winit` runner
 - Bevy-driven synthesis updates each frame
 - typed action handling via `UiEventQueue` (ECS queue path only)
 - stylesheet-driven styling (class rules + cascade) instead of hardcoded projector styles
 - pseudo-class interaction styling and transition-capable style resolution
 - virtualized task scrolling in `todo_list` using `xilem_masonry::view::virtual_scroll`
 - no `xilem::Xilem::new_simple` usage
+- no `xilem::Xilem::new` event-loop ownership
 
 ## Non-goals in current repository state
 

@@ -1,3 +1,8 @@
 [submodule "third_party/xilem"]
 	path = third_party/xilem
-	url = https://github.com/linebender/xilem.git
+	url = https://github.com/Summpot/xilem.git
+	branch = bevy-xilem-dev
+[submodule "third_party/bevy"]
+	path = third_party/bevy
+	url = https://github.com/Summpot/bevy.git
+	branch = bevy-xilem-dev

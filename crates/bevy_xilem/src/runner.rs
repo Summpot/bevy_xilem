@@ -1,168 +1,123 @@
-use std::sync::Arc;
-
 use bevy_app::App;
-use masonry::layout::{Dim, UnitPoint};
-use xilem::style::Style as _;
-use xilem::{
-    AppState, EventLoop, WindowId, WindowOptions, WindowView, Xilem, core::map_state, view::label,
-    window, winit::error::EventLoopError,
-};
-use xilem_masonry::view::zstack;
+use bevy_window::{PrimaryWindow, Window};
+use xilem::winit::{dpi::Size, error::EventLoopError};
 
-use crate::synthesize::SynthesizedUiViews;
-
-type WindowConfigurator =
-    dyn Fn(WindowOptions<BevyXilemRuntime>) -> WindowOptions<BevyXilemRuntime> + Send + Sync;
-
-/// Runtime state used by the windowed GUI bridge.
-pub struct BevyXilemRuntime {
-    bevy_app: App,
-    running: bool,
-    window_id: WindowId,
-    window_title: String,
-    configure_window: Arc<WindowConfigurator>,
+/// Compatibility window options applied to Bevy's primary window before `App::run()`.
+#[derive(Clone, Debug, Default)]
+pub struct BevyWindowOptions {
+    resizable: Option<bool>,
+    initial_inner_size: Option<Size>,
+    min_inner_size: Option<Size>,
 }
 
-impl AppState for BevyXilemRuntime {
-    fn keep_running(&self) -> bool {
-        self.running
-    }
-}
-
-impl BevyXilemRuntime {
+impl BevyWindowOptions {
+    /// Sets whether the window is resizable.
     #[must_use]
-    pub fn new(
-        bevy_app: App,
-        window_title: impl Into<String>,
-        configure_window: Arc<WindowConfigurator>,
-    ) -> Self {
-        Self {
-            bevy_app,
-            running: true,
-            window_id: WindowId::next(),
-            window_title: window_title.into(),
-            configure_window,
-        }
+    pub fn with_resizable(mut self, resizable: bool) -> Self {
+        self.resizable = Some(resizable);
+        self
     }
 
-    fn update_and_root_or_label(&mut self, fallback_text: impl Into<String>) -> crate::UiView {
-        self.bevy_app.update();
-        let roots = self
-            .bevy_app
-            .world()
-            .get_resource::<SynthesizedUiViews>()
-            .map(|views| views.roots.clone())
-            .unwrap_or_default();
-        compose_window_root(&roots, fallback_text)
+    /// Sets the initial inner size.
+    #[must_use]
+    pub fn with_initial_inner_size<S: Into<Size>>(mut self, size: S) -> Self {
+        self.initial_inner_size = Some(size.into());
+        self
+    }
+
+    /// Sets the minimum inner size.
+    #[must_use]
+    pub fn with_min_inner_size<S: Into<Size>>(mut self, size: S) -> Self {
+        self.min_inner_size = Some(size.into());
+        self
     }
 }
 
-fn compose_window_root(roots: &[crate::UiView], fallback_text: impl Into<String>) -> crate::UiView {
-    match roots {
-        [] => Arc::new(label(fallback_text.into())),
-        [root] => root.clone(),
-        _ => Arc::new(
-            zstack(roots.to_vec())
-                .alignment(UnitPoint::TOP_LEFT)
-                .width(Dim::Stretch)
-                .height(Dim::Stretch),
-        ),
+fn size_to_logical(size: Size) -> (f32, f32) {
+    match size {
+        Size::Physical(physical) => (physical.width as f32, physical.height as f32),
+        Size::Logical(logical) => (logical.width as f32, logical.height as f32),
     }
 }
 
-fn app_logic(
-    state: &mut BevyXilemRuntime,
-) -> impl Iterator<Item = WindowView<BevyXilemRuntime>> + use<> {
-    let root_view = state.update_and_root_or_label("No synthesized bevy_xilem root");
-    let window_id = state.window_id;
-    let window_title = state.window_title.clone();
-    let configure_window = state.configure_window.clone();
+fn apply_window_options(window: &mut Window, title: &str, options: BevyWindowOptions) {
+    window.title = title.to_string();
 
-    std::iter::once(
-        window(
-            window_id,
-            window_title,
-            map_state(root_view, |_state: &mut BevyXilemRuntime, _| ()),
-        )
-        .with_options(move |options| {
-            (configure_window)(options).on_close(|state: &mut BevyXilemRuntime| {
-                state.running = false;
-            })
-        }),
-    )
+    if let Some(resizable) = options.resizable {
+        window.resizable = resizable;
+    }
+
+    if let Some(initial_inner_size) = options.initial_inner_size {
+        let (width, height) = size_to_logical(initial_inner_size);
+        window.resolution.set(width, height);
+    }
+
+    if let Some(min_inner_size) = options.min_inner_size {
+        let (min_width, min_height) = size_to_logical(min_inner_size);
+        window.resize_constraints.min_width = min_width.max(1.0);
+        window.resize_constraints.min_height = min_height.max(1.0);
+    }
 }
 
-/// Run a Bevy app inside a GUI window while preserving the Bevy-driven synthesis architecture.
+fn configure_primary_window(app: &mut App, title: &str, options: BevyWindowOptions) {
+    let mut query = app
+        .world_mut()
+        .query_filtered::<&mut Window, bevy_ecs::query::With<PrimaryWindow>>();
+
+    if let Some(mut window) = query.iter_mut(app.world_mut()).next() {
+        apply_window_options(&mut window, title, options);
+        return;
+    }
+
+    let mut window = Window::default();
+    apply_window_options(&mut window, title, options);
+    app.world_mut().spawn((window, PrimaryWindow));
+}
+
+/// Run a Bevy app using Bevy's native runner and default `bevy_winit` event loop.
 ///
-/// # Example
-///
-/// ```no_run
-/// use bevy_xilem::{bevy_app::App, run_app};
-///
-/// let app = App::new();
-/// # let _ =
-/// run_app(app, "My App");
-/// ```
+/// This no longer creates a separate Xilem runner/event loop.
 pub fn run_app(bevy_app: App, window_title: impl Into<String>) -> Result<(), EventLoopError> {
     run_app_with_window_options(bevy_app, window_title, |options| options)
 }
 
-/// Same as [`run_app`] with custom window options.
+/// Same as [`run_app`] with primary-window option overrides.
 ///
-/// # Example
-///
-/// ```no_run
-/// use bevy_xilem::{
-///     bevy_app::App,
-///     run_app_with_window_options,
-///     xilem::winit::dpi::LogicalSize,
-/// };
-///
-/// let app = App::new();
-/// # let _ =
-/// run_app_with_window_options(app, "My App", |options| {
-///     options.with_initial_inner_size(LogicalSize::new(640.0, 480.0))
-/// });
-/// ```
+/// The closure receives and returns [`BevyWindowOptions`], preserving ergonomic
+/// call sites while delegating execution to Bevy's own runner.
 pub fn run_app_with_window_options(
-    bevy_app: App,
+    mut bevy_app: App,
     window_title: impl Into<String>,
-    configure_window: impl Fn(WindowOptions<BevyXilemRuntime>) -> WindowOptions<BevyXilemRuntime>
-    + Send
-    + Sync
-    + 'static,
+    configure_window: impl Fn(BevyWindowOptions) -> BevyWindowOptions + Send + Sync + 'static,
 ) -> Result<(), EventLoopError> {
-    let runtime = BevyXilemRuntime::new(bevy_app, window_title, Arc::new(configure_window));
-    let app = Xilem::new(runtime, app_logic);
-    app.run_in(EventLoop::with_user_event())
+    let title = window_title.into();
+    let options = configure_window(BevyWindowOptions::default());
+    configure_primary_window(&mut bevy_app, &title, options);
+
+    let _ = bevy_app.run();
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
-
-    use xilem::view::label;
-
-    use crate::UiView;
-
-    use super::compose_window_root;
+    use super::*;
+    use xilem::winit::dpi::{LogicalSize, PhysicalSize};
 
     #[test]
-    fn compose_window_root_returns_single_root_unchanged() {
-        let root: UiView = Arc::new(label("main root"));
-        let composed = compose_window_root(std::slice::from_ref(&root), "fallback");
+    fn options_apply_initial_and_min_sizes() {
+        let mut window = Window::default();
+        let options = BevyWindowOptions::default()
+            .with_initial_inner_size(LogicalSize::new(640.0, 480.0))
+            .with_min_inner_size(PhysicalSize::new(320, 200))
+            .with_resizable(false);
 
-        assert!(Arc::ptr_eq(&composed, &root));
-    }
+        apply_window_options(&mut window, "Test", options);
 
-    #[test]
-    fn compose_window_root_stacks_multiple_roots() {
-        let root_a: UiView = Arc::new(label("root a"));
-        let root_b: UiView = Arc::new(label("root b"));
-
-        let composed = compose_window_root(&[root_a.clone(), root_b.clone()], "fallback");
-
-        assert!(!Arc::ptr_eq(&composed, &root_a));
-        assert!(!Arc::ptr_eq(&composed, &root_b));
+        assert_eq!(window.title, "Test");
+        assert_eq!(window.width(), 640.0);
+        assert_eq!(window.height(), 480.0);
+        assert_eq!(window.resize_constraints.min_width, 320.0);
+        assert_eq!(window.resize_constraints.min_height, 200.0);
+        assert!(!window.resizable);
     }
 }

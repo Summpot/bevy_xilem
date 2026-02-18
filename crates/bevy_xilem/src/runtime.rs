@@ -3,13 +3,15 @@ use std::{fmt::Debug, sync::Arc};
 use bevy_ecs::{
     entity::Entity,
     message::MessageReader,
-    prelude::{FromWorld, NonSendMut, ResMut, World},
+    prelude::{FromWorld, NonSendMut, Query, ResMut, With, World},
 };
 use bevy_input::{
     ButtonState,
     mouse::{MouseButton, MouseButtonInput, MouseScrollUnit, MouseWheel},
 };
-use bevy_window::{CursorLeft, CursorMoved, WindowResized};
+use bevy_window::{
+    CursorLeft, CursorMoved, PrimaryWindow, WindowResized, WindowScaleFactorChanged,
+};
 use masonry::layout::{Dim, UnitPoint};
 use masonry::{
     app::{RenderRoot, RenderRootOptions, WindowSizePolicy},
@@ -22,6 +24,7 @@ use masonry::{
     theme::default_property_set,
     widgets::Passthrough,
 };
+use masonry_winit::app::{ExistingWindowMetrics, existing_window_metrics};
 use xilem::style::Style as _;
 use xilem_core::{ProxyError, RawProxy, SendMessage, View, ViewId};
 use xilem_masonry::{
@@ -62,6 +65,7 @@ pub struct MasonryRuntime {
     view_state: RuntimeViewState,
     current_view: UiView,
     active_window: Option<Entity>,
+    window_scale_factor: f64,
     pointer_info: PointerInfo,
     pointer_state: PointerState,
     viewport_width: f64,
@@ -109,6 +113,7 @@ impl FromWorld for MasonryRuntime {
             view_state,
             current_view: initial_view,
             active_window: None,
+            window_scale_factor: 1.0,
             pointer_info: PointerInfo {
                 pointer_id: Some(PointerId::new(1).expect("pointer id 1 should be valid")),
                 persistent_device_id: None,
@@ -129,6 +134,28 @@ fn focus_fallback_widget(render_root: &RenderRoot) -> Option<WidgetId> {
 }
 
 impl MasonryRuntime {
+    #[must_use]
+    pub fn is_attached_to_window(&self, window: Entity) -> bool {
+        self.active_window == Some(window)
+    }
+
+    pub fn attach_to_window(&mut self, window: Entity, metrics: ExistingWindowMetrics) {
+        self.active_window = Some(window);
+        self.window_scale_factor = metrics.scale_factor.max(f64::EPSILON);
+        self.viewport_width = metrics.logical_size.width.max(1.0);
+        self.viewport_height = metrics.logical_size.height.max(1.0);
+
+        let _ = self
+            .render_root
+            .handle_window_event(WindowEvent::Rescale(self.window_scale_factor));
+        let _ = self
+            .render_root
+            .handle_window_event(WindowEvent::Resize(PhysicalSize::new(
+                metrics.physical_size.width.max(1),
+                metrics.physical_size.height.max(1),
+            )));
+    }
+
     #[must_use]
     pub fn viewport_size(&self) -> (f64, f64) {
         (self.viewport_width.max(1.0), self.viewport_height.max(1.0))
@@ -265,10 +292,42 @@ impl MasonryRuntime {
         self.viewport_width = width.max(1.0) as f64;
         self.viewport_height = height.max(1.0) as f64;
 
+        let scale = self.window_scale_factor.max(f64::EPSILON);
+        let physical_width = (self.viewport_width * scale).round().max(1.0) as u32;
+        let physical_height = (self.viewport_height * scale).round().max(1.0) as u32;
+
         self.render_root
             .handle_window_event(WindowEvent::Resize(PhysicalSize::new(
-                width.max(1.0).round() as u32,
-                height.max(1.0).round() as u32,
+                physical_width,
+                physical_height,
+            )))
+    }
+
+    pub fn handle_window_scale_factor_changed(
+        &mut self,
+        window: Entity,
+        scale_factor: f64,
+    ) -> Handled {
+        if !self.accepts_window(window) {
+            return Handled::No;
+        }
+
+        self.window_scale_factor = scale_factor.max(f64::EPSILON);
+        let _ = self
+            .render_root
+            .handle_window_event(WindowEvent::Rescale(self.window_scale_factor));
+
+        let physical_width = (self.viewport_width * self.window_scale_factor)
+            .round()
+            .max(1.0) as u32;
+        let physical_height = (self.viewport_height * self.window_scale_factor)
+            .round()
+            .max(1.0) as u32;
+
+        self.render_root
+            .handle_window_event(WindowEvent::Resize(PhysicalSize::new(
+                physical_width,
+                physical_height,
             )))
     }
 }
@@ -306,6 +365,7 @@ pub fn inject_bevy_input_into_masonry(
     mut mouse_button_input: MessageReader<MouseButtonInput>,
     mut mouse_wheel: MessageReader<MouseWheel>,
     mut window_resized: MessageReader<WindowResized>,
+    mut window_scale_factor_changed: MessageReader<WindowScaleFactorChanged>,
 ) {
     for event in cursor_moved.read() {
         runtime.handle_cursor_moved(event.window, event.position.x, event.position.y);
@@ -339,6 +399,35 @@ pub fn inject_bevy_input_into_masonry(
     for event in window_resized.read() {
         runtime.handle_window_resized(event.window, event.width, event.height);
     }
+
+    for event in window_scale_factor_changed.read() {
+        runtime.handle_window_scale_factor_changed(event.window, event.scale_factor);
+    }
+}
+
+/// Attach Masonry runtime viewport state to the primary Bevy winit window once available.
+pub fn initialize_masonry_runtime_from_primary_window(
+    mut runtime: NonSendMut<MasonryRuntime>,
+    primary_window_query: Query<Entity, With<PrimaryWindow>>,
+) {
+    let Ok(primary_window_entity) = primary_window_query.single() else {
+        return;
+    };
+
+    if runtime.is_attached_to_window(primary_window_entity) {
+        return;
+    }
+
+    let Some(metrics) = bevy_winit::WINIT_WINDOWS.with(|winit_windows| {
+        let winit_windows = winit_windows.borrow();
+        winit_windows
+            .get_window(primary_window_entity)
+            .map(|window| existing_window_metrics(window))
+    }) else {
+        return;
+    };
+
+    runtime.attach_to_window(primary_window_entity, metrics);
 }
 
 /// PostUpdate rebuild step: diff synthesized root against retained Masonry tree.

@@ -13,7 +13,7 @@ You describe UI from ECS components (via projectors), handle user interactions t
 - Typed UI action queue (`UiEventQueue`) for interaction handling
 - Ergonomic ECS control helpers (`button`, `checkbox`, `slider`, `text_input`, ...)
 - Built-in synchronous i18n/l10n via `AppI18n` + `LocalizeText`
-- Windowed runner helpers for apps/examples
+- Bevy-native run helpers (`run_app*`) that configure primary window options then call `App::run()`
 
 ---
 

@@ -5,7 +5,7 @@ use bevy_input::mouse::{MouseButtonInput, MouseWheel};
 use bevy_text::Font;
 use bevy_time::TimePlugin;
 use bevy_tweening::{AnimationSystem, TweeningPlugin};
-use bevy_window::{CursorLeft, CursorMoved, WindowResized};
+use bevy_window::{CursorLeft, CursorMoved, WindowResized, WindowScaleFactorChanged};
 
 use crate::{
     OverlayStack,
@@ -18,7 +18,10 @@ use crate::{
         reparent_overlay_entities, sync_overlay_positions, sync_overlay_stack_lifecycle,
     },
     projection::{UiProjectorRegistry, register_builtin_projectors},
-    runtime::{MasonryRuntime, inject_bevy_input_into_masonry, rebuild_masonry_runtime},
+    runtime::{
+        MasonryRuntime, initialize_masonry_runtime_from_primary_window,
+        inject_bevy_input_into_masonry, rebuild_masonry_runtime,
+    },
     styling::{
         StyleSheet, animate_style_transitions, mark_style_dirty, sync_style_targets,
         sync_ui_interaction_markers,
@@ -48,12 +51,14 @@ impl Plugin for BevyXilemPlugin {
             .add_message::<MouseButtonInput>()
             .add_message::<MouseWheel>()
             .add_message::<WindowResized>()
+            .add_message::<WindowScaleFactorChanged>()
             .add_message::<AssetEvent<Font>>()
             .add_systems(
                 PreUpdate,
                 (
                     collect_bevy_font_assets,
                     sync_fonts_to_xilem,
+                    initialize_masonry_runtime_from_primary_window,
                     bubble_ui_pointer_events,
                     handle_global_overlay_clicks,
                     inject_bevy_input_into_masonry,
