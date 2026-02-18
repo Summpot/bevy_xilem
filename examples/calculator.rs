@@ -1,3 +1,5 @@
+mod utils;
+
 use std::sync::Arc;
 
 use bevy_xilem::{
@@ -6,12 +8,13 @@ use bevy_xilem::{
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    button, init_logging, resolve_style, resolve_style_for_classes, run_app_with_window_options,
+    button, resolve_style, resolve_style_for_classes, run_app_with_window_options,
     xilem::{
         view::{FlexExt as _, flex_col, flex_row, label},
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
+use utils::init_logging;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum MathOperator {

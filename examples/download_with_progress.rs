@@ -1,3 +1,5 @@
+mod utils;
+
 use std::{
     fs::File,
     io::{Read, Write},
@@ -12,7 +14,7 @@ use bevy_xilem::{
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPoolBuilder},
-    button, emit_ui_action, init_logging, resolve_style, resolve_style_for_classes, rfd,
+    button, emit_ui_action, resolve_style, resolve_style_for_classes, rfd,
     run_app_with_window_options, spawn_in_overlay_root, switch, text_input,
     xilem::{
         core::fork,
@@ -23,6 +25,7 @@ use bevy_xilem::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
+use utils::init_logging;
 
 const HEARTBEAT_MS: u64 = 60;
 const DEFAULT_URL: &str = "https://hil-speed.hetzner.com/100MB.bin";

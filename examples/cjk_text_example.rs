@@ -1,3 +1,5 @@
+mod utils;
+
 use bevy_xilem::{
     AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, StyleClass, StyleSetter, StyleSheet,
     TextStyle, UiFlexColumn, UiLabel, UiRoot,
@@ -6,12 +8,13 @@ use bevy_xilem::{
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPool},
     bevy_text::{Font, TextPlugin},
-    init_logging, run_app_with_window_options,
+    run_app_with_window_options,
     xilem::{
         Color,
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
+use utils::init_logging;
 
 #[derive(Resource, Default)]
 struct DemoFontHandles {

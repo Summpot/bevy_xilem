@@ -1,3 +1,5 @@
+mod utils;
+
 use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
@@ -11,8 +13,7 @@ use bevy_xilem::{
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_input::{ButtonInput, keyboard::KeyCode},
     bevy_window::WindowResized,
-    button, emit_ui_action, init_logging, resolve_style, resolve_style_for_classes,
-    run_app_with_window_options,
+    button, emit_ui_action, resolve_style, resolve_style_for_classes, run_app_with_window_options,
     xilem::{
         Color,
         masonry::layout::Length,
@@ -40,6 +41,7 @@ use masonry::{
     layout::LenReq,
     vello::Scene,
 };
+use utils::init_logging;
 
 const BOARD_SIDE: usize = 4;
 const BOARD_LEN: usize = BOARD_SIDE * BOARD_SIDE;

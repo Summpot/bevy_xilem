@@ -1,3 +1,5 @@
+mod utils;
+
 use std::sync::Arc;
 
 use bevy_xilem::{
@@ -9,7 +11,7 @@ use bevy_xilem::{
         hierarchy::{ChildOf, Children},
         prelude::*,
     },
-    button, checkbox, emit_ui_action, init_logging, resolve_style, resolve_style_for_classes,
+    button, checkbox, emit_ui_action, resolve_style, resolve_style_for_classes,
     resolve_style_for_entity_classes, run_app, text_input,
     xilem::{
         Color, InsertNewline,
@@ -21,6 +23,7 @@ use bevy_xilem::{
         winit::error::EventLoopError,
     },
 };
+use utils::init_logging;
 
 const LIST_VIEWPORT_HEIGHT: f64 = 360.0;
 

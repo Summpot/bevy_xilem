@@ -50,7 +50,6 @@ pub mod ecs;
 pub mod events;
 pub mod fonts;
 pub mod i18n;
-pub mod logging;
 pub mod overlay;
 pub mod plugin;
 pub mod projection;
@@ -78,7 +77,6 @@ pub use ecs::*;
 pub use events::*;
 pub use fonts::*;
 pub use i18n::*;
-pub use logging::*;
 pub use overlay::*;
 pub use plugin::*;
 pub use projection::*;
@@ -108,7 +106,7 @@ pub mod prelude {
         bubble_ui_pointer_events, button, button_with_child, checkbox, collect_bevy_font_assets,
         dismiss_overlays_on_click, ecs_button, ecs_button_with_child, ecs_checkbox, ecs_slider,
         ecs_switch, ecs_text_button, ecs_text_input, emit_ui_action, ensure_overlay_root,
-        ensure_overlay_root_entity, gather_ui_roots, handle_overlay_actions, init_logging,
+        ensure_overlay_root_entity, gather_ui_roots, handle_overlay_actions,
         inject_bevy_input_into_masonry, mark_style_dirty, rebuild_masonry_runtime,
         register_builtin_projectors, resolve_localized_text, resolve_style,
         resolve_style_for_classes, resolve_style_for_entity_classes, run_app,

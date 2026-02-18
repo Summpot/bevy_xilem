@@ -27,11 +27,11 @@ xilem_core.workspace = true
 xilem_masonry.workspace = true
 vello.workspace = true
 tracing.workspace = true
-tracing-subscriber.workspace = true
 
 [dev-dependencies]
 num-traits.workspace = true
 reqwest.workspace = true
+tracing-subscriber.workspace = true
 
 [[example]]
 name = "calculator"

@@ -788,6 +788,11 @@ pub fn sync_overlay_positions(world: &mut World) {
             .collect::<Vec<_>>()
     };
 
+    tracing::debug!(
+        "Running sync_overlay_positions for {} overlays",
+        overlays.iter().count()
+    );
+
     if overlays.is_empty() {
         return;
     }
@@ -803,6 +808,9 @@ pub fn sync_overlay_positions(world: &mut World) {
                 .unwrap_or((1024.0, 768.0))
         }
     };
+
+    let window_size = (viewport_width, viewport_height);
+    tracing::debug!("Primary window size: {:?}", window_size);
 
     let hit_boxes = {
         let runtime = world.non_send_resource::<MasonryRuntime>();
@@ -828,11 +836,20 @@ pub fn sync_overlay_positions(world: &mut World) {
 
         let (anchor_rect, anchor_gap) = if let Some(anchor) = config.anchor {
             let Some(anchor_rect) = anchor_rects.get(&anchor).copied() else {
+                tracing::warn!(
+                    "Anchor entity {:?} geometry resolution failed (missing GlobalTransform/Node/hit-box)",
+                    anchor
+                );
                 if world.get::<UiDropdownMenu>(entity).is_some() {
                     stale_dropdowns.push(entity);
                 }
                 continue;
             };
+            tracing::debug!(
+                "Anchor entity {:?} global bounds: {:?}",
+                anchor,
+                anchor_rect
+            );
             (anchor_rect, OVERLAY_ANCHOR_GAP)
         } else {
             (
@@ -847,6 +864,7 @@ pub fn sync_overlay_positions(world: &mut World) {
         };
 
         let mut chosen_placement = config.placement;
+        let mut did_flip = false;
         let (mut x, mut y) =
             overlay_origin_for_placement(config.placement, anchor_rect, width, height, anchor_gap);
 
@@ -866,6 +884,7 @@ pub fn sync_overlay_positions(world: &mut World) {
                 x = fx;
                 y = fy;
                 chosen_placement = flipped;
+                did_flip = true;
             }
         }
 
@@ -876,6 +895,18 @@ pub fn sync_overlay_positions(world: &mut World) {
             height,
             viewport_width.max(1.0),
             viewport_height.max(1.0),
+        );
+
+        let final_rect = OverlayAnchorRect {
+            left: x,
+            top: y,
+            width,
+            height,
+        };
+        tracing::debug!(
+            "Calculated overlay rect: {:?}, Auto-flip triggered: {}",
+            final_rect,
+            did_flip
         );
 
         if let Some(mut computed) = world.get_mut::<OverlayComputedPosition>(entity) {
@@ -972,16 +1003,35 @@ pub fn dismiss_overlays_on_click(world: &mut World) {
 
         let x = cursor.x as f64;
         let y = cursor.y as f64;
+        let pointer_pos = (x, y);
+        tracing::debug!(
+            "Global pointer click detected at screen position: {:?}",
+            pointer_pos
+        );
 
         let overlay_hit = topmost_hit_entity(world, &hit_boxes, &overlay_roots, x, y, true);
         let main_hit = topmost_hit_entity(world, &hit_boxes, &overlay_roots, x, y, false);
+        tracing::debug!(
+            "Hit-test testing UiOverlayRoot... Result: {:?}",
+            overlay_hit
+        );
+        tracing::debug!("Hit-test testing UiRoot... Result: {:?}", main_hit);
 
         let phase = match event.state {
             ButtonState::Pressed => UiPointerPhase::Pressed,
             ButtonState::Released => UiPointerPhase::Released,
         };
 
-        if let Some(target) = overlay_hit.or(main_hit) {
+        let clicked_entity = overlay_hit.or(main_hit);
+        let is_inside_overlay =
+            clicked_entity.is_some_and(|entity| is_overlay_entity(world, entity, &overlay_roots));
+        tracing::debug!(
+            "Evaluating dismissal. Clicked entity: {:?}. Is it inside Overlay tree? {}",
+            clicked_entity,
+            is_inside_overlay
+        );
+
+        if let Some(target) = clicked_entity {
             world.resource::<UiEventQueue>().push(UiEvent::typed(
                 target,
                 UiPointerHitEvent {

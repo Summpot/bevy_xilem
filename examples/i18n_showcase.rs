@@ -1,3 +1,5 @@
+mod utils;
+
 use std::sync::Arc;
 
 use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
@@ -12,7 +14,7 @@ use bevy_xilem::{
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPool},
     bevy_text::TextPlugin,
-    init_logging, resolve_style, run_app_with_window_options, spawn_in_overlay_root,
+    resolve_style, run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
         view::label,
@@ -20,6 +22,7 @@ use bevy_xilem::{
     },
 };
 use unic_langid::LanguageIdentifier;
+use utils::init_logging;
 
 #[derive(Resource, Debug, Clone, Copy)]
 struct I18nRuntime {

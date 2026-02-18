@@ -1,3 +1,5 @@
+mod utils;
+
 use std::{
     sync::{Arc, Mutex, mpsc},
     thread,
@@ -10,7 +12,7 @@ use bevy_xilem::{
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    button, button_with_child, checkbox, init_logging, resolve_style, resolve_style_for_classes,
+    button, button_with_child, checkbox, resolve_style, resolve_style_for_classes,
     run_app_with_window_options, slider,
     xilem::{
         Color,
@@ -23,6 +25,7 @@ use bevy_xilem::{
         winit::error::EventLoopError,
     },
 };
+use utils::init_logging;
 
 #[allow(unexpected_cfgs)]
 #[path = "chess_engine.rs"]

@@ -1,3 +1,5 @@
+mod utils;
+
 use std::{
     f64::consts::{FRAC_PI_2, TAU},
     sync::Arc,
@@ -11,7 +13,7 @@ use bevy_xilem::{
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
-    button, emit_ui_action, init_logging, resolve_style, resolve_style_for_classes,
+    button, emit_ui_action, resolve_style, resolve_style_for_classes,
     resolve_style_for_entity_classes, run_app_with_window_options, slider,
     xilem::{
         Color,
@@ -30,6 +32,7 @@ use bevy_xilem::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
+use utils::init_logging;
 
 const DIAL_SIZE: f64 = 188.0;
 
