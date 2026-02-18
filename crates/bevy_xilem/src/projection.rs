@@ -3,10 +3,13 @@ use std::{fmt, marker::PhantomData, sync::Arc};
 use bevy_ecs::prelude::*;
 use masonry::layout::{Dim, Length, UnitPoint};
 use tracing::trace;
-use xilem::style::Style as _;
+use xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
 use xilem_masonry::{
     AnyWidgetView,
-    view::{FlexExt as _, ZStackExt as _, flex_col, flex_row, label, transformed, zstack},
+    view::{
+        CrossAxisAlignment, FlexExt as _, MainAxisAlignment, ZStackExt as _, flex_col, flex_row,
+        label, portal, transformed, zstack,
+    },
 };
 
 use crate::{
@@ -166,6 +169,73 @@ fn translate_text(world: &World, key: Option<&str>, fallback: &str) -> String {
     }
 }
 
+const DIALOG_SURFACE_MIN_WIDTH: f64 = 240.0;
+const DIALOG_SURFACE_MAX_WIDTH: f64 = 400.0;
+const DROPDOWN_MAX_VIEWPORT_HEIGHT: f64 = 300.0;
+
+fn estimate_text_width_px(text: &str, font_size: f32) -> f64 {
+    let units = text
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_whitespace() {
+                0.34
+            } else if ch.is_ascii() {
+                0.56
+            } else {
+                1.0
+            }
+        })
+        .sum::<f64>();
+
+    (units * font_size as f64).max(font_size as f64 * 2.0)
+}
+
+fn estimate_dialog_surface_width_px(
+    title: &str,
+    body: &str,
+    dismiss_label: &str,
+    title_size: f32,
+    body_size: f32,
+    dismiss_size: f32,
+    horizontal_padding: f64,
+) -> f64 {
+    let mut widest = estimate_text_width_px(title, title_size)
+        .max(estimate_text_width_px(dismiss_label, dismiss_size));
+
+    for line in body.lines() {
+        widest = widest.max(estimate_text_width_px(line, body_size));
+    }
+
+    (widest + horizontal_padding * 2.0 + 40.0)
+        .clamp(DIALOG_SURFACE_MIN_WIDTH, DIALOG_SURFACE_MAX_WIDTH)
+}
+
+fn estimate_dropdown_surface_width_px<'a>(
+    anchor_width: f64,
+    labels: impl IntoIterator<Item = &'a str>,
+    font_size: f32,
+    horizontal_padding: f64,
+) -> f64 {
+    let widest_label = labels
+        .into_iter()
+        .map(|label| estimate_text_width_px(label, font_size))
+        .fold(0.0, f64::max);
+
+    (widest_label + horizontal_padding + 24.0).max(anchor_width.max(1.0))
+}
+
+fn estimate_dropdown_viewport_height_px(
+    item_count: usize,
+    item_font_size: f32,
+    item_padding: f64,
+    item_gap: f64,
+) -> f64 {
+    let per_item = (item_font_size as f64 + item_padding * 2.0 + 8.0).max(28.0);
+    let gap_total = item_gap * item_count.saturating_sub(1) as f64;
+    let content_height = per_item * item_count as f64 + gap_total;
+    content_height.clamp(per_item, DROPDOWN_MAX_VIEWPORT_HEIGHT)
+}
+
 fn project_overlay_root(_: &UiOverlayRoot, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(
         zstack(ctx.children)
@@ -253,6 +323,10 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
     if dialog_style.layout.border_width <= 0.0 {
         dialog_style.layout.border_width = 1.0;
     }
+    if dialog_style.box_shadow.is_none() {
+        dialog_style.box_shadow =
+            Some(BoxShadow::new(BLACK.with_alpha(0.36), (0.0, 10.0)).blur(22.0));
+    }
 
     let mut backdrop_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.backdrop"]);
     if backdrop_style.colors.bg.is_none() {
@@ -282,6 +356,16 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
         dismiss_style.font_family = Some(stack);
     }
 
+    let dialog_surface_width = estimate_dialog_surface_width_px(
+        &title,
+        &body,
+        &dismiss_label,
+        title_style.text.size,
+        body_style.text.size,
+        dismiss_style.text.size,
+        dialog_style.layout.padding.max(12.0),
+    );
+
     let backdrop = xilem_masonry::view::sized_box(apply_direct_widget_style(
         ecs_button(ctx.entity, OverlayUiAction::DismissDialog, ""),
         &backdrop_style,
@@ -290,7 +374,7 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
     .height(Dim::Stretch)
     .alignment(UnitPoint::TOP_LEFT);
 
-    let dialog_panel = apply_widget_style(
+    let dialog_surface = xilem_masonry::view::sized_box(apply_widget_style(
         flex_col(vec![
             apply_label_style(label(title), &title_style).into_any_flex(),
             apply_label_style(label(body), &body_style).into_any_flex(),
@@ -302,10 +386,17 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
         ])
         .gap(Length::px(dialog_style.layout.gap.max(10.0))),
         &dialog_style,
-    );
+    ))
+    .fixed_width(Length::px(dialog_surface_width));
+
+    let centered_surface_layer = flex_col((dialog_surface.into_any_flex(),))
+        .main_axis_alignment(MainAxisAlignment::Center)
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .width(Dim::Stretch)
+        .height(Dim::Stretch);
 
     Arc::new(
-        zstack((backdrop, dialog_panel))
+        zstack((backdrop, centered_surface_layer))
             .alignment(UnitPoint::CENTER)
             .width(Dim::Stretch)
             .height(Dim::Stretch),
@@ -368,6 +459,9 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
     if menu_style.layout.border_width <= 0.0 {
         menu_style.layout.border_width = 1.0;
     }
+    if menu_style.box_shadow.is_none() {
+        menu_style.box_shadow = Some(BoxShadow::new(BLACK.with_alpha(0.28), (0.0, 8.0)).blur(16.0));
+    }
 
     let mut item_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.item"]);
 
@@ -384,26 +478,13 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
         item_style.font_family = Some(stack);
     }
 
-    let items = anchor
+    let translated_options = anchor
         .and_then(|anchor| ctx.world.get::<UiComboBox>(anchor))
         .map(|combo_box| {
             combo_box
                 .options
                 .iter()
-                .enumerate()
-                .map(|(index, option)| {
-                    let label_text =
-                        translate_text(ctx.world, option.label_key.as_deref(), &option.label);
-                    apply_direct_widget_style(
-                        ecs_button(
-                            ctx.entity,
-                            OverlayUiAction::SelectComboItem { index },
-                            label_text,
-                        ),
-                        &item_style,
-                    )
-                    .into_any_flex()
-                })
+                .map(|option| translate_text(ctx.world, option.label_key.as_deref(), &option.label))
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
@@ -414,14 +495,46 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
         .copied()
         .unwrap_or_default();
 
-    let dropdown_panel = transformed(apply_widget_style(
-        flex_col(items).gap(Length::px(menu_style.layout.gap.max(6.0))),
-        &menu_style,
-    ))
-    .translate((anchor_rect.left, anchor_rect.top + anchor_rect.height + 4.0));
+    let dropdown_width = estimate_dropdown_surface_width_px(
+        anchor_rect.width.max(1.0),
+        translated_options.iter().map(String::as_str),
+        item_style.text.size,
+        item_style.layout.padding * 2.0 + menu_style.layout.padding * 2.0,
+    );
 
-    let dropdown_panel = xilem_masonry::view::sized_box(dropdown_panel)
-        .fixed_width(Length::px(anchor_rect.width.max(1.0)));
+    let item_gap = menu_style.layout.gap.max(6.0);
+    let dropdown_height = estimate_dropdown_viewport_height_px(
+        translated_options.len(),
+        item_style.text.size,
+        item_style.layout.padding,
+        item_gap,
+    );
+
+    let items = translated_options
+        .into_iter()
+        .enumerate()
+        .map(|(index, label_text)| {
+            let item_button = ecs_button(
+                ctx.entity,
+                OverlayUiAction::SelectComboItem { index },
+                label_text,
+            )
+            .width(Dim::Stretch);
+
+            apply_direct_widget_style(item_button, &item_style).into_any_flex()
+        })
+        .collect::<Vec<_>>();
+
+    let scrollable_menu = portal(
+        flex_col(items)
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .width(Dim::Stretch)
+            .gap(Length::px(item_gap)),
+    )
+    .dims((Length::px(dropdown_width), Length::px(dropdown_height)));
+
+    let dropdown_panel = transformed(apply_widget_style(scrollable_menu, &menu_style))
+        .translate((anchor_rect.left, anchor_rect.top + anchor_rect.height + 4.0));
 
     let backdrop_style = resolve_style_for_classes(ctx.world, ["overlay.dropdown.backdrop"]);
     let backdrop = xilem_masonry::view::sized_box(apply_direct_widget_style(
@@ -451,4 +564,56 @@ pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
         .register_component::<UiDialog>(project_dialog)
         .register_component::<UiComboBox>(project_combo_box)
         .register_component::<UiDropdownMenu>(project_dropdown_menu);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        DIALOG_SURFACE_MAX_WIDTH, DIALOG_SURFACE_MIN_WIDTH, DROPDOWN_MAX_VIEWPORT_HEIGHT,
+        estimate_dialog_surface_width_px, estimate_dropdown_surface_width_px,
+        estimate_dropdown_viewport_height_px,
+    };
+
+    #[test]
+    fn dialog_surface_width_estimation_is_clamped() {
+        let width = estimate_dialog_surface_width_px(
+            "Very long modal title that should hit max width",
+            "This is a long body line that should also be measured for width and then clamped.",
+            "Close",
+            24.0,
+            16.0,
+            15.0,
+            16.0,
+        );
+
+        assert!((DIALOG_SURFACE_MIN_WIDTH..=DIALOG_SURFACE_MAX_WIDTH).contains(&width));
+        assert_eq!(
+            estimate_dialog_surface_width_px("", "", "", 24.0, 16.0, 15.0, 16.0),
+            DIALOG_SURFACE_MIN_WIDTH
+        );
+    }
+
+    #[test]
+    fn dropdown_width_estimation_respects_anchor_min_width() {
+        let width = estimate_dropdown_surface_width_px(180.0, ["One", "Two", "Three"], 16.0, 24.0);
+        assert!(width >= 180.0);
+
+        let wide = estimate_dropdown_surface_width_px(
+            120.0,
+            ["An exceptionally long option label that should grow the menu"],
+            16.0,
+            24.0,
+        );
+        assert!(wide > 120.0);
+    }
+
+    #[test]
+    fn dropdown_viewport_height_is_capped() {
+        let height = estimate_dropdown_viewport_height_px(40, 16.0, 10.0, 6.0);
+        assert_eq!(height, DROPDOWN_MAX_VIEWPORT_HEIGHT);
+
+        let small = estimate_dropdown_viewport_height_px(2, 16.0, 10.0, 6.0);
+        assert!(small < DROPDOWN_MAX_VIEWPORT_HEIGHT);
+        assert!(small > 0.0);
+    }
 }

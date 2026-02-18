@@ -102,7 +102,8 @@ The runtime now supports a data-driven style pipeline with four phases:
   `Hovered` / `Pressed` marker components synchronized from interaction events
 - **Computed-style cache + incremental invalidation:**
   `StyleDirty` marks entities requiring recomputation; `ComputedStyle` stores
-  cached resolved layout/text/color/transition plus `font_family: Option<Vec<String>>`
+  cached resolved layout/text/color/transition plus
+  `font_family: Option<Vec<String>>` and `box_shadow: Option<BoxShadow>`
   for projector reads
 - **Smooth transitions:**
   `TargetColorStyle` + `CurrentColorStyle` driven by
@@ -114,6 +115,13 @@ Style resolution helpers (`resolve_style`, `resolve_style_for_classes`) and appl
 (`apply_widget_style`, `apply_label_style`, `apply_text_input_style`) are provided for projectors.
 Projectors now primarily consume `ComputedStyle` (through `resolve_style`) rather than
 re-running a full cascade per frame.
+
+Style surface details:
+
+- `StyleSetter` and `ResolvedStyle` include optional `box_shadow` support.
+- Widget application helpers apply resolved border/background/corner/padding and box-shadow
+  on the target surface, allowing overlay/dialog/dropdown surfaces to express depth without
+  coupling shadows to backdrop layers.
 
 Hit-testing invariant:
 

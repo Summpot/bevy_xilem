@@ -13,7 +13,7 @@ use masonry::theme;
 use xilem::{Color, style::Style as _};
 use xilem_masonry::masonry::parley::{FontFamily, GenericFamily, style::FontStack};
 use xilem_masonry::masonry::properties::{
-    Background, BorderColor, BorderWidth, CornerRadius, Padding,
+    Background, BorderColor, BorderWidth, BoxShadow, CornerRadius, Padding,
 };
 use xilem_masonry::{
     WidgetView,
@@ -81,6 +81,7 @@ pub struct ComputedStyle {
     pub colors: ResolvedColorStyle,
     pub text: ResolvedTextStyle,
     pub font_family: Option<Vec<String>>,
+    pub box_shadow: Option<BoxShadow>,
     pub transition: Option<StyleTransition>,
 }
 
@@ -183,6 +184,7 @@ pub struct StyleSetter {
     pub colors: ColorStyle,
     pub text: TextStyle,
     pub font_family: Option<Vec<String>>,
+    pub box_shadow: Option<BoxShadow>,
     pub transition: Option<StyleTransition>,
 }
 
@@ -298,6 +300,7 @@ pub struct ResolvedStyle {
     pub colors: ResolvedColorStyle,
     pub text: ResolvedTextStyle,
     pub font_family: Option<Vec<String>>,
+    pub box_shadow: Option<BoxShadow>,
     pub transition: Option<StyleTransition>,
 }
 
@@ -367,6 +370,9 @@ fn merge_setter(dst: &mut StyleSetter, setter: &StyleSetter) {
     merge_text(&mut dst.text, &setter.text);
     if setter.font_family.is_some() {
         dst.font_family = setter.font_family.clone();
+    }
+    if setter.box_shadow.is_some() {
+        dst.box_shadow = setter.box_shadow;
     }
     if setter.transition.is_some() {
         dst.transition = setter.transition;
@@ -590,6 +596,7 @@ fn resolved_from_merged(
         colors,
         text: to_resolved_text(&merged.text),
         font_family: merged.font_family.clone(),
+        box_shadow: merged.box_shadow,
         transition: merged.transition,
     }
 }
@@ -618,6 +625,7 @@ pub fn resolve_style(world: &World, entity: Entity) -> ResolvedStyle {
             colors: computed.colors,
             text: computed.text,
             font_family: computed.font_family.clone(),
+            box_shadow: computed.box_shadow,
             transition: computed.transition,
         };
 
@@ -656,6 +664,7 @@ pub fn resolve_style_for_classes<'a>(
         },
         text: to_resolved_text(&merged.text),
         font_family: merged.font_family,
+        box_shadow: merged.box_shadow,
         transition: merged.transition,
     }
 }
@@ -687,6 +696,7 @@ where
             style.layout.border_width,
         )
         .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
+        .box_shadow(style.box_shadow.unwrap_or_default())
 }
 
 /// Apply style directly on the target widget.
@@ -701,7 +711,8 @@ where
         + HasProperty<CornerRadius>
         + HasProperty<BorderColor>
         + HasProperty<BorderWidth>
-        + HasProperty<Background>,
+        + HasProperty<Background>
+        + HasProperty<BoxShadow>,
 {
     view.padding(style.layout.padding)
         .corner_radius(style.layout.corner_radius)
@@ -710,6 +721,7 @@ where
             style.layout.border_width,
         )
         .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
+        .box_shadow(style.box_shadow.unwrap_or_default())
 }
 
 fn to_target_component(colors: ResolvedColorStyle) -> TargetColorStyle {
@@ -921,6 +933,7 @@ pub fn sync_style_targets(world: &mut World) {
                     computed.colors = resolved.colors;
                     computed.text = resolved.text;
                     computed.font_family = resolved.font_family.clone();
+                    computed.box_shadow = resolved.box_shadow;
                     computed.transition = resolved.transition;
                 } else {
                     world.entity_mut(entity).insert(ComputedStyle {
@@ -928,6 +941,7 @@ pub fn sync_style_targets(world: &mut World) {
                         colors: resolved.colors,
                         text: resolved.text,
                         font_family: resolved.font_family.clone(),
+                        box_shadow: resolved.box_shadow,
                         transition: resolved.transition,
                     });
                 }
