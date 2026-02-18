@@ -6,9 +6,9 @@ use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_image::Image as BevyImage;
 use bevy_text::TextPlugin;
 use bevy_xilem::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, LayoutStyle, LocaleFontRegistry,
-    ProjectionCtx, ResolvedStyle, StyleClass, StyleSetter, StyleSheet, StyleTransition,
-    SyncAssetSource, SyncTextSource, TextStyle, UiEventQueue, UiRoot, UiView, apply_label_style,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx,
+    ResolvedStyle, StyleClass, StyleSetter, StyleSheet, StyleTransition, SyncAssetSource,
+    SyncTextSource, TextStyle, UiEventQueue, UiRoot, UiView, apply_label_style,
     apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -113,72 +113,6 @@ fn set_status_key(world: &mut World, key: &str, fallback: &str) {
         tr(world_ref, key, fallback)
     };
     set_status(world, message);
-}
-
-fn configure_locale_font_registry() -> LocaleFontRegistry {
-    LocaleFontRegistry::default()
-        .set_default(vec![
-            "Inter",
-            "Noto Sans SC",
-            "Noto Sans CJK SC",
-            "Noto Sans JP",
-            "Noto Sans CJK JP",
-            "Noto Sans CJK TC",
-            "Noto Sans CJK KR",
-            "sans-serif",
-        ])
-        .add_mapping(
-            "ja-JP",
-            vec![
-                "Inter",
-                "Noto Sans JP",
-                "Noto Sans CJK JP",
-                "Noto Sans SC",
-                "Noto Sans CJK SC",
-                "Noto Sans CJK TC",
-                "Noto Sans CJK KR",
-                "sans-serif",
-            ],
-        )
-        .add_mapping(
-            "zh-CN",
-            vec![
-                "Inter",
-                "Noto Sans SC",
-                "Noto Sans CJK SC",
-                "Noto Sans JP",
-                "Noto Sans CJK JP",
-                "Noto Sans CJK TC",
-                "Noto Sans CJK KR",
-                "sans-serif",
-            ],
-        )
-        .add_mapping(
-            "zh-TW",
-            vec![
-                "Inter",
-                "Noto Sans CJK TC",
-                "Noto Sans SC",
-                "Noto Sans CJK SC",
-                "Noto Sans JP",
-                "Noto Sans CJK JP",
-                "Noto Sans CJK KR",
-                "sans-serif",
-            ],
-        )
-        .add_mapping(
-            "ko-KR",
-            vec![
-                "Inter",
-                "Noto Sans CJK KR",
-                "Noto Sans SC",
-                "Noto Sans CJK SC",
-                "Noto Sans JP",
-                "Noto Sans CJK JP",
-                "Noto Sans CJK TC",
-                "sans-serif",
-            ],
-        )
 }
 
 fn sync_font_stack_for_locale(sheet: &mut StyleSheet, stack: Option<&[String]>) {
@@ -795,16 +729,11 @@ fn setup(mut commands: Commands) {
     let _ = cmd_tx.send(NetworkCommand::DiscoverIdp);
 }
 
-fn setup_styles(
-    mut sheet: ResMut<StyleSheet>,
-    i18n: Option<Res<AppI18n>>,
-    font_registry: Res<LocaleFontRegistry>,
-) {
-    let locale = i18n.as_ref().map_or_else(
-        || parse_locale("en-US"),
-        |current| current.active_locale.clone(),
-    );
-    let default_fonts = font_registry.font_stack_for_locale(&locale);
+fn setup_styles(mut sheet: ResMut<StyleSheet>, i18n: Option<Res<AppI18n>>) {
+    let default_fonts = i18n
+        .as_ref()
+        .map(|current| current.get_font_stack())
+        .filter(|stack| !stack.is_empty());
 
     sheet.set_class(
         "pixiv.root",
@@ -1614,8 +1543,9 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
                     .set_active_locale(next.clone());
                 {
                     let font_stack = {
-                        let registry = world.resource::<LocaleFontRegistry>();
-                        registry.font_stack_for_locale(&next)
+                        let i18n = world.resource::<AppI18n>();
+                        let stack = i18n.get_font_stack();
+                        (!stack.is_empty()).then_some(stack)
                     };
                     let mut style_sheet = world.resource_mut::<StyleSheet>();
                     sync_font_stack_for_locale(&mut style_sheet, font_stack.as_deref());
@@ -2376,16 +2306,39 @@ fn build_app() -> App {
     .register_i18n_bundle(
         "en-US",
         SyncTextSource::FilePath("assets/locales/en-US/main.ftl"),
+        vec![
+            "Inter",
+            "Noto Sans CJK SC",
+            "Noto Sans CJK JP",
+            "Noto Sans CJK TC",
+            "Noto Sans CJK KR",
+            "sans-serif",
+        ],
     )
     .register_i18n_bundle(
         "zh-CN",
         SyncTextSource::FilePath("assets/locales/zh-CN/main.ftl"),
+        vec![
+            "Inter",
+            "Noto Sans CJK SC",
+            "Noto Sans CJK JP",
+            "Noto Sans CJK TC",
+            "Noto Sans CJK KR",
+            "sans-serif",
+        ],
     )
     .register_i18n_bundle(
         "ja-JP",
         SyncTextSource::FilePath("assets/locales/ja-JP/main.ftl"),
+        vec![
+            "Inter",
+            "Noto Sans CJK JP",
+            "Noto Sans CJK SC",
+            "Noto Sans CJK TC",
+            "Noto Sans CJK KR",
+            "sans-serif",
+        ],
     )
-    .insert_resource(configure_locale_font_registry())
     .register_projector::<PixivRoot>(project_root)
     .register_projector::<PixivSidebar>(project_sidebar)
     .register_projector::<PixivMainColumn>(project_main_column)

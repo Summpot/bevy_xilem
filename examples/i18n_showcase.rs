@@ -3,9 +3,9 @@ use std::sync::Arc;
 use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_xilem::{
     AppBevyXilemExt, AppI18n, BevyXilemPlugin, BuiltinUiAction, ColorStyle, LayoutStyle,
-    LocaleFontRegistry, LocalizeText, ProjectionCtx, StyleClass, StyleSetter, StyleSheet,
-    SyncAssetSource, SyncTextSource, TextStyle, UiButton, UiEventQueue, UiFlexColumn, UiLabel,
-    UiRoot, UiView, apply_label_style, apply_widget_style,
+    LocalizeText, ProjectionCtx, StyleClass, StyleSetter, StyleSheet, SyncAssetSource,
+    SyncTextSource, TextStyle, UiButton, UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiView,
+    apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_asset::AssetPlugin,
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -35,40 +35,6 @@ fn parse_locale(tag: &str) -> LanguageIdentifier {
 
 fn ensure_task_pool_initialized() {
     let _ = IoTaskPool::get_or_init(TaskPool::new);
-}
-
-fn configure_locale_font_registry() -> LocaleFontRegistry {
-    LocaleFontRegistry::default()
-        .set_default(vec![
-            "Inter",
-            "Noto Sans SC",
-            "Noto Sans CJK SC",
-            "Noto Sans JP",
-            "Noto Sans CJK JP",
-            "sans-serif",
-        ])
-        .add_mapping(
-            "ja-JP",
-            vec![
-                "Inter",
-                "Noto Sans JP",
-                "Noto Sans CJK JP",
-                "Noto Sans SC",
-                "Noto Sans CJK SC",
-                "sans-serif",
-            ],
-        )
-        .add_mapping(
-            "zh-CN",
-            vec![
-                "Inter",
-                "Noto Sans SC",
-                "Noto Sans CJK SC",
-                "Noto Sans JP",
-                "Noto Sans CJK JP",
-                "sans-serif",
-            ],
-        )
 }
 
 fn project_locale_badge(_: &LocaleBadge, ctx: ProjectionCtx<'_>) -> UiView {
@@ -275,16 +241,28 @@ fn build_i18n_app() -> App {
     .register_i18n_bundle(
         "en-US",
         SyncTextSource::FilePath("assets/locales/en-US/main.ftl"),
+        vec!["Inter", "sans-serif"],
     )
     .register_i18n_bundle(
         "zh-CN",
         SyncTextSource::FilePath("assets/locales/zh-CN/main.ftl"),
+        vec![
+            "Inter",
+            "Noto Sans CJK SC",
+            "Noto Sans CJK JP",
+            "sans-serif",
+        ],
     )
     .register_i18n_bundle(
         "ja-JP",
         SyncTextSource::FilePath("assets/locales/ja-JP/main.ftl"),
+        vec![
+            "Inter",
+            "Noto Sans CJK JP",
+            "Noto Sans CJK SC",
+            "sans-serif",
+        ],
     )
-    .insert_resource(configure_locale_font_registry())
     .register_projector::<LocaleBadge>(project_locale_badge)
     .add_systems(Startup, (setup_i18n_styles, setup_i18n_world))
     .add_systems(PreUpdate, drain_i18n_events);

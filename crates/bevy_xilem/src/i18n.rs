@@ -5,7 +5,7 @@ use fluent::{FluentResource, concurrent::FluentBundle};
 use tracing::{debug, trace};
 use unic_langid::{LanguageIdentifier, langid};
 
-use crate::{LocalizeText, styling::ResolvedStyle};
+use crate::LocalizeText;
 
 fn default_language_identifier() -> LanguageIdentifier {
     langid!("en-US")
@@ -15,14 +15,18 @@ fn default_language_identifier() -> LanguageIdentifier {
 #[derive(Resource)]
 pub struct AppI18n {
     pub active_locale: LanguageIdentifier,
+    pub default_font_stack: Vec<String>,
     pub bundles: HashMap<LanguageIdentifier, FluentBundle<FluentResource>>,
+    pub font_stacks: HashMap<LanguageIdentifier, Vec<String>>,
 }
 
 impl Default for AppI18n {
     fn default() -> Self {
         Self {
             active_locale: default_language_identifier(),
+            default_font_stack: vec![],
             bundles: HashMap::new(),
+            font_stacks: HashMap::new(),
         }
     }
 }
@@ -32,7 +36,9 @@ impl AppI18n {
     pub fn new(active_locale: LanguageIdentifier) -> Self {
         Self {
             active_locale,
+            default_font_stack: vec![],
             bundles: HashMap::new(),
+            font_stacks: HashMap::new(),
         }
     }
 
@@ -44,8 +50,22 @@ impl AppI18n {
         &mut self,
         locale: LanguageIdentifier,
         bundle: FluentBundle<FluentResource>,
+        font_stack: Vec<String>,
     ) {
+        if self.default_font_stack.is_empty() && !font_stack.is_empty() {
+            self.default_font_stack = font_stack.clone();
+        }
+
+        self.font_stacks.insert(locale.clone(), font_stack);
         self.bundles.insert(locale, bundle);
+    }
+
+    #[must_use]
+    pub fn get_font_stack(&self) -> Vec<String> {
+        self.font_stacks
+            .get(&self.active_locale)
+            .cloned()
+            .unwrap_or_else(|| self.default_font_stack.clone())
     }
 
     #[must_use]
@@ -61,48 +81,6 @@ impl AppI18n {
         }
 
         key.to_string()
-    }
-}
-
-/// Locale-aware font stack registry used for text rendering fallback.
-#[derive(Resource, Debug, Clone, Default)]
-pub struct LocaleFontRegistry {
-    pub default_font_stack: Vec<String>,
-    pub locale_mappings: HashMap<String, Vec<String>>,
-}
-
-impl LocaleFontRegistry {
-    #[must_use]
-    pub fn add_mapping(mut self, locale: &str, stack: Vec<&str>) -> Self {
-        self.locale_mappings.insert(
-            locale.to_string(),
-            stack.into_iter().map(String::from).collect(),
-        );
-        self
-    }
-
-    #[must_use]
-    pub fn set_default(mut self, stack: Vec<&str>) -> Self {
-        self.default_font_stack = stack.into_iter().map(String::from).collect();
-        self
-    }
-
-    #[must_use]
-    pub fn font_stack_for_locale(&self, locale: &LanguageIdentifier) -> Option<Vec<String>> {
-        let locale_key = locale.to_string();
-        if let Some(stack) = self
-            .locale_mappings
-            .get(locale_key.as_str())
-            .filter(|stack| !stack.is_empty())
-        {
-            return Some(stack.clone());
-        }
-
-        if self.default_font_stack.is_empty() {
-            None
-        } else {
-            Some(self.default_font_stack.clone())
-        }
     }
 }
 
@@ -138,27 +116,6 @@ pub fn resolve_localized_text(world: &World, entity: Entity, fallback: &str) -> 
     }
 }
 
-/// Apply locale-aware fallback stack when no explicit style font stack is present.
-pub fn apply_locale_font_family_fallback(world: &World, style: &mut ResolvedStyle) {
-    if style.font_family.is_some() {
-        return;
-    }
-
-    let locale = world
-        .get_resource::<AppI18n>()
-        .map_or_else(default_language_identifier, |i18n| {
-            i18n.active_locale.clone()
-        });
-
-    let font_stack = world
-        .get_resource::<LocaleFontRegistry>()
-        .and_then(|registry| registry.font_stack_for_locale(&locale));
-
-    if let Some(font_stack) = font_stack {
-        style.font_family = Some(font_stack);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -170,18 +127,34 @@ mod tests {
     }
 
     #[test]
-    fn locale_font_registry_prefers_locale_mapping() {
-        let registry = LocaleFontRegistry::default()
-            .set_default(vec!["Default Sans", "sans-serif"])
-            .add_mapping("fr-FR", vec!["French Sans", "sans-serif"]);
-
-        let fr: LanguageIdentifier = "fr-FR"
-            .parse()
-            .expect("fr-FR locale identifier should parse");
+    fn app_i18n_get_font_stack_uses_active_locale_then_default() {
+        let mut i18n = AppI18n::new(
+            "fr-FR"
+                .parse()
+                .expect("fr-FR locale identifier should parse"),
+        );
+        i18n.default_font_stack = vec!["Default Sans".to_string(), "sans-serif".to_string()];
+        i18n.font_stacks.insert(
+            "fr-FR"
+                .parse()
+                .expect("fr-FR locale identifier should parse"),
+            vec!["French Sans".to_string(), "sans-serif".to_string()],
+        );
 
         assert_eq!(
-            registry.font_stack_for_locale(&fr),
-            Some(vec!["French Sans".to_string(), "sans-serif".to_string()])
+            i18n.get_font_stack(),
+            vec!["French Sans".to_string(), "sans-serif".to_string()]
+        );
+
+        i18n.set_active_locale(
+            "en-US"
+                .parse()
+                .expect("en-US locale identifier should parse"),
+        );
+
+        assert_eq!(
+            i18n.get_font_stack(),
+            vec!["Default Sans".to_string(), "sans-serif".to_string()]
         );
     }
 }

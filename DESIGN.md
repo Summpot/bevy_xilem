@@ -137,36 +137,25 @@ two-stage sync pipeline to register custom font bytes into Masonry's font databa
 - This enables stylesheet-level `font_family` usage for custom CJK fonts without
   requiring projector-level ad-hoc font wiring.
 
-### 5.7) Synchronous i18n registry + data-driven locale font fallback
+### 5.7) Synchronous i18n registry + explicit locale font stacks
 
 `bevy_xilem` now uses an in-memory Fluent registry without async asset loading.
 
 - `BevyXilemPlugin` initializes:
-  - `AppI18n { active_locale, bundles }`
-  - `LocaleFontRegistry { default_font_stack, locale_mappings }`
+  - `AppI18n { active_locale, default_font_stack, bundles, font_stacks }`
 - App-level synchronous API is exposed through `AppBevyXilemExt`:
   - `SyncTextSource::{String(&str), FilePath(&str)}`
-  - `.register_i18n_bundle(locale, SyncTextSource::...)`
+  - `.register_i18n_bundle(locale, SyncTextSource::..., font_stack)`
 - Bundle parsing is fail-fast (invalid locale tags, missing files, or invalid FTL all panic
   during setup).
 - `LocalizeText { key }` is resolved through `AppI18n::translate(key)` with key fallback.
-- Built-in `UiLabel`/`UiButton` projectors apply locale font fallback based on
-  `AppI18n.active_locale` when explicit style font stacks are absent.
+- Built-in `UiLabel`/`UiButton` projectors explicitly apply
+  `AppI18n::get_font_stack()` as the text font stack for translated views.
+- `AppI18n::get_font_stack()` returns locale-specific entries from `font_stacks`,
+  or falls back to `default_font_stack`.
 
-To address Han Unification and locale-specific typography needs without hardcoding app assets,
-`bevy_xilem` now uses a configurable resource:
-
-- `LocaleFontRegistry { default_font_stack, locale_mappings }`
-
-Built-in projection reads `AppI18n.active_locale` and applies fallback `font_family` only when an
-explicit style stack is absent:
-
-- if `locale_mappings` contains the active locale tag, that stack is used;
-- otherwise `default_font_stack` is used;
-- if neither is configured, projector fallback does not force any font stack.
-
-Locale/font policy is therefore owned by application setup (examples/apps insert and configure
-`LocaleFontRegistry`), while `bevy_xilem` remains framework-agnostic.
+Locale/font policy is therefore owned by application setup via i18n bundle registration,
+while the styling engine remains locale-agnostic data.
 
 ### 6) ECS control adapter coverage
 
@@ -238,7 +227,6 @@ so user code no longer needs to allocate/store a dedicated node-id component.
 - `StyleSheet`
 - `XilemFontBridge`
 - `AppI18n`
-- `LocaleFontRegistry`
 - `MasonryRuntime`
 
 and registers tweening support with:

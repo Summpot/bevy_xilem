@@ -1,8 +1,8 @@
 use std::{sync::Arc, time::Duration};
 
 use crate::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, Hovered, LocaleFontRegistry, Pressed,
-    ProjectionCtx, Selector, StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, Hovered, Pressed, ProjectionCtx,
+    Selector, StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue,
     UiProjectorRegistry, UiRoot, UiView, ecs_button, register_builtin_projectors, resolve_style,
     resolve_style_for_entity_classes, synthesize_roots_with_stats,
 };
@@ -80,6 +80,7 @@ fn app_i18n_resolves_showcase_hello_world_for_zh_cn() {
     app.add_plugins(BevyXilemPlugin).register_i18n_bundle(
         "zh-CN",
         SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
+        vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
     );
 
     assert_eq!(
@@ -94,6 +95,7 @@ fn resolve_localized_text_prefers_translation_over_uilabel_fallback() {
     app.add_plugins(BevyXilemPlugin).register_i18n_bundle(
         "zh-CN",
         SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
+        vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
     );
 
     let entity = app
@@ -121,10 +123,12 @@ fn localized_text_updates_after_active_locale_change() {
         .register_i18n_bundle(
             "en-US",
             SyncTextSource::String(include_str!("../../../assets/locales/en-US/main.ftl")),
+            vec!["Inter", "sans-serif"],
         )
         .register_i18n_bundle(
             "zh-CN",
             SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
+            vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
         );
 
     let entity = app
@@ -540,55 +544,54 @@ fn xilem_font_bridge_deduplicates_same_font_bytes() {
 }
 
 #[test]
-fn locale_font_registry_resolves_mapping_then_default() {
-    let registry = LocaleFontRegistry::default()
-        .set_default(vec!["Default Sans", "sans-serif"])
-        .add_mapping("fr-FR", vec!["French Sans", "sans-serif"]);
+fn register_i18n_bundle_stores_locale_font_stacks_in_app_i18n() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin)
+        .register_i18n_bundle(
+            "en-US",
+            SyncTextSource::String(include_str!("../../../assets/locales/en-US/main.ftl")),
+            vec!["Inter", "sans-serif"],
+        )
+        .register_i18n_bundle(
+            "zh-CN",
+            SyncTextSource::String(include_str!("../../../assets/locales/zh-CN/main.ftl")),
+            vec!["Inter", "Noto Sans CJK SC", "sans-serif"],
+        );
 
-    let french = "fr-FR"
-        .parse()
-        .expect("fr-FR locale identifier should parse");
-    let english = "en-US"
-        .parse()
-        .expect("en-US locale identifier should parse");
+    {
+        let i18n = app.world().resource::<AppI18n>();
+        assert_eq!(
+            i18n.get_font_stack(),
+            vec!["Inter".to_string(), "sans-serif".to_string()]
+        );
+    }
 
-    assert_eq!(
-        registry.font_stack_for_locale(&french),
-        Some(vec!["French Sans".to_string(), "sans-serif".to_string()])
-    );
-    assert_eq!(
-        registry.font_stack_for_locale(&english),
-        Some(vec!["Default Sans".to_string(), "sans-serif".to_string()])
-    );
-}
-
-#[test]
-fn locale_font_fallback_uses_registry_and_respects_explicit_style_font() {
-    let mut world = World::new();
-    world.insert_resource(AppI18n::new(
-        "fr-FR"
+    app.world_mut().resource_mut::<AppI18n>().set_active_locale(
+        "zh-CN"
             .parse()
-            .expect("fr-FR locale identifier should parse"),
-    ));
-    world.insert_resource(
-        LocaleFontRegistry::default()
-            .set_default(vec!["Default Sans", "sans-serif"])
-            .add_mapping("fr-FR", vec!["French Sans", "sans-serif"]),
+            .expect("zh-CN locale identifier should parse"),
     );
+    {
+        let i18n = app.world().resource::<AppI18n>();
+        assert_eq!(
+            i18n.get_font_stack(),
+            vec![
+                "Inter".to_string(),
+                "Noto Sans CJK SC".to_string(),
+                "sans-serif".to_string()
+            ]
+        );
+    }
 
-    let mut resolved = crate::ResolvedStyle::default();
-    crate::apply_locale_font_family_fallback(&world, &mut resolved);
+    app.world_mut().resource_mut::<AppI18n>().set_active_locale(
+        "ja-JP"
+            .parse()
+            .expect("ja-JP locale identifier should parse"),
+    );
     assert_eq!(
-        resolved.font_family,
-        Some(vec!["French Sans".to_string(), "sans-serif".to_string()])
+        app.world().resource::<AppI18n>().get_font_stack(),
+        vec!["Inter".to_string(), "sans-serif".to_string()]
     );
-
-    let mut explicit = crate::ResolvedStyle {
-        font_family: Some(vec!["App Font".to_string()]),
-        ..crate::ResolvedStyle::default()
-    };
-    crate::apply_locale_font_family_fallback(&world, &mut explicit);
-    assert_eq!(explicit.font_family, Some(vec!["App Font".to_string()]));
 }
 
 #[test]

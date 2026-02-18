@@ -9,9 +9,9 @@ use xilem_masonry::{
 
 use crate::{
     ecs::{LocalizeText, UiButton, UiFlexColumn, UiFlexRow, UiLabel},
-    i18n::{apply_locale_font_family_fallback, resolve_localized_text},
+    i18n::{AppI18n, resolve_localized_text},
     styling::{apply_label_style, apply_widget_style, resolve_style},
-    views::ecs_button,
+    views::ecs_button_with_child,
 };
 
 /// Xilem state used by synthesized UI views.
@@ -135,11 +135,23 @@ fn project_flex_row(_: &UiFlexRow, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(apply_widget_style(flex_row(children), &style))
 }
 
+fn localized_font_stack(world: &World, entity: Entity) -> Option<Vec<String>> {
+    if world.get::<LocalizeText>(entity).is_none() {
+        return None;
+    }
+
+    world
+        .get_resource::<AppI18n>()
+        .map(AppI18n::get_font_stack)
+        .filter(|stack| !stack.is_empty())
+}
+
 fn project_label(label_component: &UiLabel, ctx: ProjectionCtx<'_>) -> UiView {
     let mut style = resolve_style(ctx.world, ctx.entity);
-    apply_locale_font_family_fallback(ctx.world, &mut style);
-
     let text = resolve_localized_text(ctx.world, ctx.entity, &label_component.text);
+    if let Some(stack) = localized_font_stack(ctx.world, ctx.entity) {
+        style.font_family = Some(stack);
+    }
     let localization_key = ctx
         .world
         .get::<LocalizeText>(ctx.entity)
@@ -156,8 +168,10 @@ fn project_label(label_component: &UiLabel, ctx: ProjectionCtx<'_>) -> UiView {
 
 fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>) -> UiView {
     let mut style = resolve_style(ctx.world, ctx.entity);
-    apply_locale_font_family_fallback(ctx.world, &mut style);
-    let label = resolve_localized_text(ctx.world, ctx.entity, &button_component.label);
+    let button_label_text = resolve_localized_text(ctx.world, ctx.entity, &button_component.label);
+    if let Some(stack) = localized_font_stack(ctx.world, ctx.entity) {
+        style.font_family = Some(stack);
+    }
     let localization_key = ctx
         .world
         .get::<LocalizeText>(ctx.entity)
@@ -166,12 +180,14 @@ fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>) -> UiView
         entity = ?ctx.entity,
         localization_key = ?localization_key,
         fallback_text = %button_component.label,
-        resolved_text = %label,
+        resolved_text = %button_label_text,
         "projected UiButton label"
     );
 
+    let label_child = apply_label_style(label(button_label_text), &style);
+
     Arc::new(apply_widget_style(
-        ecs_button(ctx.entity, BuiltinUiAction::Clicked, label),
+        ecs_button_with_child(ctx.entity, BuiltinUiAction::Clicked, label_child),
         &style,
     ))
 }

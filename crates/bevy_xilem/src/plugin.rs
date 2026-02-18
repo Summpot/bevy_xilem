@@ -10,7 +10,7 @@ use bevy_window::{CursorLeft, CursorMoved, WindowResized};
 use crate::{
     events::UiEventQueue,
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
-    i18n::{AppI18n, LocaleFontRegistry},
+    i18n::AppI18n,
     projection::{UiProjectorRegistry, register_builtin_projectors},
     runtime::{MasonryRuntime, inject_bevy_input_into_masonry, rebuild_masonry_runtime},
     styling::{
@@ -34,7 +34,6 @@ impl Plugin for BevyXilemPlugin {
             .init_resource::<StyleSheet>()
             .init_resource::<XilemFontBridge>()
             .init_resource::<AppI18n>()
-            .init_resource::<LocaleFontRegistry>()
             .init_non_send_resource::<MasonryRuntime>()
             .add_message::<CursorMoved>()
             .add_message::<CursorLeft>()

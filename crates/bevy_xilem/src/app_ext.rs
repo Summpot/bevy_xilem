@@ -104,7 +104,12 @@ pub trait AppBevyXilemExt {
     /// Register a Fluent bundle synchronously from in-memory text or filesystem path.
     ///
     /// Initializes [`AppI18n`] automatically when missing.
-    fn register_i18n_bundle(&mut self, locale: &str, source: SyncTextSource<'_>) -> &mut Self;
+    fn register_i18n_bundle(
+        &mut self,
+        locale: &str,
+        source: SyncTextSource<'_>,
+        font_stack: Vec<&str>,
+    ) -> &mut Self;
 
     /// Queue raw font bytes for registration in Xilem/Masonry text shaping.
     ///
@@ -157,10 +162,16 @@ impl AppBevyXilemExt for App {
         self
     }
 
-    fn register_i18n_bundle(&mut self, locale: &str, source: SyncTextSource<'_>) -> &mut Self {
+    fn register_i18n_bundle(
+        &mut self,
+        locale: &str,
+        source: SyncTextSource<'_>,
+        font_stack: Vec<&str>,
+    ) -> &mut Self {
         let locale_id: LanguageIdentifier = locale
             .parse()
             .unwrap_or_else(|_| panic!("locale `{locale}` should parse"));
+        let font_stack = font_stack.into_iter().map(String::from).collect::<Vec<_>>();
 
         let ftl_text = match source {
             SyncTextSource::String(text) => text.to_string(),
@@ -186,7 +197,7 @@ impl AppBevyXilemExt for App {
         if i18n.bundles.is_empty() {
             i18n.set_active_locale(locale_id.clone());
         }
-        i18n.insert_bundle(locale_id, bundle);
+        i18n.insert_bundle(locale_id, bundle, font_stack);
 
         self
     }
