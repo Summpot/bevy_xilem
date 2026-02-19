@@ -39,7 +39,6 @@ This document defines how automated agents (and humans operating like them) shou
    - Keep `origin` pointed to the user's fork and `upstream` pointed to the official repository.
    - Do fork modifications only on branch `bevy-xilem-dev` (never directly on `main`/default branch).
    - When syncing upstream, rebase/merge `upstream/*` into `bevy-xilem-dev`, then update the submodule commit in this repo.
-   - If a required fork checkout is missing locally, clone it into `../` first, then attach/update as a submodule.
    - For local validation before pushing fork commits, temporary Cargo `[patch]` or path overrides are allowed; remove temporary overrides once validation is complete unless they are intentionally part of the design.
 
 If a change affects public behavior (config schema, admin endpoints, tunnel protocol), update `DESIGN.md` and the examples/schema together.
