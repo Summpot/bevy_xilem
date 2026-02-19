@@ -3,15 +3,16 @@ use std::{fmt::Debug, sync::Arc};
 use bevy_ecs::{
     entity::Entity,
     message::MessageReader,
-    prelude::{Added, FromWorld, NonSendMut, Query, Res, ResMut, With, World},
+    prelude::{Added, FromWorld, Local, NonSendMut, Query, Res, ResMut, With, World},
 };
 use bevy_input::{
     ButtonState,
     mouse::{MouseButton, MouseButtonInput, MouseScrollUnit, MouseWheel},
 };
+use bevy_math::Vec2;
 use bevy_time::Time;
 use bevy_window::{
-    CursorLeft, CursorMoved, PrimaryWindow, WindowResized, WindowScaleFactorChanged,
+    CursorLeft, CursorMoved, PrimaryWindow, Window, WindowResized, WindowScaleFactorChanged,
 };
 use masonry::layout::{Dim, UnitPoint};
 use masonry::{
@@ -57,6 +58,16 @@ impl RawProxy for NoopProxy {
 
 type RuntimeViewState = <UiAnyView as View<(), (), ViewCtx>>::ViewState;
 
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PointerTraceEvent {
+    Move,
+    Leave,
+    Down,
+    Up,
+    Scroll,
+}
+
 /// Headless Masonry runtime owned by Bevy.
 ///
 /// This runtime keeps ownership of the retained Masonry tree and drives it via
@@ -75,6 +86,8 @@ pub struct MasonryRuntime {
     viewport_height: f64,
     window_surface: Option<ExternalWindowSurface>,
     renderer: Option<Renderer>,
+    #[cfg(test)]
+    pointer_trace: Vec<PointerTraceEvent>,
 }
 
 impl FromWorld for MasonryRuntime {
@@ -129,6 +142,8 @@ impl FromWorld for MasonryRuntime {
             viewport_height: initial_viewport.1,
             window_surface: None,
             renderer: None,
+            #[cfg(test)]
+            pointer_trace: Vec::new(),
         }
     }
 }
@@ -153,6 +168,24 @@ impl MasonryRuntime {
     #[must_use]
     pub fn viewport_size(&self) -> (f64, f64) {
         (self.viewport_width.max(1.0), self.viewport_height.max(1.0))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn pointer_position_for_tests(&self) -> Vec2 {
+        Vec2::new(
+            self.pointer_state.position.x as f32,
+            self.pointer_state.position.y as f32,
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn pointer_trace_for_tests(&self) -> &[PointerTraceEvent] {
+        &self.pointer_trace
+    }
+
+    #[cfg(test)]
+    pub(crate) fn clear_pointer_trace_for_tests(&mut self) {
+        self.pointer_trace.clear();
     }
 
     pub fn rebuild_root_view(&mut self, next_view: UiView) {
@@ -196,6 +229,9 @@ impl MasonryRuntime {
             y: y as f64,
         };
 
+        #[cfg(test)]
+        self.pointer_trace.push(PointerTraceEvent::Move);
+
         self.render_root
             .handle_pointer_event(PointerEvent::Move(PointerUpdate {
                 pointer: self.pointer_info.clone(),
@@ -209,6 +245,9 @@ impl MasonryRuntime {
         if !self.accepts_window(window) {
             return Handled::No;
         }
+
+        #[cfg(test)]
+        self.pointer_trace.push(PointerTraceEvent::Leave);
 
         self.render_root
             .handle_pointer_event(PointerEvent::Leave(self.pointer_info.clone()))
@@ -231,6 +270,8 @@ impl MasonryRuntime {
         match state {
             ButtonState::Pressed => {
                 self.pointer_state.buttons.insert(button);
+                #[cfg(test)]
+                self.pointer_trace.push(PointerTraceEvent::Down);
                 self.render_root
                     .handle_pointer_event(PointerEvent::Down(PointerButtonEvent {
                         pointer: self.pointer_info.clone(),
@@ -240,6 +281,8 @@ impl MasonryRuntime {
             }
             ButtonState::Released => {
                 self.pointer_state.buttons.remove(button);
+                #[cfg(test)]
+                self.pointer_trace.push(PointerTraceEvent::Up);
                 self.render_root
                     .handle_pointer_event(PointerEvent::Up(PointerButtonEvent {
                         pointer: self.pointer_info.clone(),
@@ -266,6 +309,9 @@ impl MasonryRuntime {
         } else {
             1.0
         };
+
+        #[cfg(test)]
+        self.pointer_trace.push(PointerTraceEvent::Scroll);
 
         self.render_root
             .handle_pointer_event(PointerEvent::Scroll(PointerScrollEvent {
@@ -423,10 +469,40 @@ fn map_mouse_button(button: MouseButton) -> Option<PointerButton> {
     }
 }
 
+fn resolve_pointer_position_for_window(
+    window: Entity,
+    window_query: &Query<&Window>,
+    last_known_cursor_window: &mut Option<Entity>,
+    last_known_cursor_position: &mut Option<Vec2>,
+) -> Option<Vec2> {
+    if last_known_cursor_window
+        .as_ref()
+        .is_some_and(|cached_window| *cached_window == window)
+        && let Some(position) = *last_known_cursor_position
+    {
+        return Some(position);
+    }
+
+    let fallback = window_query
+        .get(window)
+        .ok()
+        .and_then(Window::cursor_position);
+
+    if let Some(position) = fallback {
+        *last_known_cursor_window = Some(window);
+        *last_known_cursor_position = Some(position);
+    }
+
+    fallback
+}
+
 /// PreUpdate input bridge: consume Bevy window/input messages and inject them into Masonry.
 pub fn inject_bevy_input_into_masonry(
     runtime: Option<NonSendMut<MasonryRuntime>>,
     mut overlay_routing: ResMut<OverlayPointerRoutingState>,
+    window_query: Query<&Window>,
+    mut last_known_cursor_window: Local<Option<Entity>>,
+    mut last_known_cursor_position: Local<Option<Vec2>>,
     mut cursor_moved: MessageReader<CursorMoved>,
     mut cursor_left: MessageReader<CursorLeft>,
     mut mouse_button_input: MessageReader<MouseButtonInput>,
@@ -439,10 +515,21 @@ pub fn inject_bevy_input_into_masonry(
     };
 
     for event in cursor_moved.read() {
+        // Bevy's CursorMoved position is logical (top-left origin), which matches
+        // Masonry's expected pointer coordinate space for hit-testing.
+        *last_known_cursor_window = Some(event.window);
+        *last_known_cursor_position = Some(event.position);
         runtime.handle_cursor_moved(event.window, event.position.x, event.position.y);
     }
 
     for event in cursor_left.read() {
+        if last_known_cursor_window
+            .as_ref()
+            .is_some_and(|cached_window| *cached_window == event.window)
+        {
+            *last_known_cursor_window = None;
+            *last_known_cursor_position = None;
+        }
         runtime.handle_cursor_left(event.window);
     }
 
@@ -460,10 +547,39 @@ pub fn inject_bevy_input_into_masonry(
             continue;
         }
 
+        let Some(pointer_position) = resolve_pointer_position_for_window(
+            event.window,
+            &window_query,
+            &mut last_known_cursor_window,
+            &mut last_known_cursor_position,
+        ) else {
+            tracing::debug!(
+                "skipping mouse button input without known cursor position for window {:?}",
+                event.window
+            );
+            continue;
+        };
+
+        runtime.handle_cursor_moved(event.window, pointer_position.x, pointer_position.y);
+
         runtime.handle_mouse_button(event.window, event.button, event.state);
     }
 
     for event in mouse_wheel.read() {
+        let Some(pointer_position) = resolve_pointer_position_for_window(
+            event.window,
+            &window_query,
+            &mut last_known_cursor_window,
+            &mut last_known_cursor_position,
+        ) else {
+            tracing::debug!(
+                "skipping mouse wheel input without known cursor position for window {:?}",
+                event.window
+            );
+            continue;
+        };
+
+        runtime.handle_cursor_moved(event.window, pointer_position.x, pointer_position.y);
         runtime.handle_mouse_wheel(event.window, event.unit, event.x, event.y);
     }
 
@@ -509,6 +625,14 @@ pub fn initialize_masonry_runtime_from_primary_window(
     };
 
     runtime.attach_to_window(primary_window_entity, metrics);
+
+    // Prime Masonry's layout root with an explicit initial logical resize so hit-testing
+    // never starts from a zero-sized root, even before the first window-resize message.
+    runtime.handle_window_resized(
+        primary_window_entity,
+        metrics.logical_size.width as f32,
+        metrics.logical_size.height as f32,
+    );
 }
 
 /// PostUpdate rebuild step: diff synthesized root against retained Masonry tree.

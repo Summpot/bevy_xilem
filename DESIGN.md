@@ -38,6 +38,11 @@ The framework now avoids the high-level `xilem::Xilem::new_simple` runner comple
 `PreUpdate` lazily binds runtime viewport/scale to the Bevy-created primary window once
 `bevy_winit` exposes it.
 
+Initialization invariant:
+
+- `initialize_masonry_runtime_from_primary_window` injects an explicit initial logical resize
+  immediately after first attach so Masonry never starts hit-testing from a `(0, 0)` root size.
+
 ### 3) Input injection bridge (PreUpdate)
 
 `PreUpdate` system consumes Bevy messages:
@@ -55,6 +60,15 @@ and translates them to Masonry events:
 - `WindowEvent::{Resize,Rescale}`
 
 which are injected into `MasonryRuntime.render_root`.
+
+Pointer bridge invariants:
+
+- Bevy `CursorMoved.position` (logical, top-left origin) is treated as Masonry pointer-space.
+- `last_known_cursor_position` is cached from `CursorMoved` and reused for
+  `MouseButtonInput` / `MouseWheel` (which do not carry cursor coordinates).
+- The bridge never injects synthetic pointer coordinates like `(0, 0)` when no position is known.
+- Click-path ordering is enforced by injecting `PointerMove` before each
+  `PointerDown` / `PointerUp` so hot/hovered state is current before activation.
 
 ### 3.5) Explicit Masonry/Vello paint pass (Last)
 

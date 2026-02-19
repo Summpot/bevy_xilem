@@ -13,10 +13,13 @@ use crate::{
 };
 use bevy_app::App;
 use bevy_ecs::{hierarchy::ChildOf, prelude::*};
-use bevy_input::{ButtonInput, mouse::MouseButton};
+use bevy_input::{
+    ButtonInput, ButtonState,
+    mouse::{MouseButton, MouseButtonInput, MouseScrollUnit, MouseWheel},
+};
 use bevy_math::{Rect, Vec2};
 use bevy_tweening::Lens;
-use bevy_window::{PrimaryWindow, Window};
+use bevy_window::{CursorMoved, PrimaryWindow, Window};
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TestRoot;
@@ -57,6 +60,105 @@ fn plugin_wires_synthesis_and_runtime() {
     assert_eq!(synthesized.roots.len(), 2);
 
     let _runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+}
+
+#[test]
+fn input_bridge_uses_cached_cursor_for_click_and_emits_move_before_down_up() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    app.update();
+
+    app.world_mut().write_message(CursorMoved {
+        window: window_entity,
+        position: Vec2::new(320.0, 180.0),
+        delta: None,
+    });
+    app.update();
+
+    {
+        let mut runtime = app
+            .world_mut()
+            .non_send_resource_mut::<crate::MasonryRuntime>();
+        runtime.clear_pointer_trace_for_tests();
+    }
+
+    app.world_mut().write_message(MouseButtonInput {
+        button: MouseButton::Left,
+        state: ButtonState::Pressed,
+        window: window_entity,
+    });
+    app.world_mut().write_message(MouseButtonInput {
+        button: MouseButton::Left,
+        state: ButtonState::Released,
+        window: window_entity,
+    });
+
+    app.update();
+
+    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    assert_eq!(
+        runtime.pointer_position_for_tests(),
+        Vec2::new(320.0, 180.0)
+    );
+    assert_eq!(
+        runtime.pointer_trace_for_tests(),
+        &[
+            crate::runtime::PointerTraceEvent::Move,
+            crate::runtime::PointerTraceEvent::Down,
+            crate::runtime::PointerTraceEvent::Move,
+            crate::runtime::PointerTraceEvent::Up,
+        ]
+    );
+}
+
+#[test]
+fn input_bridge_uses_cached_cursor_for_mouse_wheel_events() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    app.update();
+
+    app.world_mut().write_message(CursorMoved {
+        window: window_entity,
+        position: Vec2::new(144.0, 96.0),
+        delta: None,
+    });
+    app.update();
+
+    {
+        let mut runtime = app
+            .world_mut()
+            .non_send_resource_mut::<crate::MasonryRuntime>();
+        runtime.clear_pointer_trace_for_tests();
+    }
+
+    app.world_mut().write_message(MouseWheel {
+        unit: MouseScrollUnit::Line,
+        x: 0.0,
+        y: -1.0,
+        window: window_entity,
+    });
+
+    app.update();
+
+    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    assert_eq!(runtime.pointer_position_for_tests(), Vec2::new(144.0, 96.0));
+    assert_eq!(
+        runtime.pointer_trace_for_tests(),
+        &[
+            crate::runtime::PointerTraceEvent::Move,
+            crate::runtime::PointerTraceEvent::Scroll,
+        ]
+    );
 }
 
 #[test]
