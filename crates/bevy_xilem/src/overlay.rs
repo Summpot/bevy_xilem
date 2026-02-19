@@ -821,14 +821,14 @@ pub fn sync_overlay_positions(world: &mut World) {
             .collect::<Vec<_>>()
     };
 
+    if overlays.is_empty() {
+        return;
+    }
+
     tracing::debug!(
         "Running sync_overlay_positions for {} overlays",
         overlays.iter().count()
     );
-
-    if overlays.is_empty() {
-        return;
-    }
 
     let (viewport_width, viewport_height, viewport_scale_factor) = {
         let mut primary_window_query = world.query_filtered::<&Window, With<PrimaryWindow>>();

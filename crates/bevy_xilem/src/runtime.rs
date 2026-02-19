@@ -500,7 +500,7 @@ pub fn inject_bevy_input_into_masonry(
             continue;
         }
 
-        let Some(pointer_position) = primary_window.cursor_position() else {
+        let Some(pointer_position) = primary_window.physical_cursor_position() else {
             continue;
         };
 
@@ -508,6 +508,11 @@ pub fn inject_bevy_input_into_masonry(
             primary_window_entity,
             pointer_position.x,
             pointer_position.y,
+        );
+        tracing::trace!(
+            "Input Injection - Bevy Physical Cursor Moved: ({}, {}). Injected into Masonry.",
+            pointer_position.x,
+            pointer_position.y
         );
     }
 
@@ -537,7 +542,7 @@ pub fn inject_bevy_input_into_masonry(
             continue;
         }
 
-        let Some(pointer_position) = primary_window.cursor_position() else {
+        let Some(pointer_position) = primary_window.physical_cursor_position() else {
             tracing::debug!(
                 "skipping mouse button input because primary cursor is outside window {:?}",
                 primary_window_entity
@@ -552,6 +557,13 @@ pub fn inject_bevy_input_into_masonry(
         );
 
         runtime.handle_mouse_button(primary_window_entity, event.button, event.state);
+        tracing::trace!(
+            "Input Injection - Mouse Button: {:?} {:?} at Physical ({}, {})",
+            event.button,
+            event.state,
+            pointer_position.x,
+            pointer_position.y
+        );
     }
 
     for event in mouse_wheel.read() {
@@ -559,7 +571,7 @@ pub fn inject_bevy_input_into_masonry(
             continue;
         }
 
-        let Some(pointer_position) = primary_window.cursor_position() else {
+        let Some(pointer_position) = primary_window.physical_cursor_position() else {
             tracing::debug!(
                 "skipping mouse wheel input because primary cursor is outside window {:?}",
                 primary_window_entity
@@ -573,6 +585,14 @@ pub fn inject_bevy_input_into_masonry(
             pointer_position.y,
         );
         runtime.handle_mouse_wheel(primary_window_entity, event.unit, event.x, event.y);
+        tracing::trace!(
+            "Input Injection - Mouse Wheel: {:?} ({}, {}) at Physical cursor ({}, {})",
+            event.unit,
+            event.x,
+            event.y,
+            pointer_position.x,
+            pointer_position.y
+        );
     }
 
     for event in window_resized.read() {
@@ -585,6 +605,11 @@ pub fn inject_bevy_input_into_masonry(
             primary_window.width(),
             primary_window.height(),
         );
+        tracing::trace!(
+            "Window Resize - Bevy Logical Size: {}x{}, Injected into Masonry.",
+            primary_window.width(),
+            primary_window.height()
+        );
     }
 
     for event in window_scale_factor_changed.read() {
@@ -595,6 +620,10 @@ pub fn inject_bevy_input_into_masonry(
         runtime.handle_window_scale_factor_changed(
             primary_window_entity,
             primary_window.scale_factor() as f64,
+        );
+        tracing::trace!(
+            "Window Scale Factor - Bevy Scale: {}, Injected into Masonry.",
+            primary_window.scale_factor()
         );
     }
 }
@@ -633,12 +662,24 @@ pub fn initialize_masonry_runtime_from_primary_window(
 
     runtime.attach_to_window(primary_window_entity, metrics);
 
+    tracing::trace!(
+        "Runtime Init - Primary Window Logic Size: {}x{}, Scale: {}",
+        metrics.logical_size.width,
+        metrics.logical_size.height,
+        metrics.scale_factor
+    );
+
     // Prime Masonry's layout root with an explicit initial logical resize so hit-testing
     // never starts from a zero-sized root, even before the first window-resize message.
     runtime.handle_window_resized(
         primary_window_entity,
         metrics.logical_size.width as f32,
         metrics.logical_size.height as f32,
+    );
+    tracing::trace!(
+        "Runtime Init - Priming Masonry Resize: {}x{}",
+        metrics.logical_size.width,
+        metrics.logical_size.height
     );
 }
 
