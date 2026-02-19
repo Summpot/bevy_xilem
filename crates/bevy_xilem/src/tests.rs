@@ -20,6 +20,7 @@ use bevy_input::{
 use bevy_math::{Rect, Vec2};
 use bevy_tweening::Lens;
 use bevy_window::{CursorMoved, PrimaryWindow, Window, WindowResized};
+use masonry::core::{Widget, WidgetRef};
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TestRoot;
@@ -1017,6 +1018,163 @@ fn sync_overlay_positions_works_without_primary_window_marker() {
     assert!(computed.x > 0.0);
     assert!(computed.y > 0.0);
     assert!(computed.is_positioned);
+}
+
+fn send_primary_click(app: &mut App, window_entity: Entity, position: Vec2) {
+    {
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<&mut Window, With<PrimaryWindow>>();
+        let mut primary_window = query
+            .single_mut(world)
+            .expect("primary window should exist");
+        primary_window.set_cursor_position(Some(position));
+    }
+
+    app.world_mut().write_message(MouseButtonInput {
+        button: MouseButton::Left,
+        state: ButtonState::Pressed,
+        window: window_entity,
+    });
+    app.world_mut().write_message(MouseButtonInput {
+        button: MouseButton::Left,
+        state: ButtonState::Released,
+        window: window_entity,
+    });
+
+    app.update();
+}
+
+fn collect_widget_bounds_by_short_name(
+    widget: WidgetRef<'_, dyn Widget>,
+    short_type_name: &str,
+    bounds: &mut Vec<Rect>,
+) {
+    for child in widget.children() {
+        collect_widget_bounds_by_short_name(child, short_type_name, bounds);
+    }
+
+    if widget.short_type_name() == short_type_name {
+        let ctx = widget.ctx();
+        let origin = ctx.window_origin();
+        let size = ctx.border_box_size();
+        bounds.push(Rect::from_corners(
+            Vec2::new(origin.x as f32, origin.y as f32),
+            Vec2::new(
+                (origin.x + size.width) as f32,
+                (origin.y + size.height) as f32,
+            ),
+        ));
+    }
+}
+
+#[test]
+fn dialog_body_click_does_not_dismiss_overlay() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    window.set_cursor_position(Some(Vec2::new(0.0, 0.0)));
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    let dialog = spawn_in_overlay_root(&mut app.world_mut(), (crate::UiDialog::new("t", "b"),));
+
+    app.update();
+
+    let content_rect = app
+        .world()
+        .get::<crate::OverlayBounds>(dialog)
+        .expect("dialog should have overlay bounds")
+        .content_rect;
+
+    let click_position = Vec2::new(
+        (content_rect.min.x + content_rect.max.x) * 0.5,
+        content_rect.min.y + 24.0,
+    );
+
+    send_primary_click(&mut app, window_entity, click_position);
+
+    assert!(app.world().get_entity(dialog).is_ok());
+}
+
+#[test]
+fn dialog_dismiss_button_targets_dialog_entity() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    window.set_cursor_position(Some(Vec2::new(0.0, 0.0)));
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let dialog = spawn_in_overlay_root(&mut app.world_mut(), (crate::UiDialog::new("t", "b"),));
+
+    app.update();
+
+    let content_rect = app
+        .world()
+        .get::<crate::OverlayBounds>(dialog)
+        .expect("dialog should have overlay bounds")
+        .content_rect;
+
+    let button_rect = {
+        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let root = runtime.render_root.get_layer_root(0);
+        let mut button_rects = Vec::new();
+        collect_widget_bounds_by_short_name(root, "EcsButtonWidget", &mut button_rects);
+
+        button_rects
+            .into_iter()
+            .filter(|rect| {
+                let width = rect.max.x - rect.min.x;
+                let height = rect.max.y - rect.min.y;
+                width < (content_rect.max.x - content_rect.min.x)
+                    && height < (content_rect.max.y - content_rect.min.y)
+            })
+            .min_by(|a, b| {
+                let area_a = (a.max.x - a.min.x) * (a.max.y - a.min.y);
+                let area_b = (b.max.x - b.min.x) * (b.max.y - b.min.y);
+                area_a.total_cmp(&area_b)
+            })
+            .expect("dialog should project a dedicated dismiss button")
+    };
+
+    let click_position = Vec2::new(
+        (button_rect.min.x + button_rect.max.x) * 0.5,
+        (button_rect.min.y + button_rect.max.y) * 0.5,
+    );
+
+    let (hit_widget, hit_debug_text) = {
+        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let root = runtime.render_root.get_layer_root(0);
+        root.find_widget_under_pointer((click_position.x as f64, click_position.y as f64).into())
+            .map(|widget| {
+                (
+                    widget.short_type_name().to_string(),
+                    widget.get_debug_text().unwrap_or_default(),
+                )
+            })
+            .unwrap_or_default()
+    };
+
+    assert_eq!(hit_widget.as_str(), "EcsButtonWidget");
+    assert_eq!(hit_debug_text, format!("entity={}", dialog.to_bits()));
+}
+
+#[test]
+fn overlay_action_dismiss_dialog_despawns_dialog() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let dialog = world.spawn((crate::UiDialog::new("title", "body"),)).id();
+
+    world
+        .resource::<UiEventQueue>()
+        .push_typed(dialog, crate::OverlayUiAction::DismissDialog);
+
+    handle_overlay_actions(&mut world);
+
+    assert!(world.get_entity(dialog).is_err());
 }
 
 #[test]

@@ -762,35 +762,43 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
         &backdrop_style,
     );
 
+    let dismiss_button = apply_direct_widget_style(
+        ecs_button(
+            ctx.entity,
+            OverlayUiAction::DismissDialog,
+            dismiss_label.clone(),
+        ),
+        &dismiss_style,
+    )
+    .into_any_flex();
+
+    let mut dialog_children = vec![
+        apply_label_style(label(title), &title_style).into_any_flex(),
+        apply_label_style(label(body), &body_style).into_any_flex(),
+    ];
+    dialog_children.extend(ctx.children.into_iter().map(|child| child.into_any_flex()));
+    dialog_children.push(dismiss_button);
+
     let dialog_surface = xilem_masonry::view::sized_box(apply_widget_style(
-        flex_col(vec![
-            apply_label_style(label(title), &title_style).into_any_flex(),
-            apply_label_style(label(body), &body_style).into_any_flex(),
-            apply_direct_widget_style(
-                ecs_button_with_child(
-                    ctx.entity,
-                    OverlayUiAction::DismissDialog,
-                    apply_label_style(label(dismiss_label), &dismiss_style),
-                ),
-                &dismiss_style,
-            )
-            .into_any_flex(),
-        ])
-        .cross_axis_alignment(CrossAxisAlignment::Stretch)
-        .gap(Length::px(dialog_gap)),
+        flex_col(dialog_children)
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .gap(Length::px(dialog_gap)),
         &dialog_style,
     ))
     .fixed_width(Length::px(dialog_surface_width))
     .fixed_height(Length::px(dialog_surface_height));
 
-    let positioned_surface =
+    let dialog_panel =
         transformed(dialog_surface).translate((computed_position.x, computed_position.y));
 
     Arc::new(
-        zstack((backdrop, positioned_surface.alignment(UnitPoint::TOP_LEFT)))
-            .alignment(UnitPoint::TOP_LEFT)
-            .width(Dim::Stretch)
-            .height(Dim::Stretch),
+        zstack((
+            backdrop.alignment(UnitPoint::TOP_LEFT),
+            dialog_panel.alignment(UnitPoint::TOP_LEFT),
+        ))
+        .alignment(UnitPoint::TOP_LEFT)
+        .width(Dim::Stretch)
+        .height(Dim::Stretch),
     )
 }
 

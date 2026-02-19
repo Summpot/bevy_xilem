@@ -4,17 +4,17 @@ use std::sync::Arc;
 
 use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_xilem::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, BuiltinUiAction, ColorStyle, LayoutStyle,
-    LocalizeText, OverlayConfig, OverlayPlacement, ProjectionCtx, StyleClass, StyleSetter,
-    StyleSheet, SyncAssetSource, SyncTextSource, TextStyle, UiButton, UiComboBox,
-    UiComboBoxChanged, UiComboOption, UiDialog, UiEventQueue, UiFlexColumn, UiLabel, UiRoot,
-    UiView, apply_label_style, apply_widget_style,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, LayoutStyle, LocalizeText,
+    OverlayConfig, OverlayPlacement, ProjectionCtx, StyleClass, StyleSetter, StyleSheet,
+    SyncAssetSource, SyncTextSource, TextStyle, UiComboBox, UiComboBoxChanged, UiComboOption,
+    UiDialog, UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiView, apply_label_style,
+    apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_asset::AssetPlugin,
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPool},
     bevy_text::TextPlugin,
-    resolve_style, run_app_with_window_options, spawn_in_overlay_root,
+    button, resolve_style, run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
         view::label,
@@ -27,9 +27,13 @@ use utils::init_logging;
 #[derive(Resource, Debug, Clone, Copy)]
 struct I18nRuntime {
     locale_combo: Entity,
-    edge_button: Entity,
     combo_box: Entity,
-    show_modal_button: Entity,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ShowcaseUiAction {
+    EdgeClicked,
+    OpenDialog,
 }
 
 #[derive(Component, Debug, Clone, Copy)]
@@ -37,6 +41,12 @@ struct LocaleBadge;
 
 #[derive(Component, Debug, Clone, Copy)]
 struct ShowcaseStatus;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct ShowcaseEdgeButton;
+
+#[derive(Component, Debug, Clone, Copy)]
+struct ShowcaseOpenDialogButton;
 
 #[derive(Resource, Debug, Clone, Default)]
 struct ShowcaseState {
@@ -141,6 +151,35 @@ fn project_showcase_status(_: &ShowcaseStatus, ctx: ProjectionCtx<'_>) -> UiView
     ))
 }
 
+fn project_showcase_edge_button(_: &ShowcaseEdgeButton, ctx: ProjectionCtx<'_>) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let label_text = ctx.world.get_resource::<AppI18n>().map_or_else(
+        || "Edge hit test button".to_string(),
+        |i18n| i18n.translate("showcase-edge-button"),
+    );
+
+    Arc::new(apply_widget_style(
+        button(ctx.entity, ShowcaseUiAction::EdgeClicked, label_text),
+        &style,
+    ))
+}
+
+fn project_showcase_open_dialog_button(
+    _: &ShowcaseOpenDialogButton,
+    ctx: ProjectionCtx<'_>,
+) -> UiView {
+    let style = resolve_style(ctx.world, ctx.entity);
+    let label_text = ctx.world.get_resource::<AppI18n>().map_or_else(
+        || "Show modal".to_string(),
+        |i18n| i18n.translate("showcase-show-modal"),
+    );
+
+    Arc::new(apply_widget_style(
+        button(ctx.entity, ShowcaseUiAction::OpenDialog, label_text),
+        &style,
+    ))
+}
+
 fn setup_i18n_world(mut commands: Commands) {
     let root = commands
         .spawn((
@@ -170,14 +209,11 @@ fn setup_i18n_world(mut commands: Commands) {
         ChildOf(root),
     ));
 
-    let edge_button = commands
-        .spawn((
-            UiButton::new("Edge hit test button"),
-            LocalizeText::new("showcase-edge-button"),
-            StyleClass(vec!["i18n.edge-button".to_string()]),
-            ChildOf(root),
-        ))
-        .id();
+    commands.spawn((
+        ShowcaseEdgeButton,
+        StyleClass(vec!["i18n.edge-button".to_string()]),
+        ChildOf(root),
+    ));
 
     let combo_box = commands
         .spawn((
@@ -196,14 +232,11 @@ fn setup_i18n_world(mut commands: Commands) {
         ))
         .id();
 
-    let show_modal_button = commands
-        .spawn((
-            UiButton::new("Show modal"),
-            LocalizeText::new("showcase-show-modal"),
-            StyleClass(vec!["i18n.show-modal".to_string()]),
-            ChildOf(root),
-        ))
-        .id();
+    commands.spawn((
+        ShowcaseOpenDialogButton,
+        StyleClass(vec!["i18n.show-modal".to_string()]),
+        ChildOf(root),
+    ));
 
     commands.spawn((
         ShowcaseStatus,
@@ -228,9 +261,7 @@ fn setup_i18n_world(mut commands: Commands) {
 
     commands.insert_resource(I18nRuntime {
         locale_combo,
-        edge_button,
         combo_box,
-        show_modal_button,
     });
     commands.insert_resource(ShowcaseState::default());
 }
@@ -511,42 +542,39 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
 }
 
 fn drain_i18n_events(world: &mut World) {
-    let events = world
+    let ui_actions = world
         .resource_mut::<UiEventQueue>()
-        .drain_actions::<BuiltinUiAction>();
+        .drain_actions::<ShowcaseUiAction>();
 
-    let runtime = *world.resource::<I18nRuntime>();
-
-    for event in events {
-        if !matches!(event.action, BuiltinUiAction::Clicked) {
-            continue;
-        }
-
-        if event.entity == runtime.edge_button {
-            world.resource_mut::<ShowcaseState>().edge_clicks += 1;
-            continue;
-        }
-
-        if event.entity == runtime.show_modal_button {
-            spawn_in_overlay_root(world, (
-                UiDialog::new(
-                    "Overlay Modal",
-                    "Dialogs now live in a portal root and are not clipped by parent containers.",
-                )
-                .with_localized_keys(
-                    "showcase-dialog-title",
-                    "showcase-dialog-body",
-                    "showcase-dialog-close",
-                ),
-                OverlayConfig {
-                    placement: OverlayPlacement::Center,
-                    anchor: None,
-                    auto_flip: false,
-                },
-                StyleClass(vec!["i18n.dialog".to_string()]),
-            ));
+    for event in ui_actions {
+        match event.action {
+            ShowcaseUiAction::EdgeClicked => {
+                world.resource_mut::<ShowcaseState>().edge_clicks += 1;
+            }
+            ShowcaseUiAction::OpenDialog => {
+                tracing::info!("Received Open Dialog Action!");
+                spawn_in_overlay_root(world, (
+                    UiDialog::new(
+                        "Overlay Modal",
+                        "Dialogs now live in a portal root and are not clipped by parent containers.",
+                    )
+                    .with_localized_keys(
+                        "showcase-dialog-title",
+                        "showcase-dialog-body",
+                        "showcase-dialog-close",
+                    ),
+                    OverlayConfig {
+                        placement: OverlayPlacement::Center,
+                        anchor: None,
+                        auto_flip: false,
+                    },
+                    StyleClass(vec!["i18n.dialog".to_string()]),
+                ));
+            }
         }
     }
+
+    let runtime = *world.resource::<I18nRuntime>();
 
     let combo_events = world
         .resource_mut::<UiEventQueue>()
@@ -609,6 +637,8 @@ fn build_i18n_app() -> App {
     )
     .register_projector::<LocaleBadge>(project_locale_badge)
     .register_projector::<ShowcaseStatus>(project_showcase_status)
+    .register_projector::<ShowcaseEdgeButton>(project_showcase_edge_button)
+    .register_projector::<ShowcaseOpenDialogButton>(project_showcase_open_dialog_button)
     .add_systems(Startup, (setup_i18n_styles, setup_i18n_world))
     .add_systems(PreUpdate, drain_i18n_events);
 
