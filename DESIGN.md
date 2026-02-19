@@ -63,10 +63,13 @@ which are injected into `MasonryRuntime.render_root`.
 
 Pointer bridge invariants:
 
-- Bevy `CursorMoved.position` (logical, top-left origin) is treated as Masonry pointer-space.
-- `last_known_cursor_position` is cached from `CursorMoved` and reused for
-  `MouseButtonInput` / `MouseWheel` (which do not carry cursor coordinates).
-- The bridge never injects synthetic pointer coordinates like `(0, 0)` when no position is known.
+- `Window::cursor_position()` from the current `PrimaryWindow` is the single source of truth
+  for pointer coordinates (logical, top-left origin), including move/click/scroll paths.
+- `CursorMoved.position` payload is not trusted for hit-test coordinates.
+- `MouseButtonInput` / `MouseWheel` are injected only when `Window::cursor_position()` is `Some`;
+  when `None` (cursor outside), pointer interaction injection is skipped.
+- Window resize injection uses logical `Window::width()` / `Window::height()` from the active
+  primary window, ensuring Masonry receives DPI-correct dimensions.
 - Click-path ordering is enforced by injecting `PointerMove` before each
   `PointerDown` / `PointerUp` so hot/hovered state is current before activation.
 

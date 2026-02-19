@@ -19,7 +19,7 @@ use bevy_input::{
 };
 use bevy_math::{Rect, Vec2};
 use bevy_tweening::Lens;
-use bevy_window::{CursorMoved, PrimaryWindow, Window};
+use bevy_window::{CursorMoved, PrimaryWindow, Window, WindowResized};
 
 #[derive(Component, Debug, Clone, Copy)]
 struct TestRoot;
@@ -63,19 +63,22 @@ fn plugin_wires_synthesis_and_runtime() {
 }
 
 #[test]
-fn input_bridge_uses_cached_cursor_for_click_and_emits_move_before_down_up() {
+fn input_bridge_uses_primary_window_cursor_for_click_and_emits_move_before_down_up() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
+    window.set_cursor_position(Some(Vec2::new(320.0, 180.0)));
     let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
 
     app.update();
 
+    // CursorMoved payload is intentionally different from Window::cursor_position().
+    // The bridge should trust Window state.
     app.world_mut().write_message(CursorMoved {
         window: window_entity,
-        position: Vec2::new(320.0, 180.0),
+        position: Vec2::new(12.0, 24.0),
         delta: None,
     });
     app.update();
@@ -117,19 +120,20 @@ fn input_bridge_uses_cached_cursor_for_click_and_emits_move_before_down_up() {
 }
 
 #[test]
-fn input_bridge_uses_cached_cursor_for_mouse_wheel_events() {
+fn input_bridge_uses_primary_window_cursor_for_mouse_wheel_events() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
+    window.set_cursor_position(Some(Vec2::new(144.0, 96.0)));
     let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
 
     app.update();
 
     app.world_mut().write_message(CursorMoved {
         window: window_entity,
-        position: Vec2::new(144.0, 96.0),
+        position: Vec2::new(8.0, 8.0),
         delta: None,
     });
     app.update();
@@ -159,6 +163,39 @@ fn input_bridge_uses_cached_cursor_for_mouse_wheel_events() {
             crate::runtime::PointerTraceEvent::Scroll,
         ]
     );
+}
+
+#[test]
+fn input_bridge_uses_primary_window_logical_size_for_resize_events() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    app.update();
+
+    {
+        let world = app.world_mut();
+        let mut query = world.query_filtered::<&mut Window, With<PrimaryWindow>>();
+        let mut primary_window = query
+            .single_mut(world)
+            .expect("primary window should exist");
+        primary_window.resolution.set(1280.0, 720.0);
+    }
+
+    // Event payload is intentionally stale/incorrect; bridge should trust Window state.
+    app.world_mut().write_message(WindowResized {
+        window: window_entity,
+        width: 1.0,
+        height: 1.0,
+    });
+
+    app.update();
+
+    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    assert_eq!(runtime.viewport_size(), (1280.0, 720.0));
 }
 
 #[test]

@@ -3,12 +3,13 @@ use std::{fmt::Debug, sync::Arc};
 use bevy_ecs::{
     entity::Entity,
     message::MessageReader,
-    prelude::{Added, FromWorld, Local, NonSendMut, Query, Res, ResMut, With, World},
+    prelude::{Added, FromWorld, NonSendMut, Query, Res, ResMut, With, World},
 };
 use bevy_input::{
     ButtonState,
     mouse::{MouseButton, MouseButtonInput, MouseScrollUnit, MouseWheel},
 };
+#[cfg(test)]
 use bevy_math::Vec2;
 use bevy_time::Time;
 use bevy_window::{
@@ -469,40 +470,12 @@ fn map_mouse_button(button: MouseButton) -> Option<PointerButton> {
     }
 }
 
-fn resolve_pointer_position_for_window(
-    window: Entity,
-    window_query: &Query<&Window>,
-    last_known_cursor_window: &mut Option<Entity>,
-    last_known_cursor_position: &mut Option<Vec2>,
-) -> Option<Vec2> {
-    if last_known_cursor_window
-        .as_ref()
-        .is_some_and(|cached_window| *cached_window == window)
-        && let Some(position) = *last_known_cursor_position
-    {
-        return Some(position);
-    }
-
-    let fallback = window_query
-        .get(window)
-        .ok()
-        .and_then(Window::cursor_position);
-
-    if let Some(position) = fallback {
-        *last_known_cursor_window = Some(window);
-        *last_known_cursor_position = Some(position);
-    }
-
-    fallback
-}
-
 /// PreUpdate input bridge: consume Bevy window/input messages and inject them into Masonry.
 pub fn inject_bevy_input_into_masonry(
     runtime: Option<NonSendMut<MasonryRuntime>>,
     mut overlay_routing: ResMut<OverlayPointerRoutingState>,
-    window_query: Query<&Window>,
-    mut last_known_cursor_window: Local<Option<Entity>>,
-    mut last_known_cursor_position: Local<Option<Vec2>>,
+    primary_window_query: Query<&Window, With<PrimaryWindow>>,
+    primary_window_entity_query: Query<Entity, With<PrimaryWindow>>,
     mut cursor_moved: MessageReader<CursorMoved>,
     mut cursor_left: MessageReader<CursorLeft>,
     mut mouse_button_input: MessageReader<MouseButtonInput>,
@@ -514,32 +487,49 @@ pub fn inject_bevy_input_into_masonry(
         return;
     };
 
+    let Some(primary_window_entity) = primary_window_entity_query.iter().next() else {
+        return;
+    };
+
+    let Ok(primary_window) = primary_window_query.get(primary_window_entity) else {
+        return;
+    };
+
     for event in cursor_moved.read() {
-        // Bevy's CursorMoved position is logical (top-left origin), which matches
-        // Masonry's expected pointer coordinate space for hit-testing.
-        *last_known_cursor_window = Some(event.window);
-        *last_known_cursor_position = Some(event.position);
-        runtime.handle_cursor_moved(event.window, event.position.x, event.position.y);
+        if event.window != primary_window_entity {
+            continue;
+        }
+
+        let Some(pointer_position) = primary_window.cursor_position() else {
+            continue;
+        };
+
+        runtime.handle_cursor_moved(
+            primary_window_entity,
+            pointer_position.x,
+            pointer_position.y,
+        );
     }
 
     for event in cursor_left.read() {
-        if last_known_cursor_window
-            .as_ref()
-            .is_some_and(|cached_window| *cached_window == event.window)
-        {
-            *last_known_cursor_window = None;
-            *last_known_cursor_position = None;
+        if event.window != primary_window_entity {
+            continue;
         }
-        runtime.handle_cursor_left(event.window);
+
+        runtime.handle_cursor_left(primary_window_entity);
     }
 
     for event in mouse_button_input.read() {
+        if event.window != primary_window_entity {
+            continue;
+        }
+
         let suppressed = match event.state {
             ButtonState::Pressed => {
-                overlay_routing.take_suppressed_press(event.window, event.button)
+                overlay_routing.take_suppressed_press(primary_window_entity, event.button)
             }
             ButtonState::Released => {
-                overlay_routing.take_suppressed_release(event.window, event.button)
+                overlay_routing.take_suppressed_release(primary_window_entity, event.button)
             }
         };
 
@@ -547,48 +537,65 @@ pub fn inject_bevy_input_into_masonry(
             continue;
         }
 
-        let Some(pointer_position) = resolve_pointer_position_for_window(
-            event.window,
-            &window_query,
-            &mut last_known_cursor_window,
-            &mut last_known_cursor_position,
-        ) else {
+        let Some(pointer_position) = primary_window.cursor_position() else {
             tracing::debug!(
-                "skipping mouse button input without known cursor position for window {:?}",
-                event.window
+                "skipping mouse button input because primary cursor is outside window {:?}",
+                primary_window_entity
             );
             continue;
         };
 
-        runtime.handle_cursor_moved(event.window, pointer_position.x, pointer_position.y);
+        runtime.handle_cursor_moved(
+            primary_window_entity,
+            pointer_position.x,
+            pointer_position.y,
+        );
 
-        runtime.handle_mouse_button(event.window, event.button, event.state);
+        runtime.handle_mouse_button(primary_window_entity, event.button, event.state);
     }
 
     for event in mouse_wheel.read() {
-        let Some(pointer_position) = resolve_pointer_position_for_window(
-            event.window,
-            &window_query,
-            &mut last_known_cursor_window,
-            &mut last_known_cursor_position,
-        ) else {
+        if event.window != primary_window_entity {
+            continue;
+        }
+
+        let Some(pointer_position) = primary_window.cursor_position() else {
             tracing::debug!(
-                "skipping mouse wheel input without known cursor position for window {:?}",
-                event.window
+                "skipping mouse wheel input because primary cursor is outside window {:?}",
+                primary_window_entity
             );
             continue;
         };
 
-        runtime.handle_cursor_moved(event.window, pointer_position.x, pointer_position.y);
-        runtime.handle_mouse_wheel(event.window, event.unit, event.x, event.y);
+        runtime.handle_cursor_moved(
+            primary_window_entity,
+            pointer_position.x,
+            pointer_position.y,
+        );
+        runtime.handle_mouse_wheel(primary_window_entity, event.unit, event.x, event.y);
     }
 
     for event in window_resized.read() {
-        runtime.handle_window_resized(event.window, event.width, event.height);
+        if event.window != primary_window_entity {
+            continue;
+        }
+
+        runtime.handle_window_resized(
+            primary_window_entity,
+            primary_window.width(),
+            primary_window.height(),
+        );
     }
 
     for event in window_scale_factor_changed.read() {
-        runtime.handle_window_scale_factor_changed(event.window, event.scale_factor);
+        if event.window != primary_window_entity {
+            continue;
+        }
+
+        runtime.handle_window_scale_factor_changed(
+            primary_window_entity,
+            primary_window.scale_factor() as f64,
+        );
     }
 }
 
