@@ -549,6 +549,27 @@ fn setup_download_styles(mut style_sheet: ResMut<StyleSheet>) {
             ..StyleSetter::default()
         },
     );
+
+    style_sheet.set_class(
+        "overlay.dialog.dismiss",
+        StyleSetter {
+            text: TextStyle { size: Some(14.0) },
+            layout: LayoutStyle {
+                padding: Some(8.0),
+                corner_radius: Some(6.0),
+                border_width: Some(0.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x37, 0x6F, 0xD8)),
+                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x4A, 0x80, 0xE8)),
+                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x28, 0x5C, 0xC0)),
+                text: Some(bevy_xilem::xilem::Color::from_rgb8(0xF0, 0xF6, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
 }
 
 fn drain_download_events(world: &mut World) {
