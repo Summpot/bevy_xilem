@@ -986,6 +986,7 @@ pub fn sync_overlay_positions(world: &mut World) {
                 width,
                 height,
                 placement: chosen_placement,
+                is_positioned: true,
             };
         } else {
             world.entity_mut(entity).insert(OverlayComputedPosition {
@@ -994,6 +995,7 @@ pub fn sync_overlay_positions(world: &mut World) {
                 width,
                 height,
                 placement: chosen_placement,
+                is_positioned: true,
             });
         }
 

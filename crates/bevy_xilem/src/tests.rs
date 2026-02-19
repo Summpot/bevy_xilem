@@ -905,6 +905,10 @@ fn ensure_overlay_defaults_assigns_dialog_and_dropdown_configs() {
         .expect("dialog should receive overlay state");
     assert!(dialog_state.is_modal);
     assert_eq!(dialog_state.anchor, None);
+    let dialog_position = world
+        .get::<crate::OverlayComputedPosition>(dialog)
+        .expect("dialog should receive computed position");
+    assert!(!dialog_position.is_positioned);
     assert!(world.get::<crate::OverlayBounds>(dialog).is_some());
 
     let dropdown_config = world
@@ -921,6 +925,10 @@ fn ensure_overlay_defaults_assigns_dialog_and_dropdown_configs() {
         .expect("dropdown should receive overlay state");
     assert!(!dropdown_state.is_modal);
     assert_eq!(dropdown_state.anchor, Some(combo));
+    let dropdown_position = world
+        .get::<crate::OverlayComputedPosition>(dropdown)
+        .expect("dropdown should receive computed position");
+    assert!(!dropdown_position.is_positioned);
     assert!(world.get::<crate::OverlayBounds>(dropdown).is_some());
 }
 
@@ -953,6 +961,7 @@ fn sync_overlay_positions_uses_dynamic_primary_window_size_and_updates_bounds() 
     assert!(initial_bounds.content_rect.min.y >= 0.0);
     assert!(initial_bounds.content_rect.max.x <= 1024.0 + f32::EPSILON);
     assert!(initial_bounds.content_rect.max.y <= 768.0 + f32::EPSILON);
+    assert!(initial.is_positioned);
 
     {
         let world = app.world_mut();
@@ -977,6 +986,7 @@ fn sync_overlay_positions_uses_dynamic_primary_window_size_and_updates_bounds() 
     assert!(resized.x > initial.x);
     assert_eq!(initial.width, resized.width);
     assert_eq!(initial.height, resized.height);
+    assert!(resized.is_positioned);
     assert!(resized_bounds.content_rect.max.x <= 1600.0 + f32::EPSILON);
     assert!(resized_bounds.content_rect.max.y <= 900.0 + f32::EPSILON);
 }
@@ -1006,6 +1016,7 @@ fn sync_overlay_positions_works_without_primary_window_marker() {
     assert!(computed.height > 1.0);
     assert!(computed.x > 0.0);
     assert!(computed.y > 0.0);
+    assert!(computed.is_positioned);
 }
 
 #[test]

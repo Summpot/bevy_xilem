@@ -196,8 +196,14 @@ Universal placement model:
   - `is_modal: true` for modal surfaces (dialogs).
   - `anchor: Some(entity)` for anchored overlays (dropdowns/tooltips).
 - `OverlayConfig { placement, anchor, auto_flip }` remains the placement policy component.
-- `OverlayComputedPosition { x, y, width, height, placement }` stores runtime-resolved
-  placement after collision checks.
+- `OverlayComputedPosition { x, y, width, height, placement, is_positioned }` stores
+  runtime-resolved placement after collision checks.
+  - New overlays start with `is_positioned: false`.
+  - Floating projectors (`UiDialog`, `UiDropdownMenu`) render with fully transparent styles
+    while `is_positioned` is false, preserving layout size measurement but preventing the
+    initial `(0, 0)` visual flash.
+  - `sync_overlay_positions` sets `is_positioned: true` immediately after writing the
+    final clamped coordinates.
 - `OverlayBounds { content_rect, trigger_rect }` stores runtime-computed bounds for
   click-outside and trigger-protection behavior.
 

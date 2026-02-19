@@ -21,8 +21,8 @@ use crate::{
     i18n::{AppI18n, resolve_localized_text},
     overlay::OverlayUiAction,
     styling::{
-        apply_direct_widget_style, apply_label_style, apply_widget_style, resolve_style,
-        resolve_style_for_classes,
+        ResolvedStyle, apply_direct_widget_style, apply_label_style, apply_widget_style,
+        resolve_style, resolve_style_for_classes,
     },
     views::{ecs_button, ecs_button_with_child},
 };
@@ -171,6 +171,33 @@ fn translate_text(world: &World, key: Option<&str>, fallback: &str) -> String {
         ),
         None => fallback.to_string(),
     }
+}
+
+fn transparentize(color: xilem::Color) -> xilem::Color {
+    let rgba = color.to_rgba8();
+    xilem::Color::from_rgba8(rgba.r, rgba.g, rgba.b, 0)
+}
+
+fn hide_style_without_collapsing_layout(style: &mut ResolvedStyle) {
+    style.colors.bg = Some(
+        style
+            .colors
+            .bg
+            .map_or(xilem::Color::TRANSPARENT, transparentize),
+    );
+    style.colors.border = Some(
+        style
+            .colors
+            .border
+            .map_or(xilem::Color::TRANSPARENT, transparentize),
+    );
+    style.colors.text = Some(
+        style
+            .colors
+            .text
+            .map_or(xilem::Color::TRANSPARENT, transparentize),
+    );
+    style.box_shadow = None;
 }
 
 const DIALOG_SURFACE_MIN_WIDTH: f64 = 240.0;
@@ -684,6 +711,14 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
         .copied()
         .unwrap_or_default();
 
+    if !computed_position.is_positioned {
+        hide_style_without_collapsing_layout(&mut backdrop_style);
+        hide_style_without_collapsing_layout(&mut dialog_style);
+        hide_style_without_collapsing_layout(&mut title_style);
+        hide_style_without_collapsing_layout(&mut body_style);
+        hide_style_without_collapsing_layout(&mut dismiss_style);
+    }
+
     let estimated_width = estimate_dialog_surface_width_px(
         &title,
         &body,
@@ -732,7 +767,11 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
             apply_label_style(label(title), &title_style).into_any_flex(),
             apply_label_style(label(body), &body_style).into_any_flex(),
             apply_direct_widget_style(
-                ecs_button(ctx.entity, OverlayUiAction::DismissDialog, dismiss_label),
+                ecs_button_with_child(
+                    ctx.entity,
+                    OverlayUiAction::DismissDialog,
+                    apply_label_style(label(dismiss_label), &dismiss_style),
+                ),
                 &dismiss_style,
             )
             .into_any_flex(),
@@ -859,6 +898,11 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
         .copied()
         .unwrap_or_default();
 
+    if !computed_position.is_positioned {
+        hide_style_without_collapsing_layout(&mut menu_style);
+        hide_style_without_collapsing_layout(&mut item_style);
+    }
+
     let estimated_dropdown_width = estimate_dropdown_surface_width_px(
         anchor_width.max(1.0),
         translated_options.iter().map(String::as_str),
@@ -893,10 +937,10 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
         .into_iter()
         .enumerate()
         .map(|(index, label_text)| {
-            let item_button = ecs_button(
+            let item_button = ecs_button_with_child(
                 ctx.entity,
                 OverlayUiAction::SelectComboItem { index },
-                label_text,
+                apply_label_style(label(label_text), &item_style),
             )
             .width(Dim::Stretch);
 

@@ -156,6 +156,8 @@ pub struct OverlayComputedPosition {
     pub width: f64,
     pub height: f64,
     pub placement: OverlayPlacement,
+    /// Becomes `true` once layout/placement sync has written a valid final position.
+    pub is_positioned: bool,
 }
 
 /// Centralized z-ordered overlay stack.
