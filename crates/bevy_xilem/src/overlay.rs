@@ -1114,16 +1114,24 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
 
     // Diagnostic: log the mismatch so we can see what widget was hit vs. what was expected.
     {
-        let (scale_factor, computed_pos, masonry_sf, overlay_subtree) = {
+        let (_scale_factor, computed_pos, masonry_sf, overlay_subtree) = {
             let mut q = world.query_filtered::<&Window, With<PrimaryWindow>>();
-            let sf = q.iter(world)
+            let sf = q
+                .iter(world)
                 .next()
                 .map(|w| w.scale_factor() as f64)
                 .unwrap_or(1.0);
-            let cp = world.get::<OverlayComputedPosition>(top_overlay_entity).copied();
+            let cp = world
+                .get::<OverlayComputedPosition>(top_overlay_entity)
+                .copied();
             let (masonry_sf, subtree) = world
                 .get_non_send_resource::<MasonryRuntime>()
-                .map(|r| (r.masonry_scale_factors(), r.get_overlay_subtree_info(top_overlay_widget_id)))
+                .map(|r| {
+                    (
+                        r.masonry_scale_factors(),
+                        r.get_overlay_subtree_info(top_overlay_widget_id),
+                    )
+                })
                 .unwrap_or(((f64::NAN, f64::NAN), vec![]));
             (sf, cp, masonry_sf, subtree)
         };

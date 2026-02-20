@@ -416,7 +416,7 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
     style_sheet.set_class("i18n.dialog", StyleSetter::default());
 
     style_sheet.set_class(
-        "overlay.dialog.backdrop",
+        "overlay.modal.dimmer",
         StyleSetter {
             colors: ColorStyle {
                 bg: Some(Color::from_rgba8(0x00, 0x00, 0x00, 0xA0)),
@@ -504,17 +504,6 @@ fn setup_i18n_styles(mut style_sheet: ResMut<StyleSheet>) {
                 hover_bg: Some(Color::from_rgb8(0x31, 0x40, 0x5E)),
                 pressed_bg: Some(Color::from_rgb8(0x20, 0x2C, 0x44)),
                 text: Some(Color::from_rgb8(0xE0, 0xEA, 0xFF)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "overlay.dropdown.backdrop",
-        StyleSetter {
-            colors: ColorStyle {
-                bg: Some(Color::from_rgba8(0x00, 0x00, 0x00, 0x00)),
                 ..ColorStyle::default()
             },
             ..StyleSetter::default()

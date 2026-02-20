@@ -7,16 +7,15 @@ use xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
 use xilem_masonry::{
     AnyWidgetView,
     view::{
-        CrossAxisAlignment, FlexExt as _, ZStackExt as _, flex_col, flex_row, label, portal,
-        transformed, zstack,
+        CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, portal, transformed, zstack,
     },
 };
 
 use crate::{
     ecs::{
         AnchoredTo, LocalizeText, OverlayAnchorRect, OverlayBounds, OverlayComputedPosition,
-        UiButton, UiComboBox, UiDialog, UiDropdownMenu, UiFlexColumn, UiFlexRow, UiLabel,
-        UiOverlayRoot,
+        OverlayStack, OverlayState, UiButton, UiComboBox, UiDialog, UiDropdownMenu, UiFlexColumn,
+        UiFlexRow, UiLabel, UiOverlayRoot,
     },
     i18n::{AppI18n, resolve_localized_text},
     overlay::OverlayUiAction,
@@ -586,8 +585,38 @@ fn select_dropdown_origin(
 }
 
 fn project_overlay_root(_: &UiOverlayRoot, ctx: ProjectionCtx<'_>) -> UiView {
+    let has_modal_overlay = ctx
+        .world
+        .get_resource::<OverlayStack>()
+        .is_some_and(|stack| {
+            stack.active_overlays.iter().any(|overlay| {
+                ctx.world
+                    .get::<OverlayState>(*overlay)
+                    .is_some_and(|state| state.is_modal)
+            })
+        });
+
+    let mut layers = Vec::with_capacity(ctx.children.len() + usize::from(has_modal_overlay));
+
+    if has_modal_overlay {
+        let mut dimmer_style = resolve_style_for_classes(ctx.world, ["overlay.modal.dimmer"]);
+        if dimmer_style.colors.bg.is_none() {
+            dimmer_style.colors.bg = Some(xilem::Color::from_rgba8(0, 0, 0, 160));
+        }
+
+        let dimmer: UiView = Arc::new(apply_widget_style(
+            xilem_masonry::view::sized_box(label(""))
+                .width(Dim::Stretch)
+                .height(Dim::Stretch),
+            &dimmer_style,
+        ));
+        layers.push(dimmer);
+    }
+
+    layers.extend(ctx.children);
+
     Arc::new(
-        zstack(ctx.children)
+        zstack(layers)
             .alignment(UnitPoint::TOP_LEFT)
             .width(Dim::Stretch)
             .height(Dim::Stretch),
@@ -677,11 +706,6 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
             Some(BoxShadow::new(BLACK.with_alpha(0.36), (0.0, 10.0)).blur(22.0));
     }
 
-    let mut backdrop_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.backdrop"]);
-    if backdrop_style.colors.bg.is_none() {
-        backdrop_style.colors.bg = Some(xilem::Color::from_rgba8(0, 0, 0, 160));
-    }
-
     let mut title_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.title"]);
     let mut body_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.body"]);
     let mut dismiss_style = resolve_style_for_classes(ctx.world, ["overlay.dialog.dismiss"]);
@@ -712,7 +736,6 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
         .unwrap_or_default();
 
     if !computed_position.is_positioned {
-        hide_style_without_collapsing_layout(&mut backdrop_style);
         hide_style_without_collapsing_layout(&mut dialog_style);
         hide_style_without_collapsing_layout(&mut title_style);
         hide_style_without_collapsing_layout(&mut body_style);
@@ -755,13 +778,6 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
         estimated_height
     };
 
-    let backdrop = apply_direct_widget_style(
-        ecs_button(ctx.entity, OverlayUiAction::DismissDialog, "")
-            .width(Dim::Stretch)
-            .height(Dim::Stretch),
-        &backdrop_style,
-    );
-
     let dismiss_button = apply_direct_widget_style(
         ecs_button(
             ctx.entity,
@@ -791,15 +807,7 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
     let dialog_panel =
         transformed(dialog_surface).translate((computed_position.x, computed_position.y));
 
-    Arc::new(
-        zstack((
-            backdrop.alignment(UnitPoint::TOP_LEFT),
-            dialog_panel.alignment(UnitPoint::TOP_LEFT),
-        ))
-        .alignment(UnitPoint::TOP_LEFT)
-        .width(Dim::Stretch)
-        .height(Dim::Stretch),
-    )
+    Arc::new(dialog_panel)
 }
 
 fn project_combo_box(combo_box: &UiComboBox, ctx: ProjectionCtx<'_>) -> UiView {
@@ -967,12 +975,7 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
     let dropdown_panel = transformed(apply_widget_style(scrollable_menu, &menu_style))
         .translate((dropdown_x, dropdown_y));
 
-    Arc::new(
-        zstack((dropdown_panel.alignment(UnitPoint::TOP_LEFT),))
-            .alignment(UnitPoint::TOP_LEFT)
-            .width(Dim::Stretch)
-            .height(Dim::Stretch),
-    )
+    Arc::new(dropdown_panel)
 }
 
 /// Register built-in projectors for built-in ECS demo components.

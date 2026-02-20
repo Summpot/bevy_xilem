@@ -214,7 +214,7 @@ Universal placement model:
 
 Built-in floating widgets:
 
-- `UiDialog` (modal with full-screen backdrop)
+- `UiDialog` (modal panel; optional visual dimming is rendered by `UiOverlayRoot`)
 - `UiComboBox` (anchor control)
 - `UiDropdownMenu` (floating list in overlay layer)
 - `AnchoredTo(Entity)` + `OverlayAnchorRect` for anchor tracking
@@ -234,12 +234,16 @@ Overlay ownership and lifecycle policy:
   entities (`UiDialog`, `UiDropdownMenu`) under `UiOverlayRoot`.
 - This removes example/app-level `ensure_overlay_root_entity` plumbing for common modal/dropdown flows.
 
-Modal backdrop dismissal policy:
+Modal panel + dimming policy:
 
-- `UiDialog` uses a dedicated full-screen backdrop action surface plus a separately aligned
-  dialog panel surface.
-- Clicking outside the panel (on backdrop) emits dismiss action reliably.
-- Centering logic avoids introducing full-screen hit-test blockers above the backdrop.
+- `UiDialog` projector returns only the interactive dialog panel surface (no structural
+  full-screen backdrop sibling/wrapper).
+- Click-outside dismissal is handled centrally by `handle_global_overlay_clicks` using retained
+  Masonry hit paths (`MasonryWidgetId` + reverse hit-testing), not by dialog-local backdrop
+  action widgets.
+- Optional dimming is rendered independently by `UiOverlayRoot` (class
+  `overlay.modal.dimmer`) when modal overlays exist.
+- The dimmer is visual-only and is not inserted into `OverlayStack` / `OverlayState`.
 
 Overlay placement policy:
 

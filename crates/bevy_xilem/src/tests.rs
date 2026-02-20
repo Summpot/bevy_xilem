@@ -1302,6 +1302,48 @@ fn dialog_dismiss_button_targets_dialog_entity() {
 }
 
 #[test]
+fn dialog_projects_single_dismiss_button_without_fullscreen_backdrop_button() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let dialog = spawn_in_overlay_root(&mut app.world_mut(), (crate::UiDialog::new("t", "b"),));
+
+    app.update();
+
+    let content_rect = app
+        .world()
+        .get::<crate::OverlayBounds>(dialog)
+        .expect("dialog should have overlay bounds")
+        .content_rect;
+
+    let button_rects = {
+        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let root = runtime.render_root.get_layer_root(0);
+        let mut button_rects = Vec::new();
+        collect_widget_bounds_by_short_name(root, "EcsButtonWidget", &mut button_rects);
+        button_rects
+    };
+
+    assert_eq!(
+        button_rects.len(),
+        1,
+        "dialog projector should only emit the dismiss button, not a structural backdrop button"
+    );
+
+    let only_button = button_rects[0];
+    let button_area = (only_button.max.x - only_button.min.x).max(0.0)
+        * (only_button.max.y - only_button.min.y).max(0.0);
+    let content_area = (content_rect.max.x - content_rect.min.x).max(0.0)
+        * (content_rect.max.y - content_rect.min.y).max(0.0);
+
+    assert!(button_area < content_area * 0.8);
+}
+
+#[test]
 fn overlay_action_dismiss_dialog_despawns_dialog() {
     let mut world = World::new();
     world.insert_resource(UiEventQueue::default());

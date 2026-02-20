@@ -254,10 +254,7 @@ impl MasonryRuntime {
     /// Returns `(bevy_window_scale_factor, masonry_global_scale_factor)` for diagnostics.
     #[must_use]
     pub fn masonry_scale_factors(&self) -> (f64, f64) {
-        (
-            self.window_scale_factor,
-            self.render_root.scale_factor(),
-        )
+        (self.window_scale_factor, self.render_root.scale_factor())
     }
 
     /// Returns the bounding box of a widget by its id, for diagnostics.
@@ -287,7 +284,11 @@ impl MasonryRuntime {
             esw.ctx().is_stashed(),
         )];
         for child in esw.children() {
-            result.push((child.id(), child.ctx().bounding_box(), child.ctx().is_stashed()));
+            result.push((
+                child.id(),
+                child.ctx().bounding_box(),
+                child.ctx().is_stashed(),
+            ));
         }
         result
     }
