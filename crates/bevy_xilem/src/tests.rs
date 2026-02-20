@@ -841,6 +841,65 @@ fn overlay_actions_toggle_and_select_combo_box() {
 }
 
 #[test]
+/// On HiDPI displays (scale_factor > 1) physical cursor coordinates are larger
+/// than logical ones. `handle_global_overlay_clicks` must compare against logical
+/// coordinates to match `OverlayBounds.content_rect` (which is in logical pixels).
+///
+/// This test verifies that a click whose *logical* position is inside the dropdown
+/// content_rect does NOT dismiss the dropdown.
+fn overlay_click_inside_logical_content_rect_not_dismissed_on_hidpi() {
+    let mut world = World::new();
+    world.insert_resource(ButtonInput::<MouseButton>::default());
+    world.insert_resource(crate::OverlayStack::default());
+    world.insert_resource(crate::OverlayPointerRoutingState::default());
+
+    let mut window = Window::default();
+    window.resolution.set(400.0, 300.0);
+    window.resolution.set_scale_factor_override(Some(2.0));
+    // Logical cursor position (150, 80) — INSIDE content_rect [100,300]×[50,200].
+    // At scale_factor=2 the physical position would be (300, 160), which is OUTSIDE the
+    // same rect, so this test distinguishes the logical vs physical code paths.
+    window.set_cursor_position(Some(Vec2::new(150.0, 80.0)));
+    world.spawn((window, PrimaryWindow));
+
+    {
+        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
+        input.press(MouseButton::Left);
+    }
+
+    let anchor = world.spawn_empty().id();
+    let dropdown = world
+        .spawn((
+            crate::UiDropdownMenu,
+            crate::AnchoredTo(anchor),
+            crate::OverlayState {
+                is_modal: false,
+                anchor: Some(anchor),
+            },
+            // content_rect in logical pixels: x=[100,300], y=[50,200]
+            // Logical cursor (150, 80) is inside; physical (300, 160) would be outside.
+            crate::OverlayBounds {
+                content_rect: Rect::from_corners(
+                    Vec2::new(100.0, 50.0),
+                    Vec2::new(300.0, 200.0),
+                ),
+                trigger_rect: None,
+            },
+        ))
+        .id();
+
+    crate::sync_overlay_stack_lifecycle(&mut world);
+    crate::handle_global_overlay_clicks(&mut world);
+
+    // Logical (150,80) is inside content_rect, so the dropdown must NOT be dismissed.
+    assert!(
+        world.get_entity(dropdown).is_ok(),
+        "dropdown was incorrectly despawned; logical cursor (150,80) is inside \
+         content_rect [100,300]×[50,200] — the handler must use logical coordinates"
+    );
+}
+
+#[test]
 fn spawn_in_overlay_root_parents_entity_under_overlay_root() {
     let mut world = World::new();
     world.spawn((UiRoot,));
@@ -1234,15 +1293,22 @@ fn native_dismiss_overlays_on_click_closes_only_outside_bounds_and_anchor() {
 }
 
 #[test]
-fn native_dismiss_overlays_on_click_uses_physical_cursor_for_inside_hit_checks() {
+/// Previously this function resolved to physical cursor coordinates; it now resolves
+/// to logical cursor coordinates so that the comparison against `content_rect`
+/// (which is always in logical pixels) works correctly on HiDPI displays.
+///
+/// Logical cursor (120, 60) is OUTSIDE content_rect [200,300]×[100,200] in logical space,
+/// so the dropdown should be dismissed (outside-click behavior).
+fn native_dismiss_overlays_on_click_uses_logical_cursor_for_inside_hit_checks() {
     let mut world = World::new();
     world.insert_resource(ButtonInput::<MouseButton>::default());
     world.insert_resource(crate::OverlayStack::default());
+    world.insert_resource(crate::OverlayPointerRoutingState::default());
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
     window.resolution.set_scale_factor_override(Some(2.0));
-    // Logical cursor (120, 60) maps to physical cursor (240, 120).
+    // Logical cursor at (120, 60) — outside content_rect [200,300]×[100,200].
     window.set_cursor_position(Some(Vec2::new(120.0, 60.0)));
     world.spawn((window, PrimaryWindow));
 
@@ -1270,9 +1336,15 @@ fn native_dismiss_overlays_on_click_uses_physical_cursor_for_inside_hit_checks()
         ))
         .id();
 
+    crate::sync_overlay_stack_lifecycle(&mut world);
     crate::native_dismiss_overlays_on_click(&mut world);
 
-    assert!(world.get_entity(dropdown).is_ok());
+    // Logical (120,60) is outside [200,300]×[100,200], so the outside-click handler
+    // should have dismissed the dropdown.
+    assert!(
+        world.get_entity(dropdown).is_err(),
+        "click outside content_rect in logical coords should dismiss the dropdown"
+    );
 }
 
 #[test]

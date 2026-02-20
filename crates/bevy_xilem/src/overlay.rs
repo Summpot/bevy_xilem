@@ -1069,11 +1069,13 @@ pub fn sync_dropdown_positions(world: &mut World) {
 
 fn primary_window_cursor(world: &mut World) -> Option<(Entity, Vec2)> {
     fn resolve_cursor(window: &Window) -> Option<Vec2> {
-        window.physical_cursor_position().or_else(|| {
-            window
-                .cursor_position()
-                .map(|logical| logical * window.scale_factor())
-        })
+        // `OverlayBounds.content_rect` is computed in logical pixels by
+        // `sync_overlay_positions` (which uses `window.width()`/`window.height()`).
+        // Using physical coordinates here would cause a scale-factor mismatch on
+        // HiDPI displays, making inside-clicks register as outside the content_rect
+        // and incorrectly triggering overlay dismissal before Masonry processes
+        // the PointerUp event.
+        window.cursor_position()
     }
 
     let mut primary_window_query = world.query_filtered::<(Entity, &Window), With<PrimaryWindow>>();
