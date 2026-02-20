@@ -1114,21 +1114,42 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
 
     // Diagnostic: log the mismatch so we can see what widget was hit vs. what was expected.
     {
-        let scale_factor = {
+        let (scale_factor, computed_pos, masonry_sf, overlay_subtree) = {
             let mut q = world.query_filtered::<&Window, With<PrimaryWindow>>();
-            q.iter(world)
+            let sf = q.iter(world)
                 .next()
                 .map(|w| w.scale_factor() as f64)
-                .unwrap_or(1.0)
+                .unwrap_or(1.0);
+            let cp = world.get::<OverlayComputedPosition>(top_overlay_entity).copied();
+            let (masonry_sf, subtree) = world
+                .get_non_send_resource::<MasonryRuntime>()
+                .map(|r| (r.masonry_scale_factors(), r.get_overlay_subtree_info(top_overlay_widget_id)))
+                .unwrap_or(((f64::NAN, f64::NAN), vec![]));
+            (sf, cp, masonry_sf, subtree)
         };
+        let (bevy_window_sf, masonry_global_sf) = masonry_sf;
+        let masonry_logical_x = cursor_pos.x as f64 / masonry_global_sf.max(f64::EPSILON);
+        let masonry_logical_y = cursor_pos.y as f64 / masonry_global_sf.max(f64::EPSILON);
         tracing::debug!(
             overlay_entity = ?top_overlay_entity,
             expected_widget_id = ?top_overlay_widget_id,
             hit_path = ?hit_path,
             physical_cursor_x = cursor_pos.x,
             physical_cursor_y = cursor_pos.y,
-            logical_cursor_x = cursor_pos.x as f64 / scale_factor,
-            logical_cursor_y = cursor_pos.y as f64 / scale_factor,
+            masonry_logical_cursor_x = masonry_logical_x,
+            masonry_logical_cursor_y = masonry_logical_y,
+            bevy_window_scale_factor = bevy_window_sf,
+            masonry_global_scale_factor = masonry_global_sf,
+            dialog_computed_x = computed_pos.map(|p| p.x),
+            dialog_computed_y = computed_pos.map(|p| p.y),
+            dialog_computed_w = computed_pos.map(|p| p.width),
+            dialog_computed_h = computed_pos.map(|p| p.height),
+            dialog_is_positioned = computed_pos.map(|p| p.is_positioned),
+            // (widget_id, bounding_box(x0,y0,x1,y1), is_stashed) for ESW(overlay) and its children
+            overlay_subtree_bboxes = ?overlay_subtree
+                .iter()
+                .map(|(id, bb, stashed)| format!("{id:?} bbox=({:.1},{:.1},{:.1},{:.1}) stashed={stashed}", bb.x0, bb.y0, bb.x1, bb.y1))
+                .collect::<Vec<_>>(),
             "overlay_hit_test: overlay dismissed as outside-click (widget ID not found in hit path)"
         );
     }

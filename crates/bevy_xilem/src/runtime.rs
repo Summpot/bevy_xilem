@@ -251,6 +251,47 @@ impl MasonryRuntime {
         self.render_root.get_hit_path(physical_pos)
     }
 
+    /// Returns `(bevy_window_scale_factor, masonry_global_scale_factor)` for diagnostics.
+    #[must_use]
+    pub fn masonry_scale_factors(&self) -> (f64, f64) {
+        (
+            self.window_scale_factor,
+            self.render_root.scale_factor(),
+        )
+    }
+
+    /// Returns the bounding box of a widget by its id, for diagnostics.
+    #[must_use]
+    pub fn get_widget_bounding_box(
+        &self,
+        id: masonry::core::WidgetId,
+    ) -> Option<masonry::kurbo::Rect> {
+        self.render_root
+            .get_widget(id)
+            .map(|w| w.ctx().bounding_box())
+    }
+
+    /// Returns all layer-0 widget IDs that are direct children of the overlay-root zstack,
+    /// for diagnostics. Returns (widget_id, bounding_box) pairs.
+    #[must_use]
+    pub fn get_overlay_subtree_info(
+        &self,
+        overlay_widget_id: masonry::core::WidgetId,
+    ) -> Vec<(masonry::core::WidgetId, masonry::kurbo::Rect, bool)> {
+        let Some(esw) = self.render_root.get_widget(overlay_widget_id) else {
+            return vec![];
+        };
+        let mut result = vec![(
+            overlay_widget_id,
+            esw.ctx().bounding_box(),
+            esw.ctx().is_stashed(),
+        )];
+        for child in esw.children() {
+            result.push((child.id(), child.ctx().bounding_box(), child.ctx().is_stashed()));
+        }
+        result
+    }
+
     #[cfg(test)]
     pub(crate) fn pointer_position_for_tests(&self) -> Vec2 {
         Vec2::new(
