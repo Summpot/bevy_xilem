@@ -28,6 +28,9 @@ struct TestRoot;
 #[derive(Component, Debug, Clone, Copy)]
 struct TypeStyled;
 
+#[derive(Component, Debug, Clone, Copy)]
+struct ToastProbe;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum TestAction {
     Clicked,
@@ -35,6 +38,13 @@ enum TestAction {
 
 fn project_test_root(_: &TestRoot, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(ecs_button(ctx.entity, TestAction::Clicked, "Click"))
+}
+
+fn project_toast_probe(_: &ToastProbe, _ctx: ProjectionCtx<'_>) -> UiView {
+    Arc::new(
+        crate::xilem::view::transformed(crate::xilem::view::label("Toast"))
+            .translate((620.0, 48.0)),
+    )
 }
 
 fn init_test_tracing() {
@@ -879,10 +889,7 @@ fn overlay_click_inside_logical_content_rect_not_dismissed_on_hidpi() {
             // content_rect in logical pixels: x=[100,300], y=[50,200]
             // Logical cursor (150, 80) is inside; physical (300, 160) would be outside.
             crate::OverlayBounds {
-                content_rect: Rect::from_corners(
-                    Vec2::new(100.0, 50.0),
-                    Vec2::new(300.0, 200.0),
-                ),
+                content_rect: Rect::from_corners(Vec2::new(100.0, 50.0), Vec2::new(300.0, 200.0)),
                 trigger_rect: None,
             },
         ))
@@ -1103,6 +1110,80 @@ fn send_primary_click(app: &mut App, window_entity: Entity, position: Vec2) {
     app.update();
 }
 
+fn set_window_cursor_position(app: &mut App, window_entity: Entity, position: Vec2) {
+    let world = app.world_mut();
+    let mut window = world
+        .get_mut::<Window>(window_entity)
+        .expect("window should exist");
+    window.set_cursor_position(Some(position));
+}
+
+fn run_global_overlay_click(app: &mut App, window_entity: Entity, position: Vec2) {
+    set_window_cursor_position(app, window_entity, position);
+
+    if !app.world().contains_resource::<ButtonInput<MouseButton>>() {
+        app.world_mut()
+            .insert_resource(ButtonInput::<MouseButton>::default());
+    }
+
+    {
+        let mut input = app.world_mut().resource_mut::<ButtonInput<MouseButton>>();
+        input.release(MouseButton::Left);
+        input.clear();
+        input.press(MouseButton::Left);
+    }
+
+    app.update();
+
+    let mut input = app.world_mut().resource_mut::<ButtonInput<MouseButton>>();
+    input.release(MouseButton::Left);
+    input.clear();
+}
+
+fn widget_center_for_widget_id(app: &App, widget_id: xilem_masonry::WidgetId) -> Vec2 {
+    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    let widget = runtime
+        .render_root
+        .get_widget(widget_id)
+        .expect("widget id should resolve in render tree");
+
+    let ctx = widget.ctx();
+    let origin = ctx.window_origin();
+    let size = ctx.border_box_size();
+    Vec2::new(
+        (origin.x + size.width * 0.5) as f32,
+        (origin.y + size.height * 0.5) as f32,
+    )
+}
+
+fn widget_center_for_entity(app: &App, entity: Entity) -> Vec2 {
+    let widget_id = app
+        .world()
+        .get::<crate::MasonryWidgetId>(entity)
+        .map(|id| id.0)
+        .expect("entity should have MasonryWidgetId");
+    widget_center_for_widget_id(app, widget_id)
+}
+
+fn open_combo_dropdown(app: &mut App, combo: Entity) -> Entity {
+    app.world()
+        .resource::<UiEventQueue>()
+        .push_typed(combo, crate::OverlayUiAction::ToggleCombo);
+
+    app.update();
+
+    let mut query = app.world_mut().query::<(Entity, &crate::AnchoredTo)>();
+    query
+        .iter(app.world())
+        .find_map(|(entity, anchored_to)| {
+            app.world()
+                .get::<crate::UiDropdownMenu>(entity)
+                .is_some_and(|_| anchored_to.0 == combo)
+                .then_some(entity)
+        })
+        .expect("combo toggle should create dropdown")
+}
+
 fn collect_widget_bounds_by_short_name(
     widget: WidgetRef<'_, dyn Widget>,
     short_type_name: &str,
@@ -1237,237 +1318,197 @@ fn overlay_action_dismiss_dialog_despawns_dialog() {
 }
 
 #[test]
-fn native_dismiss_overlays_on_click_closes_only_outside_bounds_and_anchor() {
-    let mut world = World::new();
-    world.insert_resource(ButtonInput::<MouseButton>::default());
-    world.insert_resource(crate::OverlayStack::default());
+fn native_dismiss_overlays_on_click_closes_when_clicking_anchor_and_suppresses_pointer() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
-    window.set_cursor_position(Some(Vec2::new(240.0, 120.0)));
-    world.spawn((window, PrimaryWindow));
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
 
-    {
-        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
-        input.press(MouseButton::Left);
-    }
-
-    let anchor = world.spawn_empty().id();
-    let dropdown = world
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let combo = app
+        .world_mut()
         .spawn((
-            crate::UiDropdownMenu,
-            crate::AnchoredTo(anchor),
-            crate::OverlayState {
-                is_modal: false,
-                anchor: Some(anchor),
-            },
-            crate::OverlayBounds {
-                content_rect: Rect::from_corners(Vec2::new(100.0, 100.0), Vec2::new(200.0, 200.0)),
-                trigger_rect: Some(Rect::from_corners(
-                    Vec2::new(220.0, 100.0),
-                    Vec2::new(300.0, 130.0),
-                )),
-            },
+            crate::UiComboBox::new(vec![
+                crate::UiComboOption::new("one", "One"),
+                crate::UiComboOption::new("two", "Two"),
+            ]),
+            ChildOf(root),
         ))
         .id();
 
-    crate::native_dismiss_overlays_on_click(&mut world);
-    assert!(world.get_entity(dropdown).is_ok());
+    app.update();
 
-    {
-        let mut window_query = world.query_filtered::<&mut Window, With<PrimaryWindow>>();
-        let mut primary_window = window_query
-            .single_mut(&mut world)
-            .expect("primary window should exist");
-        primary_window.set_cursor_position(Some(Vec2::new(500.0, 500.0)));
-    }
-    {
-        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
-        input.release(MouseButton::Left);
-        input.clear();
-        input.press(MouseButton::Left);
-    }
+    let dropdown = open_combo_dropdown(&mut app, combo);
+    let anchor_center = widget_center_for_entity(&app, combo);
 
-    crate::native_dismiss_overlays_on_click(&mut world);
-    assert!(world.get_entity(dropdown).is_err());
+    run_global_overlay_click(&mut app, window_entity, anchor_center);
+
+    assert!(app.world().get_entity(dropdown).is_err());
+
+    let mut routing = app
+        .world_mut()
+        .resource_mut::<crate::OverlayPointerRoutingState>();
+    assert!(routing.take_suppressed_press(window_entity, MouseButton::Left));
+    assert!(routing.take_suppressed_release(window_entity, MouseButton::Left));
 }
 
 #[test]
-/// Previously this function resolved to physical cursor coordinates; it now resolves
-/// to logical cursor coordinates so that the comparison against `content_rect`
-/// (which is always in logical pixels) works correctly on HiDPI displays.
-///
-/// Logical cursor (120, 60) is OUTSIDE content_rect [200,300]×[100,200] in logical space,
-/// so the dropdown should be dismissed (outside-click behavior).
-fn native_dismiss_overlays_on_click_uses_logical_cursor_for_inside_hit_checks() {
-    let mut world = World::new();
-    world.insert_resource(ButtonInput::<MouseButton>::default());
-    world.insert_resource(crate::OverlayStack::default());
-    world.insert_resource(crate::OverlayPointerRoutingState::default());
+fn native_dismiss_overlays_on_click_keeps_overlay_open_when_clicking_inside_overlay() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
-    window.resolution.set_scale_factor_override(Some(2.0));
-    // Logical cursor at (120, 60) — outside content_rect [200,300]×[100,200].
-    window.set_cursor_position(Some(Vec2::new(120.0, 60.0)));
-    world.spawn((window, PrimaryWindow));
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
 
-    {
-        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
-        input.press(MouseButton::Left);
-    }
-
-    let anchor = world.spawn_empty().id();
-    let dropdown = world
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let combo = app
+        .world_mut()
         .spawn((
-            crate::UiDropdownMenu,
-            crate::AnchoredTo(anchor),
-            crate::OverlayState {
-                is_modal: false,
-                anchor: Some(anchor),
-            },
-            crate::OverlayBounds {
-                content_rect: Rect::from_corners(Vec2::new(200.0, 100.0), Vec2::new(300.0, 200.0)),
-                trigger_rect: Some(Rect::from_corners(
-                    Vec2::new(200.0, 100.0),
-                    Vec2::new(300.0, 200.0),
-                )),
-            },
+            crate::UiComboBox::new(vec![
+                crate::UiComboOption::new("one", "One"),
+                crate::UiComboOption::new("two", "Two"),
+            ]),
+            ChildOf(root),
         ))
         .id();
 
-    crate::sync_overlay_stack_lifecycle(&mut world);
-    crate::native_dismiss_overlays_on_click(&mut world);
+    app.update();
 
-    // Logical (120,60) is outside [200,300]×[100,200], so the outside-click handler
-    // should have dismissed the dropdown.
-    assert!(
-        world.get_entity(dropdown).is_err(),
-        "click outside content_rect in logical coords should dismiss the dropdown"
-    );
+    let dropdown = open_combo_dropdown(&mut app, combo);
+    let dropdown_center = widget_center_for_entity(&app, dropdown);
+
+    run_global_overlay_click(&mut app, window_entity, dropdown_center);
+
+    assert!(app.world().get_entity(dropdown).is_ok());
+
+    let mut routing = app
+        .world_mut()
+        .resource_mut::<crate::OverlayPointerRoutingState>();
+    assert!(!routing.take_suppressed_press(window_entity, MouseButton::Left));
+    assert!(!routing.take_suppressed_release(window_entity, MouseButton::Left));
 }
 
 #[test]
-fn native_dismiss_overlays_on_click_closes_nested_topmost_overlay_first() {
-    let mut world = World::new();
-    world.insert_resource(ButtonInput::<MouseButton>::default());
-    world.insert_resource(crate::OverlayStack::default());
-    world.insert_resource(crate::OverlayPointerRoutingState::default());
+fn native_dismiss_overlays_on_click_closes_overlay_on_outside_click_without_suppression() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
-    window.set_cursor_position(Some(Vec2::new(500.0, 180.0)));
-    world.spawn((window, PrimaryWindow));
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
 
-    let dialog = world
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let combo = app
+        .world_mut()
         .spawn((
-            crate::UiDialog::new("modal", "body"),
-            crate::OverlayState {
-                is_modal: true,
-                anchor: None,
-            },
-            crate::OverlayBounds {
-                content_rect: Rect::from_corners(Vec2::new(150.0, 120.0), Vec2::new(650.0, 500.0)),
-                trigger_rect: None,
-            },
+            crate::UiComboBox::new(vec![
+                crate::UiComboOption::new("one", "One"),
+                crate::UiComboOption::new("two", "Two"),
+            ]),
+            ChildOf(root),
         ))
         .id();
 
-    let combo_anchor = world.spawn_empty().id();
+    app.update();
 
-    let dropdown = world
-        .spawn((
-            crate::UiDropdownMenu,
-            crate::AnchoredTo(combo_anchor),
-            crate::OverlayState {
-                is_modal: false,
-                anchor: Some(combo_anchor),
-            },
-            crate::OverlayBounds {
-                content_rect: Rect::from_corners(Vec2::new(200.0, 220.0), Vec2::new(360.0, 340.0)),
-                trigger_rect: Some(Rect::from_corners(
-                    Vec2::new(180.0, 160.0),
-                    Vec2::new(340.0, 196.0),
-                )),
-            },
-        ))
-        .id();
+    let dropdown = open_combo_dropdown(&mut app, combo);
 
-    crate::sync_overlay_stack_lifecycle(&mut world);
+    run_global_overlay_click(&mut app, window_entity, Vec2::new(790.0, 590.0));
 
-    {
-        let stack = world.resource::<crate::OverlayStack>();
-        assert_eq!(stack.active_overlays, vec![dialog, dropdown]);
-    }
+    assert!(app.world().get_entity(dropdown).is_err());
 
-    {
-        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
-        input.press(MouseButton::Left);
-    }
-
-    crate::native_dismiss_overlays_on_click(&mut world);
-
-    assert!(world.get_entity(dropdown).is_err());
-    assert!(world.get_entity(dialog).is_ok());
-    {
-        let stack = world.resource::<crate::OverlayStack>();
-        assert_eq!(stack.active_overlays, vec![dialog]);
-    }
-
-    {
-        let mut query = world.query_filtered::<&mut Window, With<PrimaryWindow>>();
-        let mut primary = query
-            .single_mut(&mut world)
-            .expect("primary window should exist");
-        primary.set_cursor_position(Some(Vec2::new(60.0, 60.0)));
-    }
-    {
-        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
-        input.release(MouseButton::Left);
-        input.clear();
-        input.press(MouseButton::Left);
-    }
-
-    crate::native_dismiss_overlays_on_click(&mut world);
-
-    assert!(world.get_entity(dialog).is_err());
-    let stack = world.resource::<crate::OverlayStack>();
-    assert!(stack.active_overlays.is_empty());
+    let mut routing = app
+        .world_mut()
+        .resource_mut::<crate::OverlayPointerRoutingState>();
+    assert!(!routing.take_suppressed_press(window_entity, MouseButton::Left));
+    assert!(!routing.take_suppressed_release(window_entity, MouseButton::Left));
 }
 
 #[test]
 fn native_dismiss_overlays_on_click_works_without_primary_window_marker() {
-    let mut world = World::new();
-    world.insert_resource(ButtonInput::<MouseButton>::default());
-    world.insert_resource(crate::OverlayStack::default());
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
 
     let mut window = Window::default();
     window.resolution.set(800.0, 600.0);
-    window.set_cursor_position(Some(Vec2::new(790.0, 590.0)));
-    world.spawn((window,));
+    let window_entity = app.world_mut().spawn((window,)).id();
 
-    {
-        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
-        input.press(MouseButton::Left);
-    }
-
-    let dialog = world
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let combo = app
+        .world_mut()
         .spawn((
-            crate::UiDialog::new("title", "body"),
-            crate::OverlayState {
-                is_modal: true,
-                anchor: None,
-            },
-            crate::OverlayBounds {
-                content_rect: Rect::from_corners(Vec2::new(100.0, 100.0), Vec2::new(300.0, 260.0)),
-                trigger_rect: None,
-            },
+            crate::UiComboBox::new(vec![
+                crate::UiComboOption::new("one", "One"),
+                crate::UiComboOption::new("two", "Two"),
+            ]),
+            ChildOf(root),
         ))
         .id();
 
-    crate::native_dismiss_overlays_on_click(&mut world);
+    app.update();
 
-    assert!(world.get_entity(dialog).is_err());
+    let dropdown = open_combo_dropdown(&mut app, combo);
+
+    run_global_overlay_click(&mut app, window_entity, Vec2::new(790.0, 590.0));
+
+    assert!(app.world().get_entity(dropdown).is_err());
+}
+
+#[test]
+fn toast_in_overlay_root_is_isolated_from_dropdown_overlay_stack_dismissal() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin)
+        .register_projector::<ToastProbe>(project_toast_probe);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let combo = app
+        .world_mut()
+        .spawn((
+            crate::UiComboBox::new(vec![
+                crate::UiComboOption::new("one", "One"),
+                crate::UiComboOption::new("two", "Two"),
+            ]),
+            ChildOf(root),
+        ))
+        .id();
+
+    app.update();
+
+    let dropdown = open_combo_dropdown(&mut app, combo);
+    let toast = spawn_in_overlay_root(&mut app.world_mut(), (ToastProbe,));
+
+    app.update();
+
+    assert!(app.world().get::<crate::OverlayState>(toast).is_none());
+    {
+        let stack = app.world().resource::<crate::OverlayStack>();
+        assert_eq!(stack.active_overlays, vec![dropdown]);
+    }
+
+    let toast_center = widget_center_for_entity(&app, toast);
+    run_global_overlay_click(&mut app, window_entity, toast_center);
+
+    assert!(app.world().get_entity(dropdown).is_err());
+    assert!(app.world().get_entity(toast).is_ok());
+    assert!(
+        app.world()
+            .resource::<crate::OverlayStack>()
+            .active_overlays
+            .is_empty()
+    );
+
+    let mut routing = app
+        .world_mut()
+        .resource_mut::<crate::OverlayPointerRoutingState>();
+    assert!(!routing.take_suppressed_press(window_entity, MouseButton::Left));
+    assert!(!routing.take_suppressed_release(window_entity, MouseButton::Left));
 }
 
 #[test]

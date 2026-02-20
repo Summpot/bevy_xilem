@@ -16,11 +16,11 @@ use bevy_window::{PrimaryWindow, Window};
 use masonry::core::{Widget, WidgetRef};
 
 use crate::{
-    AnchoredTo, AppI18n, OverlayAnchorRect, OverlayBounds, OverlayComputedPosition, OverlayConfig,
-    OverlayPlacement, OverlayStack, OverlayState, StopUiPointerPropagation, UiComboBox,
-    UiComboBoxChanged, UiDialog, UiDropdownMenu, UiEventQueue, UiInteractionEvent, UiOverlayRoot,
-    UiPointerEvent, UiPointerHitEvent, UiRoot, events::UiEvent, runtime::MasonryRuntime,
-    styling::resolve_style_for_classes,
+    AnchoredTo, AppI18n, MasonryWidgetId, OverlayAnchorRect, OverlayBounds,
+    OverlayComputedPosition, OverlayConfig, OverlayPlacement, OverlayStack, OverlayState,
+    StopUiPointerPropagation, UiComboBox, UiComboBoxChanged, UiDialog, UiDropdownMenu,
+    UiEventQueue, UiInteractionEvent, UiOverlayRoot, UiPointerEvent, UiPointerHitEvent, UiRoot,
+    events::UiEvent, runtime::MasonryRuntime, styling::resolve_style_for_classes,
 };
 
 const OVERLAY_ANCHOR_GAP: f64 = 4.0;
@@ -1067,27 +1067,17 @@ pub fn sync_dropdown_positions(world: &mut World) {
     sync_overlay_positions(world);
 }
 
-fn primary_window_cursor(world: &mut World) -> Option<(Entity, Vec2)> {
-    fn resolve_cursor(window: &Window) -> Option<Vec2> {
-        // `OverlayBounds.content_rect` is computed in logical pixels by
-        // `sync_overlay_positions` (which uses `window.width()`/`window.height()`).
-        // Using physical coordinates here would cause a scale-factor mismatch on
-        // HiDPI displays, making inside-clicks register as outside the content_rect
-        // and incorrectly triggering overlay dismissal before Masonry processes
-        // the PointerUp event.
-        window.cursor_position()
-    }
-
+fn primary_window_physical_cursor(world: &mut World) -> Option<(Entity, Vec2)> {
     let mut primary_window_query = world.query_filtered::<(Entity, &Window), With<PrimaryWindow>>();
     if let Some((window_entity, window)) = primary_window_query.iter(world).next()
-        && let Some(cursor) = resolve_cursor(window)
+        && let Some(cursor) = window.physical_cursor_position()
     {
         return Some((window_entity, cursor));
     }
 
     let mut window_query = world.query::<(Entity, &Window)>();
     let (window_entity, window) = window_query.iter(world).next()?;
-    let cursor = resolve_cursor(window)?;
+    let cursor = window.physical_cursor_position()?;
     Some((window_entity, cursor))
 }
 
@@ -1119,34 +1109,39 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         return;
     }
 
-    let Some((window_entity, cursor_pos)) = primary_window_cursor(world) else {
+    let Some((window_entity, cursor_pos)) = primary_window_physical_cursor(world) else {
         return;
     };
 
-    let (clicked_content, clicked_trigger) = {
-        let Some(bounds) = world.get::<OverlayBounds>(top_overlay_entity) else {
-            return;
-        };
-        tracing::info!(
-            "Overlay click detected at {:?}, content_rect: {:?}",
-            cursor_pos,
-            bounds.content_rect
-        );
-
-        let clicked_content = bounds.content_rect.contains(cursor_pos);
-        let clicked_trigger = bounds
-            .trigger_rect
-            .is_some_and(|rect| rect.contains(cursor_pos));
-        (clicked_content, clicked_trigger)
+    let Some(top_overlay_widget_id) = world
+        .get::<MasonryWidgetId>(top_overlay_entity)
+        .map(|widget_id| widget_id.0)
+    else {
+        return;
     };
 
-    if clicked_content || clicked_trigger {
+    let anchor_widget_id = world
+        .get::<OverlayState>(top_overlay_entity)
+        .and_then(|state| state.anchor)
+        .and_then(|anchor| {
+            world
+                .get::<MasonryWidgetId>(anchor)
+                .map(|widget_id| widget_id.0)
+        });
+
+    let hit_path = {
+        let Some(runtime) = world.get_non_send_resource::<MasonryRuntime>() else {
+            return;
+        };
+        runtime.get_hit_path((cursor_pos.x as f64, cursor_pos.y as f64).into())
+    };
+
+    let clicked_inside_overlay = hit_path.contains(&top_overlay_widget_id);
+    if clicked_inside_overlay {
         return;
     }
 
-    let is_modal = world
-        .get::<OverlayState>(top_overlay_entity)
-        .is_some_and(|state| state.is_modal);
+    let clicked_anchor = anchor_widget_id.is_some_and(|widget_id| hit_path.contains(&widget_id));
 
     if world.get::<UiDropdownMenu>(top_overlay_entity).is_some() {
         close_dropdown(world, top_overlay_entity);
@@ -1155,20 +1150,19 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         remove_overlay_from_stack(world, top_overlay_entity);
     }
 
-    if let Some(mut routing) = world.get_resource_mut::<OverlayPointerRoutingState>() {
-        // Consuming the native click avoids accidental click-through to lower layers.
+    if clicked_anchor
+        && let Some(mut routing) = world.get_resource_mut::<OverlayPointerRoutingState>()
+    {
         routing.suppress_click(window_entity, MouseButton::Left);
-        if is_modal {
-            tracing::debug!(
-                "Closed modal overlay {:?} from outside click and consumed pointer",
-                top_overlay_entity
-            );
-        } else {
-            tracing::debug!(
-                "Closed non-modal overlay {:?} from outside click and consumed pointer",
-                top_overlay_entity
-            );
-        }
+        tracing::debug!(
+            "Closed overlay {:?} by clicking anchor and consumed pointer",
+            top_overlay_entity
+        );
+    } else {
+        tracing::debug!(
+            "Closed overlay {:?} from outside click and allowed pointer propagation",
+            top_overlay_entity
+        );
     }
 
     sync_overlay_stack_lifecycle(world);

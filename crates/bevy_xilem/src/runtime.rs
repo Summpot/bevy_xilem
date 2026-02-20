@@ -20,8 +20,8 @@ use masonry::{
     app::{RenderRoot, RenderRootOptions, WindowSizePolicy},
     core::{
         Handled, PointerButton, PointerButtonEvent, PointerEvent, PointerId, PointerInfo,
-        PointerScrollEvent, PointerState, PointerType, PointerUpdate, ScrollDelta, WidgetId,
-        WindowEvent,
+        PointerScrollEvent, PointerState, PointerType, PointerUpdate, ScrollDelta, Widget,
+        WidgetId, WidgetRef, WindowEvent,
     },
     dpi::{PhysicalPosition, PhysicalSize},
     peniko::Color,
@@ -38,6 +38,7 @@ use xilem_masonry::{
 };
 
 use crate::{
+    MasonryWidgetId,
     events::{UiEventQueue, install_global_ui_event_queue},
     overlay::OverlayPointerRoutingState,
     projection::{UiAnyView, UiView},
@@ -156,6 +157,77 @@ fn focus_fallback_widget(render_root: &RenderRoot) -> Option<WidgetId> {
         .map(|root| root.inner().inner_id())
 }
 
+fn parse_entity_scope_widget_id(widget: WidgetRef<'_, dyn Widget>) -> Option<(Entity, WidgetId)> {
+    let debug = widget.get_debug_text()?;
+    let bits = debug.strip_prefix("entity_scope=")?.parse::<u64>().ok()?;
+    let entity = Entity::try_from_bits(bits)?;
+    Some((entity, widget.id()))
+}
+
+fn collect_entity_scope_widget_ids(
+    widget: WidgetRef<'_, dyn Widget>,
+    out: &mut Vec<(Entity, WidgetId)>,
+) {
+    for child in widget.children() {
+        collect_entity_scope_widget_ids(child, out);
+    }
+
+    let Some((entity, widget_id)) = parse_entity_scope_widget_id(widget) else {
+        return;
+    };
+
+    if let Some(index) = out
+        .iter()
+        .position(|(existing_entity, _)| *existing_entity == entity)
+    {
+        out[index] = (entity, widget_id);
+    } else {
+        out.push((entity, widget_id));
+    }
+}
+
+/// Synchronize per-entity Masonry widget identity onto ECS components.
+pub fn sync_masonry_widget_ids(world: &mut World) {
+    let mappings = {
+        let Some(runtime) = world.get_non_send_resource::<MasonryRuntime>() else {
+            return;
+        };
+
+        let root = runtime.render_root.get_layer_root(0);
+        let mut mappings = Vec::new();
+        collect_entity_scope_widget_ids(root, &mut mappings);
+        mappings
+    };
+
+    let existing = {
+        let mut query = world.query_filtered::<Entity, With<MasonryWidgetId>>();
+        query.iter(world).collect::<Vec<_>>()
+    };
+
+    for entity in existing {
+        let still_mapped = mappings
+            .iter()
+            .any(|(mapped_entity, _)| *mapped_entity == entity);
+        if !still_mapped && world.get_entity(entity).is_ok() {
+            world.entity_mut(entity).remove::<MasonryWidgetId>();
+        }
+    }
+
+    for (entity, widget_id) in mappings {
+        if world.get_entity(entity).is_err() {
+            continue;
+        }
+
+        let needs_update = world
+            .get::<MasonryWidgetId>(entity)
+            .is_none_or(|current| current.0 != widget_id);
+
+        if needs_update {
+            world.entity_mut(entity).insert(MasonryWidgetId(widget_id));
+        }
+    }
+}
+
 impl MasonryRuntime {
     #[must_use]
     pub fn is_attached_to_window(&self, window: Entity) -> bool {
@@ -169,6 +241,14 @@ impl MasonryRuntime {
     #[must_use]
     pub fn viewport_size(&self) -> (f64, f64) {
         (self.viewport_width.max(1.0), self.viewport_height.max(1.0))
+    }
+
+    #[must_use]
+    pub fn get_hit_path(
+        &self,
+        physical_pos: masonry::kurbo::Point,
+    ) -> Vec<masonry::core::WidgetId> {
+        self.render_root.get_hit_path(physical_pos)
     }
 
     #[cfg(test)]

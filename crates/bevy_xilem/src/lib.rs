@@ -95,9 +95,9 @@ pub mod prelude {
     pub use crate::{
         AppBevyXilemExt, AppI18n, AutoDismiss, BevyWindowOptions, BevyXilemPlugin, BuiltinUiAction,
         ColorStyle, ComputedStyle, CurrentColorStyle, EcsButtonView, Hovered, LayoutStyle,
-        LocalizeText, MasonryRuntime, OverlayBounds, OverlayComputedPosition, OverlayConfig,
-        OverlayMouseButtonCursor, OverlayPlacement, OverlayPointerRoutingState, OverlayStack,
-        OverlayState, OverlayUiAction, Pressed, ProjectionCtx, PseudoClass, Selector,
+        LocalizeText, MasonryRuntime, MasonryWidgetId, OverlayBounds, OverlayComputedPosition,
+        OverlayConfig, OverlayMouseButtonCursor, OverlayPlacement, OverlayPointerRoutingState,
+        OverlayStack, OverlayState, OverlayUiAction, Pressed, ProjectionCtx, PseudoClass, Selector,
         StopUiPointerPropagation, StyleClass, StyleDirty, StyleRule, StyleSetter, StyleSheet,
         StyleTransition, SyncAssetSource, SyncTextSource, SynthesizedUiViews, TargetColorStyle,
         TextStyle, TypedUiEvent, UiAnyView, UiButton, UiComboBox, UiComboBoxChanged, UiComboOption,
@@ -113,10 +113,11 @@ pub mod prelude {
         register_builtin_projectors, resolve_localized_text, resolve_style,
         resolve_style_for_classes, resolve_style_for_entity_classes, run_app,
         run_app_with_window_options, slider, spawn_in_overlay_root, switch,
-        sync_dropdown_positions, sync_fonts_to_xilem, sync_overlay_positions,
-        sync_overlay_stack_lifecycle, synthesize_roots, synthesize_roots_with_stats, synthesize_ui,
-        synthesize_world, text_button, text_input, xilem_button, xilem_button_any_pointer,
-        xilem_checkbox, xilem_slider, xilem_switch, xilem_text_button, xilem_text_input,
+        sync_dropdown_positions, sync_fonts_to_xilem, sync_masonry_widget_ids,
+        sync_overlay_positions, sync_overlay_stack_lifecycle, synthesize_roots,
+        synthesize_roots_with_stats, synthesize_ui, synthesize_world, text_button, text_input,
+        xilem_button, xilem_button_any_pointer, xilem_checkbox, xilem_slider, xilem_switch,
+        xilem_text_button, xilem_text_input,
     };
 
     pub use crate::{

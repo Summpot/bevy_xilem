@@ -21,6 +21,7 @@ use crate::{
     runtime::{
         MasonryRuntime, initialize_masonry_runtime_from_primary_window,
         inject_bevy_input_into_masonry, paint_masonry_ui, rebuild_masonry_runtime,
+        sync_masonry_widget_ids,
     },
     styling::{
         StyleSheet, animate_style_transitions, mark_style_dirty, sync_style_targets,
@@ -84,13 +85,21 @@ impl Plugin for BevyXilemPlugin {
                 Update,
                 animate_style_transitions.after(AnimationSystem::AnimationUpdate),
             )
-            .add_systems(PostUpdate, (synthesize_ui, rebuild_masonry_runtime).chain());
+            .add_systems(
+                PostUpdate,
+                (
+                    synthesize_ui,
+                    rebuild_masonry_runtime,
+                    sync_masonry_widget_ids,
+                )
+                    .chain(),
+            );
 
         // Run overlay placement after Masonry's retained tree has been rebuilt,
         // so anchor/widget geometry is up-to-date for this frame.
         app.add_systems(
             PostUpdate,
-            sync_overlay_positions.after(rebuild_masonry_runtime),
+            sync_overlay_positions.after(sync_masonry_widget_ids),
         );
 
         app.add_systems(Last, paint_masonry_ui);

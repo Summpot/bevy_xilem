@@ -177,6 +177,10 @@ pub struct OverlayState {
     pub anchor: Option<Entity>,
 }
 
+/// Bridge component that binds a Bevy entity to its synthesized Masonry widget id.
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MasonryWidgetId(pub xilem_masonry::WidgetId);
+
 /// Runtime-computed screen bounds for overlay hit-testing.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
 pub struct OverlayBounds {

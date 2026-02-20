@@ -6,6 +6,7 @@ use xilem_masonry::view::{FlexExt as _, flex_col, label};
 use crate::{
     ecs::{UiOverlayRoot, UiRoot},
     projection::{UiProjectorRegistry, UiView},
+    views::entity_scope,
 };
 
 /// Snapshot containing synthesized root views for the current frame.
@@ -114,7 +115,7 @@ fn synthesize_entity(
 
     let projected = registry.project_node(world, entity, node_id, children.clone());
 
-    let view = if let Some(view) = projected {
+    let base_view: UiView = if let Some(view) = projected {
         view
     } else {
         stats.unhandled_count += 1;
@@ -123,6 +124,8 @@ fn synthesize_entity(
         seq.extend(children.into_iter().map(|child| child.into_any_flex()));
         Arc::new(flex_col(seq))
     };
+
+    let view: UiView = Arc::new(entity_scope(entity, base_view));
 
     stats.node_count += 1;
 

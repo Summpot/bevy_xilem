@@ -206,8 +206,11 @@ Universal placement model:
     initial `(0, 0)` visual flash.
   - `sync_overlay_positions` sets `is_positioned: true` immediately after writing the
     final clamped coordinates.
-- `OverlayBounds { content_rect, trigger_rect }` stores runtime-computed bounds for
-  click-outside and trigger-protection behavior.
+- `MasonryWidgetId(xilem_masonry::WidgetId)` binds ECS entities to their retained Masonry
+  wrapper widget ids (synchronized each frame after rebuild).
+- `OverlayBounds { content_rect, trigger_rect }` remains runtime geometry metadata for
+  placement/render concerns, but global overlay dismissal no longer uses these Bevy-computed
+  rectangles for click arbitration.
 
 Built-in floating widgets:
 
@@ -215,7 +218,14 @@ Built-in floating widgets:
 - `UiComboBox` (anchor control)
 - `UiDropdownMenu` (floating list in overlay layer)
 - `AnchoredTo(Entity)` + `OverlayAnchorRect` for anchor tracking
-- `OverlayState` / `OverlayBounds` for behavior + hit-testing.
+- `OverlayState` for behavior and `MasonryWidgetId` for retained hit-routing identity.
+
+Entity↔Widget bridge model:
+
+- Synthesis wraps each ECS node in an entity-scoped Masonry wrapper widget.
+- `sync_masonry_widget_ids` traverses the retained tree after rebuild and writes
+  `MasonryWidgetId` components back onto ECS entities.
+- No global `Entity -> WidgetId` map/resource is used.
 
 Overlay ownership and lifecycle policy:
 
@@ -244,9 +254,8 @@ Overlay placement policy:
   placement would overflow (notably bottom → top for near-bottom dropdowns).
 - Final clamped coordinates are written to `OverlayComputedPosition`, and overlay projectors
   read these values when rendering transformed surfaces.
-- The same pass writes:
-  - `OverlayBounds.content_rect` for the overlay panel,
-  - `OverlayBounds.trigger_rect` (when anchored) for immediate re-click protection.
+- The same pass may still write `OverlayBounds`/anchor metadata for rendering/placement
+  diagnostics and compatibility paths.
 
 Overlay runtime flow:
 
@@ -261,20 +270,20 @@ Layered dismissal / blocking flow:
 - `handle_global_overlay_clicks` runs in `PreUpdate` before Masonry input injection.
 - On left click:
   1. Read top-most overlay from `OverlayStack`.
-  2. If click is inside `content_rect` or `trigger_rect`, do nothing (allow normal UI handling).
-     The hit test uses window-space cursor coordinates aligned with overlay bounds so inside
-     dropdown clicks are never misclassified as outside dismiss clicks on high-DPI displays.
-  3. If outside, close only that top-most overlay.
-- Closed clicks are consumed through pointer-routing suppression, preventing click-through into
-  lower layers in the same frame.
-- This supports nested overlays (for example combo dropdown inside a modal dialog) with
-  deterministic one-layer-at-a-time dismissal.
+  2. Resolve top overlay `MasonryWidgetId` and optional anchor entity `MasonryWidgetId`.
+  3. Query retained Masonry hit path via `RenderRoot::get_hit_path(physical_pos)`.
+  4. If hit-path contains top overlay widget id: treat as inside overlay → do nothing.
+  5. Else if hit-path contains anchor widget id: close overlay and suppress the click
+     (prevents anchor default action from re-triggering in the same frame).
+  6. Else: close overlay and do **not** suppress click (underlying UI can react immediately).
+- This supports nested overlays with deterministic top-most-only dismissal while avoiding
+  Bevy-side rectangle hit math.
 
 Pointer routing + click-outside:
 
 - `handle_global_overlay_clicks` is the canonical implementation; the
   `native_dismiss_overlays_on_click` name remains as a compatibility alias.
-- Outside clicks are resolved against `OverlayBounds` from the centralized overlay stack.
+- Outside/inside resolution uses Masonry-native hit paths and entity-bound `MasonryWidgetId`.
 - `bubble_ui_pointer_events` remains available for ECS pointer-bubbling paths and walks up
   `ChildOf` parent chains until roots or `StopUiPointerPropagation`.
 
@@ -364,6 +373,7 @@ Built-in components:
 - `UiLabel { text }`
 - `UiButton { label }`
 - `LocalizeText { key }`
+- `MasonryWidgetId(xilem_masonry::WidgetId)`
 
 Node identity for projection context is derived from ECS entities (`entity.to_bits()`),
 so user code no longer needs to allocate/store a dedicated node-id component.
@@ -405,8 +415,8 @@ and registers systems:
 
 - `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> initialize_masonry_runtime_from_primary_window -> bubble_ui_pointer_events -> handle_global_overlay_clicks -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
 - `Update`: `ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> handle_overlay_actions -> sync_overlay_stack_lifecycle -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
-- `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime`, followed by
-  `sync_overlay_positions` after runtime rebuild
+- `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime -> sync_masonry_widget_ids`, followed by
+  `sync_overlay_positions` after widget-id sync
 - `Last`: `paint_masonry_ui` (explicit Masonry/Vello render + present pass)
 
 Transition execution details:
