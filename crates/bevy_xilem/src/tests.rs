@@ -1140,6 +1140,33 @@ fn run_global_overlay_click(app: &mut App, window_entity: Entity, position: Vec2
     input.clear();
 }
 
+fn hit_path_for_position(
+    app: &mut App,
+    window_entity: Entity,
+    position: Vec2,
+) -> Vec<xilem_masonry::WidgetId> {
+    set_window_cursor_position(app, window_entity, position);
+
+    let mut runtime = app
+        .world_mut()
+        .non_send_resource_mut::<crate::MasonryRuntime>();
+    let _ = runtime.render_root.redraw();
+    runtime.get_hit_path((position.x as f64, position.y as f64).into())
+}
+
+fn find_widget_id_by_debug_text(
+    widget: WidgetRef<'_, dyn Widget>,
+    expected_debug_text: &str,
+) -> Option<xilem_masonry::WidgetId> {
+    for child in widget.children() {
+        if let Some(id) = find_widget_id_by_debug_text(child, expected_debug_text) {
+            return Some(id);
+        }
+    }
+
+    (widget.get_debug_text().as_deref() == Some(expected_debug_text)).then_some(widget.id())
+}
+
 fn widget_center_for_widget_id(app: &App, widget_id: xilem_masonry::WidgetId) -> Vec2 {
     let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
     let widget = runtime
@@ -1154,6 +1181,22 @@ fn widget_center_for_widget_id(app: &App, widget_id: xilem_masonry::WidgetId) ->
         (origin.x + size.width * 0.5) as f32,
         (origin.y + size.height * 0.5) as f32,
     )
+}
+
+fn widget_inset_point_for_widget_id(
+    app: &App,
+    widget_id: xilem_masonry::WidgetId,
+    inset: f64,
+) -> Vec2 {
+    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    let widget = runtime
+        .render_root
+        .get_widget(widget_id)
+        .expect("widget id should resolve in render tree");
+
+    let ctx = widget.ctx();
+    let origin = ctx.window_origin();
+    Vec2::new((origin.x + inset) as f32, (origin.y + inset) as f32)
 }
 
 fn widget_center_for_entity(app: &App, entity: Entity) -> Vec2 {
@@ -1220,6 +1263,7 @@ fn dialog_body_click_does_not_dismiss_overlay() {
     let dialog = spawn_in_overlay_root(&mut app.world_mut(), (crate::UiDialog::new("t", "b"),));
 
     app.update();
+    app.update();
 
     let content_rect = app
         .world()
@@ -1233,6 +1277,38 @@ fn dialog_body_click_does_not_dismiss_overlay() {
     );
 
     send_primary_click(&mut app, window_entity, click_position);
+
+    assert!(app.world().get_entity(dialog).is_ok());
+}
+
+#[test]
+fn dialog_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    window.set_cursor_position(Some(Vec2::new(0.0, 0.0)));
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    let dialog = spawn_in_overlay_root(&mut app.world_mut(), (crate::UiDialog::new("t", "b"),));
+
+    app.update();
+
+    let opaque_debug = format!("opaque_hitbox_entity={}", dialog.to_bits());
+    let opaque_widget_id = {
+        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let root = runtime.render_root.get_layer_root(0);
+        find_widget_id_by_debug_text(root, &opaque_debug)
+            .expect("dialog should project an entity-tagged OpaqueHitboxWidget")
+    };
+
+    // Deliberately target a stable inset point inside the opaque panel surface.
+    let click_position = widget_inset_point_for_widget_id(&app, opaque_widget_id, 14.0);
+    let hit_path = hit_path_for_position(&mut app, window_entity, click_position);
+    assert!(hit_path.contains(&opaque_widget_id));
+
+    run_global_overlay_click(&mut app, window_entity, click_position);
 
     assert!(app.world().get_entity(dialog).is_ok());
 }
@@ -1383,6 +1459,7 @@ fn native_dismiss_overlays_on_click_closes_when_clicking_anchor_and_suppresses_p
     app.update();
 
     let dropdown = open_combo_dropdown(&mut app, combo);
+    app.update();
     let anchor_center = widget_center_for_entity(&app, combo);
 
     run_global_overlay_click(&mut app, window_entity, anchor_center);
@@ -1431,6 +1508,49 @@ fn native_dismiss_overlays_on_click_keeps_overlay_open_when_clicking_inside_over
         .resource_mut::<crate::OverlayPointerRoutingState>();
     assert!(!routing.take_suppressed_press(window_entity, MouseButton::Left));
     assert!(!routing.take_suppressed_release(window_entity, MouseButton::Left));
+}
+
+#[test]
+fn dropdown_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let combo = app
+        .world_mut()
+        .spawn((
+            crate::UiComboBox::new(vec![
+                crate::UiComboOption::new("one", "One"),
+                crate::UiComboOption::new("two", "Two"),
+            ]),
+            ChildOf(root),
+        ))
+        .id();
+
+    app.update();
+
+    let dropdown = open_combo_dropdown(&mut app, combo);
+
+    let opaque_debug = format!("opaque_hitbox_entity={}", dropdown.to_bits());
+    let opaque_widget_id = {
+        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let root = runtime.render_root.get_layer_root(0);
+        find_widget_id_by_debug_text(root, &opaque_debug)
+            .expect("dropdown should project an entity-tagged OpaqueHitboxWidget")
+    };
+
+    // Deliberately target menu padding, not option label text.
+    let click_position = widget_inset_point_for_widget_id(&app, opaque_widget_id, 6.0);
+    let hit_path = hit_path_for_position(&mut app, window_entity, click_position);
+    assert!(hit_path.contains(&opaque_widget_id));
+
+    run_global_overlay_click(&mut app, window_entity, click_position);
+
+    assert!(app.world().get_entity(dropdown).is_ok());
 }
 
 #[test]

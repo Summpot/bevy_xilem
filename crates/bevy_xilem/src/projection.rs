@@ -23,7 +23,7 @@ use crate::{
         ResolvedStyle, apply_direct_widget_style, apply_label_style, apply_widget_style,
         resolve_style, resolve_style_for_classes,
     },
-    views::{ecs_button, ecs_button_with_child},
+    views::{ecs_button, ecs_button_with_child, opaque_hitbox_for_entity},
 };
 
 #[cfg(test)]
@@ -804,8 +804,8 @@ fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
     .fixed_width(Length::px(dialog_surface_width))
     .fixed_height(Length::px(dialog_surface_height));
 
-    let dialog_panel =
-        transformed(dialog_surface).translate((computed_position.x, computed_position.y));
+    let dialog_panel = transformed(opaque_hitbox_for_entity(ctx.entity, dialog_surface))
+        .translate((computed_position.x, computed_position.y));
 
     Arc::new(dialog_panel)
 }
@@ -972,8 +972,11 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
     )
     .dims((Length::px(dropdown_width), Length::px(dropdown_height)));
 
-    let dropdown_panel = transformed(apply_widget_style(scrollable_menu, &menu_style))
-        .translate((dropdown_x, dropdown_y));
+    let dropdown_panel = transformed(opaque_hitbox_for_entity(
+        ctx.entity,
+        apply_widget_style(scrollable_menu, &menu_style),
+    ))
+    .translate((dropdown_x, dropdown_y));
 
     Arc::new(dropdown_panel)
 }

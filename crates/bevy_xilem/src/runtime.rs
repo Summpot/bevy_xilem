@@ -157,33 +157,64 @@ fn focus_fallback_widget(render_root: &RenderRoot) -> Option<WidgetId> {
         .map(|root| root.inner().inner_id())
 }
 
-fn parse_entity_scope_widget_id(widget: WidgetRef<'_, dyn Widget>) -> Option<(Entity, WidgetId)> {
+fn parse_entity_debug_binding(debug: &str) -> Option<(u64, bool)> {
+    if let Some(bits) = debug.strip_prefix("opaque_hitbox_entity=") {
+        return Some((bits.parse::<u64>().ok()?, true));
+    }
+
+    if let Some(bits) = debug.strip_prefix("entity_scope=") {
+        return Some((bits.parse::<u64>().ok()?, false));
+    }
+
+    None
+}
+
+#[derive(Debug, Clone, Copy)]
+struct EntityWidgetBinding {
+    entity: Entity,
+    widget_id: WidgetId,
+    is_opaque_hitbox: bool,
+}
+
+fn parse_entity_scope_widget_id(widget: WidgetRef<'_, dyn Widget>) -> Option<EntityWidgetBinding> {
     let debug = widget.get_debug_text()?;
-    let bits = debug.strip_prefix("entity_scope=")?.parse::<u64>().ok()?;
+    let (bits, is_opaque_hitbox) = parse_entity_debug_binding(&debug)?;
     let entity = Entity::try_from_bits(bits)?;
-    Some((entity, widget.id()))
+    Some(EntityWidgetBinding {
+        entity,
+        widget_id: widget.id(),
+        is_opaque_hitbox,
+    })
 }
 
 fn collect_entity_scope_widget_ids(
     widget: WidgetRef<'_, dyn Widget>,
-    out: &mut Vec<(Entity, WidgetId)>,
+    out: &mut Vec<EntityWidgetBinding>,
 ) {
+    if widget.ctx().is_stashed() {
+        return;
+    }
+
     for child in widget.children() {
         collect_entity_scope_widget_ids(child, out);
     }
 
-    let Some((entity, widget_id)) = parse_entity_scope_widget_id(widget) else {
+    let Some(binding) = parse_entity_scope_widget_id(widget) else {
         return;
     };
 
     if let Some(index) = out
         .iter()
-        .position(|(existing_entity, _)| *existing_entity == entity)
+        .position(|existing| existing.entity == binding.entity)
     {
-        out[index] = (entity, widget_id);
-    } else {
-        out.push((entity, widget_id));
+        // Prefer opaque hitbox bindings when both wrappers are present.
+        if binding.is_opaque_hitbox && !out[index].is_opaque_hitbox {
+            out[index] = binding;
+        }
+        return;
     }
+
+    out.push(binding);
 }
 
 /// Synchronize per-entity Masonry widget identity onto ECS components.
@@ -205,15 +236,16 @@ pub fn sync_masonry_widget_ids(world: &mut World) {
     };
 
     for entity in existing {
-        let still_mapped = mappings
-            .iter()
-            .any(|(mapped_entity, _)| *mapped_entity == entity);
+        let still_mapped = mappings.iter().any(|binding| binding.entity == entity);
         if !still_mapped && world.get_entity(entity).is_ok() {
             world.entity_mut(entity).remove::<MasonryWidgetId>();
         }
     }
 
-    for (entity, widget_id) in mappings {
+    for binding in mappings {
+        let entity = binding.entity;
+        let widget_id = binding.widget_id;
+
         if world.get_entity(entity).is_err() {
             continue;
         }
@@ -249,6 +281,50 @@ impl MasonryRuntime {
         physical_pos: masonry::kurbo::Point,
     ) -> Vec<masonry::core::WidgetId> {
         self.render_root.get_hit_path(physical_pos)
+    }
+
+    #[must_use]
+    pub fn find_widget_id_for_entity(
+        &self,
+        entity: Entity,
+        prefer_opaque_hitbox: bool,
+    ) -> Option<WidgetId> {
+        fn walk(
+            widget: WidgetRef<'_, dyn Widget>,
+            entity_bits: u64,
+            prefer_opaque_hitbox: bool,
+        ) -> Option<WidgetId> {
+            if widget.ctx().is_stashed() {
+                return None;
+            }
+
+            for child in widget.children() {
+                if let Some(id) = walk(child, entity_bits, prefer_opaque_hitbox) {
+                    return Some(id);
+                }
+            }
+
+            let Some(debug) = widget.get_debug_text() else {
+                return None;
+            };
+
+            let Some((bits, is_opaque_hitbox)) = parse_entity_debug_binding(&debug) else {
+                return None;
+            };
+
+            if bits != entity_bits {
+                return None;
+            }
+
+            if prefer_opaque_hitbox && !is_opaque_hitbox {
+                return None;
+            }
+
+            Some(widget.id())
+        }
+
+        let root = self.render_root.get_layer_root(0);
+        walk(root, entity.to_bits(), prefer_opaque_hitbox)
     }
 
     /// Returns `(bevy_window_scale_factor, masonry_global_scale_factor)` for diagnostics.

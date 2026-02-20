@@ -1084,10 +1084,20 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         return;
     };
 
-    let Some(top_overlay_widget_id) = world
-        .get::<MasonryWidgetId>(top_overlay_entity)
-        .map(|widget_id| widget_id.0)
-    else {
+    let Some(top_overlay_widget_id) = ({
+        let Some(runtime) = world.get_non_send_resource::<MasonryRuntime>() else {
+            return;
+        };
+
+        runtime
+            .find_widget_id_for_entity(top_overlay_entity, true)
+            .or_else(|| runtime.find_widget_id_for_entity(top_overlay_entity, false))
+            .or_else(|| {
+                world
+                    .get::<MasonryWidgetId>(top_overlay_entity)
+                    .map(|widget_id| widget_id.0)
+            })
+    }) else {
         return;
     };
 
@@ -1096,14 +1106,24 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         .and_then(|state| state.anchor)
         .and_then(|anchor| {
             world
-                .get::<MasonryWidgetId>(anchor)
-                .map(|widget_id| widget_id.0)
+                .get_non_send_resource::<MasonryRuntime>()
+                .and_then(|runtime| {
+                    runtime
+                        .find_widget_id_for_entity(anchor, true)
+                        .or_else(|| runtime.find_widget_id_for_entity(anchor, false))
+                })
+                .or_else(|| {
+                    world
+                        .get::<MasonryWidgetId>(anchor)
+                        .map(|widget_id| widget_id.0)
+                })
         });
 
     let hit_path = {
-        let Some(runtime) = world.get_non_send_resource::<MasonryRuntime>() else {
+        let Some(mut runtime) = world.get_non_send_resource_mut::<MasonryRuntime>() else {
             return;
         };
+        let _ = runtime.render_root.redraw();
         runtime.get_hit_path((cursor_pos.x as f64, cursor_pos.y as f64).into())
     };
 

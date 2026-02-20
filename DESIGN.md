@@ -172,6 +172,14 @@ Hit-testing invariant:
   on the target control widget itself (instead of only through a purely visual outer wrapper).
 - This ensures Masonry's layout and pointer hit-testing use the same structural box model as what
   users see on screen.
+- Floating overlay surfaces (`UiDialog`, `UiDropdownMenu`) are wrapped in a dedicated
+  pointer-opaque wrapper (`OpaqueHitboxWidget` via `opaque_hitbox_for_entity(...)`) at the
+  projected panel root.
+  - The wrapper is paint-transparent but pointer-solid across its full layout bounds, preventing
+    hit-test fallthrough through internal flex/padding gaps.
+  - The wrapper carries entity debug metadata (`opaque_hitbox_entity=<bits>`), and
+    `sync_masonry_widget_ids` prefers the deepest entity-tagged widget, so the overlay entity's
+    `MasonryWidgetId` resolves to this opaque backplane.
 
 ### 5.8) Overlay/Portal layer architecture
 
@@ -282,6 +290,8 @@ Layered dismissal / blocking flow:
   6. Else: close overlay and do **not** suppress click (underlying UI can react immediately).
 - This supports nested overlays with deterministic top-most-only dismissal while avoiding
   Bevy-side rectangle hit math.
+- Because top overlay ids now resolve to opaque panel roots, clicks in panel padding/gap regions
+  are classified as inside-overlay hits and no longer trigger false outside-dismissals.
 
 Pointer routing + click-outside:
 
