@@ -827,12 +827,7 @@ pub fn sync_overlay_positions(world: &mut World) {
         return;
     }
 
-    tracing::debug!(
-        "Running sync_overlay_positions for {} overlays",
-        overlays.iter().count()
-    );
-
-    let (viewport_width, viewport_height, viewport_scale_factor) = {
+    let (viewport_width, viewport_height, _viewport_scale_factor) = {
         let mut primary_window_query = world.query_filtered::<&Window, With<PrimaryWindow>>();
         let primary_window = primary_window_query.iter(world).next();
 
@@ -850,12 +845,7 @@ pub fn sync_overlay_positions(world: &mut World) {
         let window_width = window.width() as f64;
         let window_height = window.height() as f64;
         let window_scale_factor = window.scale_factor() as f64;
-        tracing::debug!(
-            "Dynamic Window Size: {}x{} (scale_factor={})",
-            window_width,
-            window_height,
-            window_scale_factor
-        );
+
         (window_width, window_height, window_scale_factor)
     };
 
@@ -905,7 +895,7 @@ pub fn sync_overlay_positions(world: &mut World) {
                 stale_overlays.push(entity);
                 continue;
             };
-            tracing::debug!(
+            tracing::trace!(
                 "Anchor entity {:?} global bounds: {:?}",
                 anchor,
                 anchor_rect
@@ -924,7 +914,7 @@ pub fn sync_overlay_positions(world: &mut World) {
         };
 
         let mut chosen_placement = preferred_placement;
-        let mut did_flip = false;
+        let mut _did_flip = false;
         let (mut x, mut y) = overlay_origin_for_placement(
             preferred_placement,
             anchor_rect,
@@ -949,7 +939,7 @@ pub fn sync_overlay_positions(world: &mut World) {
                 x = fx;
                 y = fy;
                 chosen_placement = flipped;
-                did_flip = true;
+                _did_flip = true;
             }
         }
 
@@ -960,25 +950,6 @@ pub fn sync_overlay_positions(world: &mut World) {
             height,
             viewport_width.max(1.0),
             viewport_height.max(1.0),
-        );
-
-        tracing::trace!(
-            "Overlay {:?} clamped in logical space with primary window scale_factor={}",
-            entity,
-            viewport_scale_factor
-        );
-
-        let final_rect = OverlayAnchorRect {
-            left: x,
-            top: y,
-            width,
-            height,
-        };
-        tracing::debug!(
-            "Calculated overlay rect for {:?}: {:?}, Auto-flip triggered: {}",
-            entity,
-            final_rect,
-            did_flip
         );
 
         if let Some(mut computed) = world.get_mut::<OverlayComputedPosition>(entity) {
@@ -1001,7 +972,7 @@ pub fn sync_overlay_positions(world: &mut World) {
             });
         }
 
-        tracing::debug!(
+        tracing::trace!(
             "Applied overlay position to projection state for {:?}: x={}, y={}, w={}, h={}",
             entity,
             x,
@@ -1139,6 +1110,27 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
     let clicked_inside_overlay = hit_path.contains(&top_overlay_widget_id);
     if clicked_inside_overlay {
         return;
+    }
+
+    // Diagnostic: log the mismatch so we can see what widget was hit vs. what was expected.
+    {
+        let scale_factor = {
+            let mut q = world.query_filtered::<&Window, With<PrimaryWindow>>();
+            q.iter(world)
+                .next()
+                .map(|w| w.scale_factor() as f64)
+                .unwrap_or(1.0)
+        };
+        tracing::debug!(
+            overlay_entity = ?top_overlay_entity,
+            expected_widget_id = ?top_overlay_widget_id,
+            hit_path = ?hit_path,
+            physical_cursor_x = cursor_pos.x,
+            physical_cursor_y = cursor_pos.y,
+            logical_cursor_x = cursor_pos.x as f64 / scale_factor,
+            logical_cursor_y = cursor_pos.y as f64 / scale_factor,
+            "overlay_hit_test: overlay dismissed as outside-click (widget ID not found in hit path)"
+        );
     }
 
     let clicked_anchor = anchor_widget_id.is_some_and(|widget_id| hit_path.contains(&widget_id));
