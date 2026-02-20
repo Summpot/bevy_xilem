@@ -8,7 +8,7 @@ use bevy_xilem::{
     OverlayConfig, OverlayPlacement, ProjectionCtx, StyleClass, StyleSetter, StyleSheet,
     SyncAssetSource, SyncTextSource, TextStyle, UiComboBox, UiComboBoxChanged, UiComboOption,
     UiDialog, UiEventQueue, UiFlexColumn, UiLabel, UiRoot, UiView, apply_label_style,
-    apply_widget_style,
+    apply_widget_style, apply_direct_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_asset::AssetPlugin,
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -158,7 +158,7 @@ fn project_showcase_edge_button(_: &ShowcaseEdgeButton, ctx: ProjectionCtx<'_>) 
         |i18n| i18n.translate("showcase-edge-button"),
     );
 
-    Arc::new(apply_widget_style(
+    Arc::new(apply_direct_widget_style(
         button(ctx.entity, ShowcaseUiAction::EdgeClicked, label_text),
         &style,
     ))
@@ -174,7 +174,7 @@ fn project_showcase_open_dialog_button(
         |i18n| i18n.translate("showcase-show-modal"),
     );
 
-    Arc::new(apply_widget_style(
+    Arc::new(apply_direct_widget_style(
         button(ctx.entity, ShowcaseUiAction::OpenDialog, label_text),
         &style,
     ))
