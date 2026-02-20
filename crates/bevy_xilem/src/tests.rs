@@ -851,59 +851,41 @@ fn overlay_actions_toggle_and_select_combo_box() {
 }
 
 #[test]
-/// On HiDPI displays (scale_factor > 1) physical cursor coordinates are larger
-/// than logical ones. `handle_global_overlay_clicks` must compare against logical
-/// coordinates to match `OverlayBounds.content_rect` (which is in logical pixels).
-///
-/// This test verifies that a click whose *logical* position is inside the dropdown
-/// content_rect does NOT dismiss the dropdown.
-fn overlay_click_inside_logical_content_rect_not_dismissed_on_hidpi() {
-    let mut world = World::new();
-    world.insert_resource(ButtonInput::<MouseButton>::default());
-    world.insert_resource(crate::OverlayStack::default());
-    world.insert_resource(crate::OverlayPointerRoutingState::default());
+/// On HiDPI displays, `Window::cursor_position` (logical) must still resolve to an
+/// inside-overlay retained hit after conversion to physical coordinates.
+fn overlay_click_inside_computed_overlay_position_not_dismissed_on_hidpi() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
 
     let mut window = Window::default();
     window.resolution.set(400.0, 300.0);
     window.resolution.set_scale_factor_override(Some(2.0));
-    // Logical cursor position (150, 80) — INSIDE content_rect [100,300]×[50,200].
-    // At scale_factor=2 the physical position would be (300, 160), which is OUTSIDE the
-    // same rect, so this test distinguishes the logical vs physical code paths.
-    window.set_cursor_position(Some(Vec2::new(150.0, 80.0)));
-    world.spawn((window, PrimaryWindow));
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
 
-    {
-        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
-        input.press(MouseButton::Left);
-    }
+    let dialog = spawn_in_overlay_root(&mut app.world_mut(), (crate::UiDialog::new("t", "b"),));
 
-    let anchor = world.spawn_empty().id();
-    let dropdown = world
-        .spawn((
-            crate::UiDropdownMenu,
-            crate::AnchoredTo(anchor),
-            crate::OverlayState {
-                is_modal: false,
-                anchor: Some(anchor),
-            },
-            // content_rect in logical pixels: x=[100,300], y=[50,200]
-            // Logical cursor (150, 80) is inside; physical (300, 160) would be outside.
-            crate::OverlayBounds {
-                content_rect: Rect::from_corners(Vec2::new(100.0, 50.0), Vec2::new(300.0, 200.0)),
-                trigger_rect: None,
-            },
-        ))
-        .id();
+    app.update();
+    app.update();
 
-    crate::sync_overlay_stack_lifecycle(&mut world);
-    crate::handle_global_overlay_clicks(&mut world);
+    let opaque_debug = format!("opaque_hitbox_entity={}", dialog.to_bits());
+    let opaque_widget_id = {
+        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let root = runtime.render_root.get_layer_root(0);
+        find_widget_id_by_debug_text(root, &opaque_debug)
+            .expect("dialog should project an entity-tagged OpaqueHitboxWidget")
+    };
 
-    // Logical (150,80) is inside content_rect, so the dropdown must NOT be dismissed.
-    assert!(
-        world.get_entity(dropdown).is_ok(),
-        "dropdown was incorrectly despawned; logical cursor (150,80) is inside \
-         content_rect [100,300]×[50,200] — the handler must use logical coordinates"
-    );
+    let runtime_center = widget_center_for_widget_id(&app, opaque_widget_id);
+    let window_scale_factor = app
+        .world()
+        .get::<Window>(window_entity)
+        .expect("primary window should exist")
+        .scale_factor() as f32;
+    let click_position = runtime_center / window_scale_factor.max(f32::EPSILON);
+
+    run_global_overlay_click(&mut app, window_entity, click_position);
+
+    assert!(app.world().get_entity(dialog).is_ok());
 }
 
 #[test]
@@ -976,7 +958,6 @@ fn ensure_overlay_defaults_assigns_dialog_and_dropdown_configs() {
         .get::<crate::OverlayComputedPosition>(dialog)
         .expect("dialog should receive computed position");
     assert!(!dialog_position.is_positioned);
-    assert!(world.get::<crate::OverlayBounds>(dialog).is_some());
 
     let dropdown_config = world
         .get::<crate::OverlayConfig>(dropdown)
@@ -996,11 +977,10 @@ fn ensure_overlay_defaults_assigns_dialog_and_dropdown_configs() {
         .get::<crate::OverlayComputedPosition>(dropdown)
         .expect("dropdown should receive computed position");
     assert!(!dropdown_position.is_positioned);
-    assert!(world.get::<crate::OverlayBounds>(dropdown).is_some());
 }
 
 #[test]
-fn sync_overlay_positions_uses_dynamic_primary_window_size_and_updates_bounds() {
+fn sync_overlay_positions_uses_dynamic_primary_window_size() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
@@ -1019,15 +999,6 @@ fn sync_overlay_positions_uses_dynamic_primary_window_size_and_updates_bounds() 
         .world()
         .get::<crate::OverlayComputedPosition>(dialog)
         .expect("dialog should have computed position");
-    let initial_bounds = app
-        .world()
-        .get::<crate::OverlayBounds>(dialog)
-        .expect("dialog should have overlay bounds");
-
-    assert!(initial_bounds.content_rect.min.x >= 0.0);
-    assert!(initial_bounds.content_rect.min.y >= 0.0);
-    assert!(initial_bounds.content_rect.max.x <= 1024.0 + f32::EPSILON);
-    assert!(initial_bounds.content_rect.max.y <= 768.0 + f32::EPSILON);
     assert!(initial.is_positioned);
 
     {
@@ -1045,17 +1016,13 @@ fn sync_overlay_positions_uses_dynamic_primary_window_size_and_updates_bounds() 
         .world()
         .get::<crate::OverlayComputedPosition>(dialog)
         .expect("dialog should still have computed position");
-    let resized_bounds = app
-        .world()
-        .get::<crate::OverlayBounds>(dialog)
-        .expect("dialog should still have overlay bounds");
 
     assert!(resized.x > initial.x);
     assert_eq!(initial.width, resized.width);
     assert_eq!(initial.height, resized.height);
     assert!(resized.is_positioned);
-    assert!(resized_bounds.content_rect.max.x <= 1600.0 + f32::EPSILON);
-    assert!(resized_bounds.content_rect.max.y <= 900.0 + f32::EPSILON);
+    assert!(resized.x + resized.width <= 1600.0 + f64::EPSILON);
+    assert!(resized.y + resized.height <= 900.0 + f64::EPSILON);
 }
 
 #[test]
@@ -1200,11 +1167,11 @@ fn widget_inset_point_for_widget_id(
 }
 
 fn widget_center_for_entity(app: &App, entity: Entity) -> Vec2 {
-    let widget_id = app
-        .world()
-        .get::<crate::MasonryWidgetId>(entity)
-        .map(|id| id.0)
-        .expect("entity should have MasonryWidgetId");
+    let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+    let widget_id = runtime
+        .find_widget_id_for_entity_bits(entity.to_bits(), true)
+        .or_else(|| runtime.find_widget_id_for_entity_bits(entity.to_bits(), false))
+        .expect("entity should resolve to a Masonry widget");
     widget_center_for_widget_id(app, widget_id)
 }
 
@@ -1265,15 +1232,14 @@ fn dialog_body_click_does_not_dismiss_overlay() {
     app.update();
     app.update();
 
-    let content_rect = app
+    let computed = app
         .world()
-        .get::<crate::OverlayBounds>(dialog)
-        .expect("dialog should have overlay bounds")
-        .content_rect;
+        .get::<crate::OverlayComputedPosition>(dialog)
+        .expect("dialog should have computed position");
 
     let click_position = Vec2::new(
-        (content_rect.min.x + content_rect.max.x) * 0.5,
-        content_rect.min.y + 24.0,
+        (computed.x + computed.width * 0.5) as f32,
+        (computed.y + 24.0) as f32,
     );
 
     send_primary_click(&mut app, window_entity, click_position);
@@ -1327,11 +1293,17 @@ fn dialog_dismiss_button_targets_dialog_entity() {
 
     app.update();
 
-    let content_rect = app
+    let computed = app
         .world()
-        .get::<crate::OverlayBounds>(dialog)
-        .expect("dialog should have overlay bounds")
-        .content_rect;
+        .get::<crate::OverlayComputedPosition>(dialog)
+        .expect("dialog should have computed position");
+    let content_rect = Rect::from_corners(
+        Vec2::new(computed.x as f32, computed.y as f32),
+        Vec2::new(
+            (computed.x + computed.width) as f32,
+            (computed.y + computed.height) as f32,
+        ),
+    );
 
     let button_rect = {
         let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
@@ -1390,11 +1362,17 @@ fn dialog_projects_single_dismiss_button_without_fullscreen_backdrop_button() {
 
     app.update();
 
-    let content_rect = app
+    let computed = app
         .world()
-        .get::<crate::OverlayBounds>(dialog)
-        .expect("dialog should have overlay bounds")
-        .content_rect;
+        .get::<crate::OverlayComputedPosition>(dialog)
+        .expect("dialog should have computed position");
+    let content_rect = Rect::from_corners(
+        Vec2::new(computed.x as f32, computed.y as f32),
+        Vec2::new(
+            (computed.x + computed.width) as f32,
+            (computed.y + computed.height) as f32,
+        ),
+    );
 
     let button_rects = {
         let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
@@ -1436,7 +1414,7 @@ fn overlay_action_dismiss_dialog_despawns_dialog() {
 }
 
 #[test]
-fn native_dismiss_overlays_on_click_closes_when_clicking_anchor_and_suppresses_pointer() {
+fn handle_global_overlay_clicks_closes_when_clicking_anchor_and_suppresses_pointer() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
@@ -1474,7 +1452,7 @@ fn native_dismiss_overlays_on_click_closes_when_clicking_anchor_and_suppresses_p
 }
 
 #[test]
-fn native_dismiss_overlays_on_click_keeps_overlay_open_when_clicking_inside_overlay() {
+fn handle_global_overlay_clicks_keeps_overlay_open_when_clicking_inside_overlay() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
@@ -1554,7 +1532,7 @@ fn dropdown_padding_click_is_in_overlay_hit_path_and_does_not_dismiss() {
 }
 
 #[test]
-fn native_dismiss_overlays_on_click_closes_overlay_on_outside_click_without_suppression() {
+fn handle_global_overlay_clicks_closes_overlay_on_outside_click_without_suppression() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
@@ -1590,7 +1568,7 @@ fn native_dismiss_overlays_on_click_closes_overlay_on_outside_click_without_supp
 }
 
 #[test]
-fn native_dismiss_overlays_on_click_works_without_primary_window_marker() {
+fn handle_global_overlay_clicks_works_without_primary_window_marker() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
@@ -1674,7 +1652,7 @@ fn toast_in_overlay_root_is_isolated_from_dropdown_overlay_stack_dismissal() {
 }
 
 #[test]
-fn native_dismiss_overlays_on_click_logs_when_window_missing() {
+fn handle_global_overlay_clicks_logs_when_window_missing() {
     init_test_tracing();
 
     let mut world = World::new();
@@ -1692,14 +1670,10 @@ fn native_dismiss_overlays_on_click_logs_when_window_missing() {
                 is_modal: true,
                 anchor: None,
             },
-            crate::OverlayBounds {
-                content_rect: Rect::from_corners(Vec2::new(100.0, 100.0), Vec2::new(300.0, 260.0)),
-                trigger_rect: None,
-            },
         ))
         .id();
 
-    crate::native_dismiss_overlays_on_click(&mut world);
+    crate::handle_global_overlay_clicks(&mut world);
 
     assert!(world.get_entity(dialog).is_ok());
 }

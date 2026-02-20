@@ -38,7 +38,6 @@ use xilem_masonry::{
 };
 
 use crate::{
-    MasonryWidgetId,
     events::{UiEventQueue, install_global_ui_event_queue},
     overlay::OverlayPointerRoutingState,
     projection::{UiAnyView, UiView},
@@ -169,97 +168,6 @@ fn parse_entity_debug_binding(debug: &str) -> Option<(u64, bool)> {
     None
 }
 
-#[derive(Debug, Clone, Copy)]
-struct EntityWidgetBinding {
-    entity: Entity,
-    widget_id: WidgetId,
-    is_opaque_hitbox: bool,
-}
-
-fn parse_entity_scope_widget_id(widget: WidgetRef<'_, dyn Widget>) -> Option<EntityWidgetBinding> {
-    let debug = widget.get_debug_text()?;
-    let (bits, is_opaque_hitbox) = parse_entity_debug_binding(&debug)?;
-    let entity = Entity::try_from_bits(bits)?;
-    Some(EntityWidgetBinding {
-        entity,
-        widget_id: widget.id(),
-        is_opaque_hitbox,
-    })
-}
-
-fn collect_entity_scope_widget_ids(
-    widget: WidgetRef<'_, dyn Widget>,
-    out: &mut Vec<EntityWidgetBinding>,
-) {
-    if widget.ctx().is_stashed() {
-        return;
-    }
-
-    for child in widget.children() {
-        collect_entity_scope_widget_ids(child, out);
-    }
-
-    let Some(binding) = parse_entity_scope_widget_id(widget) else {
-        return;
-    };
-
-    if let Some(index) = out
-        .iter()
-        .position(|existing| existing.entity == binding.entity)
-    {
-        // Prefer opaque hitbox bindings when both wrappers are present.
-        if binding.is_opaque_hitbox && !out[index].is_opaque_hitbox {
-            out[index] = binding;
-        }
-        return;
-    }
-
-    out.push(binding);
-}
-
-/// Synchronize per-entity Masonry widget identity onto ECS components.
-pub fn sync_masonry_widget_ids(world: &mut World) {
-    let mappings = {
-        let Some(runtime) = world.get_non_send_resource::<MasonryRuntime>() else {
-            return;
-        };
-
-        let root = runtime.render_root.get_layer_root(0);
-        let mut mappings = Vec::new();
-        collect_entity_scope_widget_ids(root, &mut mappings);
-        mappings
-    };
-
-    let existing = {
-        let mut query = world.query_filtered::<Entity, With<MasonryWidgetId>>();
-        query.iter(world).collect::<Vec<_>>()
-    };
-
-    for entity in existing {
-        let still_mapped = mappings.iter().any(|binding| binding.entity == entity);
-        if !still_mapped && world.get_entity(entity).is_ok() {
-            world.entity_mut(entity).remove::<MasonryWidgetId>();
-        }
-    }
-
-    for binding in mappings {
-        let entity = binding.entity;
-        let widget_id = binding.widget_id;
-
-        if world.get_entity(entity).is_err() {
-            continue;
-        }
-
-        let needs_update = world
-            .get::<MasonryWidgetId>(entity)
-            .is_none_or(|current| current.0 != widget_id);
-
-        if needs_update {
-            world.entity_mut(entity).insert(MasonryWidgetId(widget_id));
-        }
-    }
-}
-
 impl MasonryRuntime {
     #[must_use]
     pub fn is_attached_to_window(&self, window: Entity) -> bool {
@@ -284,9 +192,9 @@ impl MasonryRuntime {
     }
 
     #[must_use]
-    pub fn find_widget_id_for_entity(
+    pub fn find_widget_id_for_entity_bits(
         &self,
-        entity: Entity,
+        entity_bits: u64,
         prefer_opaque_hitbox: bool,
     ) -> Option<WidgetId> {
         fn walk(
@@ -324,7 +232,7 @@ impl MasonryRuntime {
         }
 
         let root = self.render_root.get_layer_root(0);
-        walk(root, entity.to_bits(), prefer_opaque_hitbox)
+        walk(root, entity_bits, prefer_opaque_hitbox)
     }
 
     /// Returns `(bevy_window_scale_factor, masonry_global_scale_factor)` for diagnostics.

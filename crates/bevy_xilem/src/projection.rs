@@ -13,9 +13,9 @@ use xilem_masonry::{
 
 use crate::{
     ecs::{
-        AnchoredTo, LocalizeText, OverlayAnchorRect, OverlayBounds, OverlayComputedPosition,
-        OverlayStack, OverlayState, UiButton, UiComboBox, UiDialog, UiDropdownMenu, UiFlexColumn,
-        UiFlexRow, UiLabel, UiOverlayRoot,
+        AnchoredTo, LocalizeText, OverlayAnchorRect, OverlayComputedPosition, OverlayStack,
+        OverlayState, UiButton, UiComboBox, UiDialog, UiDropdownMenu, UiFlexColumn, UiFlexRow,
+        UiLabel, UiOverlayRoot,
     },
     i18n::{AppI18n, resolve_localized_text},
     overlay::OverlayUiAction,
@@ -898,14 +898,8 @@ fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) -> UiView {
 
     let anchor_width = ctx
         .world
-        .get::<OverlayBounds>(ctx.entity)
-        .and_then(|bounds| bounds.trigger_rect)
-        .map(|rect| (rect.max.x - rect.min.x) as f64)
-        .or_else(|| {
-            ctx.world
-                .get::<OverlayAnchorRect>(ctx.entity)
-                .map(|anchor_rect| anchor_rect.width)
-        })
+        .get::<OverlayAnchorRect>(ctx.entity)
+        .map(|anchor_rect| anchor_rect.width)
         .unwrap_or(160.0);
 
     let computed_position = ctx

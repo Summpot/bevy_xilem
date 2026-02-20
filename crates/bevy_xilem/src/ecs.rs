@@ -1,5 +1,4 @@
 use bevy_ecs::{entity::Entity, prelude::Component, prelude::Resource};
-use bevy_math::Rect;
 
 /// Marker component for UI tree roots.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -175,19 +174,6 @@ pub struct OverlayState {
     pub is_modal: bool,
     /// Optional trigger/anchor entity that opened this overlay.
     pub anchor: Option<Entity>,
-}
-
-/// Bridge component that binds a Bevy entity to its synthesized Masonry widget id.
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MasonryWidgetId(pub xilem_masonry::WidgetId);
-
-/// Runtime-computed screen bounds for overlay hit-testing.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
-pub struct OverlayBounds {
-    /// The actual overlay surface bounds (dialog panel, dropdown menu panel, etc.).
-    pub content_rect: Rect,
-    /// Trigger bounds used to avoid immediately re-closing on trigger re-click.
-    pub trigger_rect: Option<Rect>,
 }
 
 /// Marker for overlays that should close on outside click.

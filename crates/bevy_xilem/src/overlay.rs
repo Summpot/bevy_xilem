@@ -11,16 +11,16 @@ use bevy_input::{
     ButtonInput,
     mouse::{MouseButton, MouseButtonInput},
 };
-use bevy_math::{Rect, Vec2};
+use bevy_math::Vec2;
 use bevy_window::{PrimaryWindow, Window};
 use masonry::core::{Widget, WidgetRef};
 
 use crate::{
-    AnchoredTo, AppI18n, MasonryWidgetId, OverlayAnchorRect, OverlayBounds,
-    OverlayComputedPosition, OverlayConfig, OverlayPlacement, OverlayStack, OverlayState,
-    StopUiPointerPropagation, UiComboBox, UiComboBoxChanged, UiDialog, UiDropdownMenu,
-    UiEventQueue, UiInteractionEvent, UiOverlayRoot, UiPointerEvent, UiPointerHitEvent, UiRoot,
-    events::UiEvent, runtime::MasonryRuntime, styling::resolve_style_for_classes,
+    AnchoredTo, AppI18n, OverlayAnchorRect, OverlayComputedPosition, OverlayConfig,
+    OverlayPlacement, OverlayStack, OverlayState, StopUiPointerPropagation, UiComboBox,
+    UiComboBoxChanged, UiDialog, UiDropdownMenu, UiEventQueue, UiInteractionEvent, UiOverlayRoot,
+    UiPointerEvent, UiPointerHitEvent, UiRoot, events::UiEvent, runtime::MasonryRuntime,
+    styling::resolve_style_for_classes,
 };
 
 const OVERLAY_ANCHOR_GAP: f64 = 4.0;
@@ -238,7 +238,7 @@ pub fn ensure_overlay_root(world: &mut World) {
     world.spawn((UiRoot, UiOverlayRoot));
 }
 
-/// Ensure built-in overlays have default placement, behavior, and bounds metadata.
+/// Ensure built-in overlays have default placement and behavior metadata.
 pub fn ensure_overlay_defaults(world: &mut World) {
     let dialogs = {
         let mut query = world.query_filtered::<Entity, With<UiDialog>>();
@@ -263,9 +263,6 @@ pub fn ensure_overlay_defaults(world: &mut World) {
             world
                 .entity_mut(dialog)
                 .insert(OverlayComputedPosition::default());
-        }
-        if world.get::<OverlayBounds>(dialog).is_none() {
-            world.entity_mut(dialog).insert(OverlayBounds::default());
         }
     }
 
@@ -302,10 +299,6 @@ pub fn ensure_overlay_defaults(world: &mut World) {
             world
                 .entity_mut(dropdown)
                 .insert(OverlayComputedPosition::default());
-        }
-
-        if world.get::<OverlayBounds>(dropdown).is_none() {
-            world.entity_mut(dropdown).insert(OverlayBounds::default());
         }
 
         if world.get::<OverlayAnchorRect>(dropdown).is_none() {
@@ -400,7 +393,6 @@ pub fn handle_overlay_actions(world: &mut World) {
                             is_modal: false,
                             anchor: Some(event.entity),
                         },
-                        OverlayBounds::default(),
                         OverlayAnchorRect::default(),
                         OverlayConfig {
                             placement,
@@ -981,33 +973,6 @@ pub fn sync_overlay_positions(world: &mut World) {
             height
         );
 
-        let bounds_rect = Rect::from_corners(
-            Vec2::new(x as f32, y as f32),
-            Vec2::new((x + width) as f32, (y + height) as f32),
-        );
-
-        let trigger_rect = anchor_entity
-            .and_then(|anchor| anchor_rects.get(&anchor).copied())
-            .map(|anchor_rect| {
-                Rect::from_corners(
-                    Vec2::new(anchor_rect.left as f32, anchor_rect.top as f32),
-                    Vec2::new(
-                        (anchor_rect.left + anchor_rect.width) as f32,
-                        (anchor_rect.top + anchor_rect.height) as f32,
-                    ),
-                )
-            });
-
-        if let Some(mut bounds) = world.get_mut::<OverlayBounds>(entity) {
-            bounds.content_rect = bounds_rect;
-            bounds.trigger_rect = trigger_rect;
-        } else {
-            world.entity_mut(entity).insert(OverlayBounds {
-                content_rect: bounds_rect,
-                trigger_rect,
-            });
-        }
-
         if let Some(anchor) = anchor_entity
             && let Some(anchor_rect) = anchor_rects.get(&anchor).copied()
         {
@@ -1090,13 +1055,8 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         };
 
         runtime
-            .find_widget_id_for_entity(top_overlay_entity, true)
-            .or_else(|| runtime.find_widget_id_for_entity(top_overlay_entity, false))
-            .or_else(|| {
-                world
-                    .get::<MasonryWidgetId>(top_overlay_entity)
-                    .map(|widget_id| widget_id.0)
-            })
+            .find_widget_id_for_entity_bits(top_overlay_entity.to_bits(), true)
+            .or_else(|| runtime.find_widget_id_for_entity_bits(top_overlay_entity.to_bits(), false))
     }) else {
         return;
     };
@@ -1109,13 +1069,8 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
                 .get_non_send_resource::<MasonryRuntime>()
                 .and_then(|runtime| {
                     runtime
-                        .find_widget_id_for_entity(anchor, true)
-                        .or_else(|| runtime.find_widget_id_for_entity(anchor, false))
-                })
-                .or_else(|| {
-                    world
-                        .get::<MasonryWidgetId>(anchor)
-                        .map(|widget_id| widget_id.0)
+                        .find_widget_id_for_entity_bits(anchor.to_bits(), true)
+                        .or_else(|| runtime.find_widget_id_for_entity_bits(anchor.to_bits(), false))
                 })
         });
 
@@ -1210,13 +1165,8 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
 }
 
 /// Backward-compatible alias kept for existing callsites.
-pub fn native_dismiss_overlays_on_click(world: &mut World) {
-    handle_global_overlay_clicks(world);
-}
-
-/// Backward-compatible alias kept for existing callsites.
 pub fn dismiss_overlays_on_click(world: &mut World) {
-    native_dismiss_overlays_on_click(world);
+    handle_global_overlay_clicks(world);
 }
 
 /// Bubble pointer hits up the ECS parent hierarchy, emitting [`UiPointerEvent`] entries.
