@@ -415,7 +415,9 @@ pub fn handle_overlay_actions(world: &mut World) {
                     combo_box.is_open = true;
                 }
             }
-            OverlayUiAction::SelectComboItem { index } => {
+            action @ OverlayUiAction::SelectComboItem { index } => {
+                tracing::info!("ComboBox Item Clicked: {:?}", action);
+
                 let Some(anchor) = world
                     .get::<AnchoredTo>(event.entity)
                     .map(|anchored| anchored.0)
@@ -1066,16 +1068,24 @@ pub fn sync_dropdown_positions(world: &mut World) {
 }
 
 fn primary_window_cursor(world: &mut World) -> Option<(Entity, Vec2)> {
+    fn resolve_cursor(window: &Window) -> Option<Vec2> {
+        window.physical_cursor_position().or_else(|| {
+            window
+                .cursor_position()
+                .map(|logical| logical * window.scale_factor())
+        })
+    }
+
     let mut primary_window_query = world.query_filtered::<(Entity, &Window), With<PrimaryWindow>>();
     if let Some((window_entity, window)) = primary_window_query.iter(world).next()
-        && let Some(cursor) = window.cursor_position()
+        && let Some(cursor) = resolve_cursor(window)
     {
         return Some((window_entity, cursor));
     }
 
     let mut window_query = world.query::<(Entity, &Window)>();
     let (window_entity, window) = window_query.iter(world).next()?;
-    let cursor = window.cursor_position()?;
+    let cursor = resolve_cursor(window)?;
     Some((window_entity, cursor))
 }
 
@@ -1107,7 +1117,7 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         return;
     }
 
-    let Some((window_entity, cursor)) = primary_window_cursor(world) else {
+    let Some((window_entity, cursor_pos)) = primary_window_cursor(world) else {
         return;
     };
 
@@ -1115,10 +1125,16 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         let Some(bounds) = world.get::<OverlayBounds>(top_overlay_entity) else {
             return;
         };
-        let clicked_content = bounds.content_rect.contains(cursor);
+        tracing::info!(
+            "Overlay click detected at {:?}, content_rect: {:?}",
+            cursor_pos,
+            bounds.content_rect
+        );
+
+        let clicked_content = bounds.content_rect.contains(cursor_pos);
         let clicked_trigger = bounds
             .trigger_rect
-            .is_some_and(|rect| rect.contains(cursor));
+            .is_some_and(|rect| rect.contains(cursor_pos));
         (clicked_content, clicked_trigger)
     };
 

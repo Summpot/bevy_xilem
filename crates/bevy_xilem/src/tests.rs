@@ -1234,6 +1234,48 @@ fn native_dismiss_overlays_on_click_closes_only_outside_bounds_and_anchor() {
 }
 
 #[test]
+fn native_dismiss_overlays_on_click_uses_physical_cursor_for_inside_hit_checks() {
+    let mut world = World::new();
+    world.insert_resource(ButtonInput::<MouseButton>::default());
+    world.insert_resource(crate::OverlayStack::default());
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    window.resolution.set_scale_factor_override(Some(2.0));
+    // Logical cursor (120, 60) maps to physical cursor (240, 120).
+    window.set_cursor_position(Some(Vec2::new(120.0, 60.0)));
+    world.spawn((window, PrimaryWindow));
+
+    {
+        let mut input = world.resource_mut::<ButtonInput<MouseButton>>();
+        input.press(MouseButton::Left);
+    }
+
+    let anchor = world.spawn_empty().id();
+    let dropdown = world
+        .spawn((
+            crate::UiDropdownMenu,
+            crate::AnchoredTo(anchor),
+            crate::OverlayState {
+                is_modal: false,
+                anchor: Some(anchor),
+            },
+            crate::OverlayBounds {
+                content_rect: Rect::from_corners(Vec2::new(200.0, 100.0), Vec2::new(300.0, 200.0)),
+                trigger_rect: Some(Rect::from_corners(
+                    Vec2::new(200.0, 100.0),
+                    Vec2::new(300.0, 200.0),
+                )),
+            },
+        ))
+        .id();
+
+    crate::native_dismiss_overlays_on_click(&mut world);
+
+    assert!(world.get_entity(dropdown).is_ok());
+}
+
+#[test]
 fn native_dismiss_overlays_on_click_closes_nested_topmost_overlay_first() {
     let mut world = World::new();
     world.insert_resource(ButtonInput::<MouseButton>::default());

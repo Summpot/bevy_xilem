@@ -581,6 +581,8 @@ fn drain_i18n_events(world: &mut World) {
         .drain_actions::<UiComboBoxChanged>();
 
     for event in combo_events {
+        tracing::info!("ComboBox Item Clicked: {:?}", event.action);
+
         if event.action.combo == runtime.locale_combo {
             let next_locale = parse_locale(event.action.value.as_str());
             world

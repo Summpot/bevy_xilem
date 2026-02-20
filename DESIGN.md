@@ -63,11 +63,13 @@ which are injected into `MasonryRuntime.render_root`.
 
 Pointer bridge invariants:
 
-- `Window::cursor_position()` from the current `PrimaryWindow` is the single source of truth
-  for pointer coordinates (logical, top-left origin), including move/click/scroll paths.
+- `Window::physical_cursor_position()` from the current `PrimaryWindow` is the source of truth
+  for injected Masonry pointer coordinates.
+- When physical cursor data is unavailable, logical cursor coordinates can be converted using
+  the current window scale factor for compatibility paths.
 - `CursorMoved.position` payload is not trusted for hit-test coordinates.
-- `MouseButtonInput` / `MouseWheel` are injected only when `Window::cursor_position()` is `Some`;
-  when `None` (cursor outside), pointer interaction injection is skipped.
+- `MouseButtonInput` / `MouseWheel` are injected only when physical cursor data is available;
+  when unavailable (cursor outside), pointer interaction injection is skipped.
 - Window resize injection uses logical `Window::width()` / `Window::height()` from the active
   primary window, ensuring Masonry receives DPI-correct dimensions.
 - Click-path ordering is enforced by injecting `PointerMove` before each
@@ -260,6 +262,8 @@ Layered dismissal / blocking flow:
 - On left click:
   1. Read top-most overlay from `OverlayStack`.
   2. If click is inside `content_rect` or `trigger_rect`, do nothing (allow normal UI handling).
+     The hit test uses window-space cursor coordinates aligned with overlay bounds so inside
+     dropdown clicks are never misclassified as outside dismiss clicks on high-DPI displays.
   3. If outside, close only that top-most overlay.
 - Closed clicks are consumed through pointer-routing suppression, preventing click-through into
   lower layers in the same frame.
