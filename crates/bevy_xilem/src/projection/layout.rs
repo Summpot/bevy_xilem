@@ -1,12 +1,12 @@
-use std::sync::Arc;
-use masonry::layout::Length;
-use xilem_masonry::view::{flex_col, flex_row, FlexExt as _};
+use super::core::{ProjectionCtx, UiView};
 use crate::{
     ecs::{UiFlexColumn, UiFlexRow},
     styling::{apply_widget_style, resolve_style},
 };
+use masonry::layout::Length;
+use std::sync::Arc;
 use xilem_masonry::style::Style;
-use super::core::{ProjectionCtx, UiView};
+use xilem_masonry::view::{FlexExt as _, flex_col, flex_row};
 
 pub(crate) fn project_flex_column(_: &UiFlexColumn, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);

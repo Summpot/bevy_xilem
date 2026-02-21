@@ -1,9 +1,5 @@
+use crate::{ecs::LocalizeText, i18n::AppI18n, styling::ResolvedStyle};
 use bevy_ecs::prelude::*;
-use crate::{
-    ecs::LocalizeText,
-    i18n::AppI18n,
-    styling::ResolvedStyle,
-};
 
 pub(crate) fn translate_text(world: &World, key: Option<&str>, fallback: &str) -> String {
     match key {

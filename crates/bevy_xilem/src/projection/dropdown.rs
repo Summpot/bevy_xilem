@@ -1,20 +1,26 @@
-use std::sync::Arc;
-use masonry::layout::{Dim, Length};
-use xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
-use xilem_masonry::view::{CrossAxisAlignment, flex_col, label, portal, transformed, FlexExt as _};
 use crate::{
     ecs::{AnchoredTo, OverlayAnchorRect, OverlayComputedPosition, UiComboBox, UiDropdownMenu},
     overlay::OverlayUiAction,
-    styling::{apply_direct_widget_style, apply_label_style, apply_widget_style, resolve_style, resolve_style_for_classes},
+    styling::{
+        apply_direct_widget_style, apply_label_style, apply_widget_style, resolve_style,
+        resolve_style_for_classes,
+    },
     views::{ecs_button, ecs_button_with_child, opaque_hitbox_for_entity},
 };
+use masonry::layout::{Dim, Length};
+use std::sync::Arc;
+use xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
+use xilem_masonry::view::{CrossAxisAlignment, FlexExt as _, flex_col, label, portal, transformed};
 
 #[cfg(test)]
 use crate::UiDropdownPlacement;
 
 use super::{
     core::{ProjectionCtx, UiView},
-    utils::{app_i18n_font_stack, estimate_text_width_px, hide_style_without_collapsing_layout, translate_text},
+    utils::{
+        app_i18n_font_stack, estimate_text_width_px, hide_style_without_collapsing_layout,
+        translate_text,
+    },
 };
 
 pub(crate) const DROPDOWN_MAX_VIEWPORT_HEIGHT: f64 = 300.0;

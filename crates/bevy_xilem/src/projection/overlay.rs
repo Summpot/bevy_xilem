@@ -1,12 +1,12 @@
-use std::sync::Arc;
-use masonry::layout::{Dim, UnitPoint};
-use xilem_masonry::view::{label, zstack};
+use super::core::{ProjectionCtx, UiView};
 use crate::{
     ecs::{OverlayStack, OverlayState, UiOverlayRoot},
     styling::{apply_widget_style, resolve_style_for_classes},
 };
+use masonry::layout::{Dim, UnitPoint};
+use std::sync::Arc;
 use xilem_masonry::style::Style;
-use super::core::{ProjectionCtx, UiView};
+use xilem_masonry::view::{label, zstack};
 
 pub(crate) fn project_overlay_root(_: &UiOverlayRoot, ctx: ProjectionCtx<'_>) -> UiView {
     let has_modal_overlay = ctx

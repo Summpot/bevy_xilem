@@ -76,3 +76,7 @@ path = "../../examples/cjk_text_example.rs"
 [[example]]
 name = "i18n_showcase"
 path = "../../examples/i18n_showcase.rs"
+
+[[example]]
+name = "widget_showcase"
+path = "../../examples/widget_showcase.rs"

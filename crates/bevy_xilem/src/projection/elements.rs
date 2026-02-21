@@ -1,16 +1,16 @@
-use std::sync::Arc;
-use tracing::trace;
-use xilem_masonry::view::label;
+use super::{
+    core::{BuiltinUiAction, ProjectionCtx, UiView},
+    utils::localized_font_stack,
+};
 use crate::{
     ecs::{LocalizeText, UiButton, UiLabel},
     i18n::resolve_localized_text,
     styling::{apply_direct_widget_style, apply_label_style, resolve_style},
     views::ecs_button_with_child,
 };
-use super::{
-    core::{BuiltinUiAction, ProjectionCtx, UiView},
-    utils::localized_font_stack,
-};
+use std::sync::Arc;
+use tracing::trace;
+use xilem_masonry::view::label;
 
 pub(crate) fn project_label(label_component: &UiLabel, ctx: ProjectionCtx<'_>) -> UiView {
     let mut style = resolve_style(ctx.world, ctx.entity);
