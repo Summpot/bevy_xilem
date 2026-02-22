@@ -234,6 +234,14 @@ pub struct StyleSheet {
     pub rules: Vec<StyleRule>,
 }
 
+/// Baseline stylesheet tier populated from built-in control defaults.
+#[derive(Resource, Debug, Clone, Default)]
+pub struct BaseStyleSheet(pub StyleSheet);
+
+/// Active user stylesheet tier loaded from external `.ron` assets.
+#[derive(Resource, Debug, Clone, Default)]
+pub struct ActiveStyleSheet(pub StyleSheet);
+
 /// Handle/path of the active stylesheet asset used for runtime style hot-reload.
 #[derive(Resource, Debug, Clone, Default)]
 pub struct ActiveStyleSheetAsset {
@@ -327,6 +335,24 @@ impl StyleSheet {
     }
 }
 
+fn upsert_rule_by_selector(sheet: &mut StyleSheet, incoming: StyleRule) {
+    if let Some(existing) = sheet
+        .rules
+        .iter_mut()
+        .find(|rule| rule.selector == incoming.selector)
+    {
+        *existing = incoming;
+    } else {
+        sheet.rules.push(incoming);
+    }
+}
+
+fn upsert_rules_by_selector(sheet: &mut StyleSheet, incoming: Vec<StyleRule>) {
+    for rule in incoming {
+        upsert_rule_by_selector(sheet, rule);
+    }
+}
+
 /// Default stylesheet asset path loaded by [`crate::BevyXilemPlugin`].
 pub const DEFAULT_STYLE_SHEET_ASSET_PATH: &str = "themes/default_theme.ron";
 
@@ -383,6 +409,42 @@ pub fn set_active_stylesheet_asset_path(world: &mut World, asset_path: impl Into
     let mut active = world.resource_mut::<ActiveStyleSheetAsset>();
     active.path = Some(asset_path);
     active.handle = None;
+}
+
+/// Parse stylesheet RON text into a runtime [`StyleSheet`].
+pub fn parse_stylesheet_ron(ron_text: &str) -> io::Result<StyleSheet> {
+    stylesheet_from_ron_bytes(ron_text.as_bytes())
+}
+
+/// Merge a control-local default stylesheet RON into the base + runtime tiers.
+///
+/// Runtime insertion preserves active stylesheet precedence by skipping selectors
+/// currently owned by [`ActiveStyleSheetSelectors`].
+pub fn merge_base_stylesheet_ron(world: &mut World, ron_text: &str) -> io::Result<()> {
+    let parsed = parse_stylesheet_ron(ron_text)?;
+
+    world.init_resource::<BaseStyleSheet>();
+    world.init_resource::<StyleSheet>();
+
+    let incoming_rules = parsed.rules;
+    upsert_rules_by_selector(
+        &mut world.resource_mut::<BaseStyleSheet>().0,
+        incoming_rules.clone(),
+    );
+
+    let active_selectors = world
+        .get_resource::<ActiveStyleSheetSelectors>()
+        .map(|selectors| selectors.0.clone())
+        .unwrap_or_default();
+
+    let filtered = incoming_rules
+        .into_iter()
+        .filter(|rule| !active_selectors.contains(&rule.selector))
+        .collect::<Vec<_>>();
+
+    upsert_rules_by_selector(&mut world.resource_mut::<StyleSheet>(), filtered);
+
+    Ok(())
 }
 
 /// Ensure the active stylesheet asset handle is loaded from the configured path.
@@ -461,7 +523,9 @@ pub fn sync_stylesheet_asset_events(world: &mut World) {
         return;
     };
 
+    world.init_resource::<ActiveStyleSheet>();
     world.init_resource::<ActiveStyleSheetSelectors>();
+    world.resource_mut::<ActiveStyleSheet>().0 = loaded_stylesheet.clone();
 
     let incoming_selectors = loaded_stylesheet
         .rules
@@ -1687,7 +1751,7 @@ fn stylesheet_from_ron_bytes(bytes: &[u8]) -> io::Result<StyleSheet> {
 
 #[cfg(test)]
 pub(crate) fn parse_stylesheet_ron_for_tests(ron_text: &str) -> io::Result<StyleSheet> {
-    stylesheet_from_ron_bytes(ron_text.as_bytes())
+    parse_stylesheet_ron(ron_text)
 }
 
 /// Asset loader for stylesheet `.ron` files.

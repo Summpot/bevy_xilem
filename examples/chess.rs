@@ -854,6 +854,9 @@ fn build_bevy_chess_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
+        .register_ui_control::<bevy_xilem::UiButton>()
+        .register_ui_control::<bevy_xilem::UiDialog>()
+        .register_ui_control::<bevy_xilem::UiComboBox>()
         .load_style_sheet("themes/default_theme.ron")
         .insert_resource(ChessGameResource::new(game))
         .insert_resource(ui)

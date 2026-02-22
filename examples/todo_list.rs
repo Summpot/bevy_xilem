@@ -605,6 +605,9 @@ fn build_bevy_todo_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
+        .register_ui_control::<bevy_xilem::UiButton>()
+        .register_ui_control::<bevy_xilem::UiCheckbox>()
+        .register_ui_control::<bevy_xilem::UiTextInput>()
         .load_style_sheet("themes/default_theme.ron")
         .insert_resource(ActiveFilter(FilterType::All))
         .insert_resource(DraftTodo("My Next Task".to_string()))

@@ -1192,6 +1192,13 @@ fn build_theme_gallery_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
+        .register_ui_control::<bevy_xilem::UiButton>()
+        .register_ui_control::<bevy_xilem::UiCheckbox>()
+        .register_ui_control::<bevy_xilem::UiSlider>()
+        .register_ui_control::<bevy_xilem::UiSwitch>()
+        .register_ui_control::<bevy_xilem::UiTextInput>()
+        .register_ui_control::<bevy_xilem::UiDialog>()
+        .register_ui_control::<bevy_xilem::UiComboBox>()
         .load_style_sheet("themes/default_theme.ron")
         .insert_resource(GalleryState::default())
         .register_projector::<GalleryRoot>(project_gallery_root)

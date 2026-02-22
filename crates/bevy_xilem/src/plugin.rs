@@ -9,6 +9,7 @@ use bevy_window::{CursorLeft, CursorMoved, WindowResized, WindowScaleFactorChang
 
 use crate::{
     OverlayStack,
+    controls::register_builtin_ui_controls,
     events::UiEventQueue,
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
     i18n::AppI18n,
@@ -17,20 +18,19 @@ use crate::{
         ensure_overlay_root, handle_global_overlay_clicks, handle_overlay_actions,
         reparent_overlay_entities, sync_overlay_positions, sync_overlay_stack_lifecycle,
     },
-    projection::{UiProjectorRegistry, register_builtin_projectors},
+    projection::{UiProjectorRegistry, register_core_projectors},
     runtime::{
         MasonryRuntime, initialize_masonry_runtime_from_primary_window,
         inject_bevy_input_into_masonry, paint_masonry_ui, rebuild_masonry_runtime,
     },
     styling::{
-        ActiveStyleSheetAsset, ActiveStyleSheetSelectors, DEFAULT_STYLE_SHEET_ASSET_PATH,
-        StyleAssetEventCursor, StyleSheet, StyleSheetRonLoader, animate_style_transitions,
-        ensure_active_stylesheet_asset_handle, mark_style_dirty,
+        ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors, BaseStyleSheet,
+        DEFAULT_STYLE_SHEET_ASSET_PATH, StyleAssetEventCursor, StyleSheet, StyleSheetRonLoader,
+        animate_style_transitions, ensure_active_stylesheet_asset_handle, mark_style_dirty,
         register_builtin_style_type_aliases, set_active_stylesheet_asset_path, sync_style_targets,
         sync_stylesheet_asset_events, sync_ui_interaction_markers,
     },
     synthesize::{SynthesizedUiViews, UiSynthesisStats, synthesize_ui},
-    templates::expand_builtin_control_templates,
     widget_actions::{handle_tooltip_hovers, handle_widget_actions, tick_toasts},
 };
 
@@ -55,6 +55,8 @@ impl Plugin for BevyXilemPlugin {
             .init_resource::<UiSynthesisStats>()
             .init_resource::<UiEventQueue>()
             .init_resource::<StyleSheet>()
+            .init_resource::<BaseStyleSheet>()
+            .init_resource::<ActiveStyleSheet>()
             .init_resource::<ActiveStyleSheetAsset>()
             .init_resource::<ActiveStyleSheetSelectors>()
             .init_resource::<StyleAssetEventCursor>()
@@ -86,7 +88,6 @@ impl Plugin for BevyXilemPlugin {
             .add_systems(
                 Update,
                 (
-                    expand_builtin_control_templates,
                     ensure_overlay_root,
                     reparent_overlay_entities,
                     ensure_overlay_defaults,
@@ -121,7 +122,11 @@ impl Plugin for BevyXilemPlugin {
         set_active_stylesheet_asset_path(app.world_mut(), DEFAULT_STYLE_SHEET_ASSET_PATH);
         register_builtin_style_type_aliases(app.world_mut());
 
-        let mut registry = app.world_mut().resource_mut::<UiProjectorRegistry>();
-        register_builtin_projectors(&mut registry);
+        {
+            let mut registry = app.world_mut().resource_mut::<UiProjectorRegistry>();
+            register_core_projectors(&mut registry);
+        }
+
+        register_builtin_ui_controls(app);
     }
 }

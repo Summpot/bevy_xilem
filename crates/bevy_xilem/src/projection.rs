@@ -16,18 +16,28 @@ use crate::ecs::{
     UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput, UiToast, UiTooltip, UiTreeNode,
 };
 
-/// Register built-in projectors for built-in ECS demo components.
-pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
+/// Register non-control foundational projectors.
+pub fn register_core_projectors(registry: &mut UiProjectorRegistry) {
     registry
         .register_component::<UiFlexColumn>(layout::project_flex_column)
         .register_component::<UiFlexRow>(layout::project_flex_row)
         .register_component::<UiLabel>(elements::project_label)
+        .register_component::<UiOverlayRoot>(overlay::project_overlay_root);
+}
+
+/// Register built-in projectors for built-in ECS demo components.
+///
+/// Compatibility helper: controls are now expected to be registered through
+/// `AppBevyXilemExt::register_ui_control::<T>()`.
+pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
+    register_core_projectors(registry);
+
+    registry
         .register_component::<UiButton>(elements::project_button)
         .register_component::<UiCheckbox>(elements::project_checkbox)
         .register_component::<UiSlider>(elements::project_slider)
         .register_component::<UiSwitch>(elements::project_switch)
         .register_component::<UiTextInput>(elements::project_text_input)
-        .register_component::<UiOverlayRoot>(overlay::project_overlay_root)
         .register_component::<UiDialog>(dialog::project_dialog)
         .register_component::<UiComboBox>(dropdown::project_combo_box)
         .register_component::<UiDropdownMenu>(dropdown::project_dropdown_menu)

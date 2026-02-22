@@ -1837,6 +1837,7 @@ fn build_2048_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
+        .register_ui_control::<bevy_xilem::UiButton>()
         .load_style_sheet("themes/default_theme.ron")
         .insert_resource(ButtonInput::<KeyCode>::default())
         .insert_resource(GameViewport::default())

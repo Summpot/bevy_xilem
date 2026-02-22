@@ -148,6 +148,7 @@ fn build_cjk_app() -> App {
         TextPlugin::default(),
         BevyXilemPlugin,
     ))
+    .register_ui_control::<bevy_xilem::UiButton>()
     .load_style_sheet("themes/default_theme.ron")
     .init_resource::<DemoFontHandles>()
     .add_systems(

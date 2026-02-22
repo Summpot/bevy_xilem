@@ -46,6 +46,7 @@
 #![forbid(unsafe_code)]
 
 pub mod app_ext;
+pub mod controls;
 pub mod ecs;
 pub mod events;
 pub mod fonts;
@@ -76,6 +77,7 @@ pub use xilem;
 pub use xilem_masonry;
 
 pub use app_ext::*;
+pub use controls::*;
 pub use ecs::*;
 pub use events::*;
 pub use fonts::*;
@@ -106,23 +108,24 @@ pub mod prelude {
         StyleSheet, StyleTransition, SyncAssetSource, SyncTextSource, SynthesizedUiViews,
         TargetColorStyle, TextStyle, ToastKind, TypedUiEvent, UiAnyView, UiButton, UiCheckbox,
         UiCheckboxChanged, UiColorPicker, UiColorPickerChanged, UiColorPickerPanel, UiComboBox,
-        UiComboBoxChanged, UiComboOption, UiDatePicker, UiDatePickerChanged, UiDatePickerPanel,
-        UiDialog, UiDropdownMenu, UiDropdownPlacement, UiEvent, UiEventQueue, UiFlexColumn,
-        UiFlexRow, UiGroupBox, UiInteractionEvent, UiLabel, UiMenuBar, UiMenuBarItem, UiMenuItem,
-        UiMenuItemPanel, UiMenuItemSelected, UiOverlayRoot, UiPointerEvent, UiPointerHitEvent,
-        UiPointerPhase, UiProjector, UiProjectorRegistry, UiRadioGroup, UiRadioGroupChanged,
-        UiRoot, UiSlider, UiSliderChanged, UiSpinner, UiSplitPane, UiSwitch, UiSwitchChanged,
-        UiSynthesisStats, UiTabBar, UiTabChanged, UiTable, UiTextInput, UiTextInputChanged,
-        UiToast, UiTooltip, UiTreeNode, UiTreeNodeToggled, UiView, WidgetUiAction, XilemFontBridge,
-        bubble_ui_pointer_events, button, button_with_child, checkbox, collect_bevy_font_assets,
-        dismiss_overlays_on_click, ecs_button, ecs_button_with_child, ecs_checkbox, ecs_slider,
-        ecs_switch, ecs_text_button, ecs_text_input, emit_ui_action, ensure_overlay_root,
-        ensure_overlay_root_entity, ensure_template_part, expand_builtin_control_templates,
-        find_template_part, gather_ui_roots, handle_global_overlay_clicks, handle_overlay_actions,
+        UiComboBoxChanged, UiComboOption, UiControlTemplate, UiDatePicker, UiDatePickerChanged,
+        UiDatePickerPanel, UiDialog, UiDropdownMenu, UiDropdownPlacement, UiEvent, UiEventQueue,
+        UiFlexColumn, UiFlexRow, UiGroupBox, UiInteractionEvent, UiLabel, UiMenuBar, UiMenuBarItem,
+        UiMenuItem, UiMenuItemPanel, UiMenuItemSelected, UiOverlayRoot, UiPointerEvent,
+        UiPointerHitEvent, UiPointerPhase, UiProjector, UiProjectorRegistry, UiRadioGroup,
+        UiRadioGroupChanged, UiRoot, UiSlider, UiSliderChanged, UiSpinner, UiSplitPane, UiSwitch,
+        UiSwitchChanged, UiSynthesisStats, UiTabBar, UiTabChanged, UiTable, UiTextInput,
+        UiTextInputChanged, UiToast, UiTooltip, UiTreeNode, UiTreeNodeToggled, UiView,
+        WidgetUiAction, XilemFontBridge, bubble_ui_pointer_events, button, button_with_child,
+        checkbox, collect_bevy_font_assets, dismiss_overlays_on_click, ecs_button,
+        ecs_button_with_child, ecs_checkbox, ecs_slider, ecs_switch, ecs_text_button,
+        ecs_text_input, emit_ui_action, ensure_overlay_root, ensure_overlay_root_entity,
+        ensure_template_part, expand_builtin_control_templates, find_template_part,
+        gather_ui_roots, handle_global_overlay_clicks, handle_overlay_actions,
         handle_tooltip_hovers, handle_widget_actions, inject_bevy_input_into_masonry,
         mark_style_dirty, rebuild_masonry_runtime, register_builtin_projectors,
-        register_builtin_style_type_aliases, resolve_localized_text, resolve_style,
-        resolve_style_for_classes, resolve_style_for_entity_classes, run_app,
+        register_builtin_style_type_aliases, register_builtin_ui_controls, resolve_localized_text,
+        resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes, run_app,
         run_app_with_window_options, slider, spawn_in_overlay_root, switch,
         sync_dropdown_positions, sync_fonts_to_xilem, sync_overlay_positions,
         sync_overlay_stack_lifecycle, synthesize_roots, synthesize_roots_with_stats, synthesize_ui,

@@ -4,14 +4,11 @@ use super::{
 };
 use crate::{
     ecs::{
-        LocalizeText, PartCheckboxIndicator, PartCheckboxLabel, PartComboBoxChevron,
-        PartComboBoxDisplay, PartDialogBody, PartDialogDismiss, PartDialogTitle,
-        PartSliderDecrease, PartSliderIncrease, PartSliderThumb, PartSliderTrack, PartSwitchThumb,
-        PartSwitchTrack, UiButton, UiCheckbox, UiComboBox, UiDialog, UiLabel, UiSlider, UiSwitch,
-        UiTextInput,
+        LocalizeText, PartCheckboxIndicator, PartCheckboxLabel, PartSliderDecrease,
+        PartSliderIncrease, PartSliderThumb, PartSliderTrack, PartSwitchThumb, PartSwitchTrack,
+        UiButton, UiCheckbox, UiLabel, UiSlider, UiSwitch, UiTextInput,
     },
     i18n::resolve_localized_text,
-    overlay::OverlayUiAction,
     styling::{
         apply_direct_widget_style, apply_label_style, apply_text_input_style, apply_widget_style,
         resolve_style,
@@ -191,60 +188,6 @@ pub(crate) fn project_text_input(input: &UiTextInput, ctx: ProjectionCtx<'_>) ->
                 }
             }),
             &style,
-        ),
-        &style,
-    ))
-}
-
-pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let parts = child_entity_views(&ctx);
-
-    let title = first_part_view::<PartDialogTitle>(&ctx, &parts)
-        .unwrap_or_else(|| Arc::new(label(dialog.title.clone())));
-    let body = first_part_view::<PartDialogBody>(&ctx, &parts)
-        .unwrap_or_else(|| Arc::new(label(dialog.body.clone())));
-    let dismiss_label = first_part_view::<PartDialogDismiss>(&ctx, &parts)
-        .unwrap_or_else(|| Arc::new(label(dialog.dismiss_label.clone())));
-
-    let dismiss = ecs_button_with_child(ctx.entity, OverlayUiAction::DismissDialog, dismiss_label);
-
-    let mut content = vec![title.into_any_flex(), body.into_any_flex()];
-    content.extend(parts.into_iter().filter_map(|(entity, view)| {
-        (ctx.world.get::<PartDialogTitle>(entity).is_none()
-            && ctx.world.get::<PartDialogBody>(entity).is_none()
-            && ctx.world.get::<PartDialogDismiss>(entity).is_none())
-        .then_some(view.into_any_flex())
-    }));
-    content.push(dismiss.into_any_flex());
-
-    Arc::new(apply_widget_style(
-        xilem_masonry::view::flex_col(content).gap(Length::px(style.layout.gap.max(10.0))),
-        &style,
-    ))
-}
-
-pub(crate) fn project_combo_box(combo_box: &UiComboBox, ctx: ProjectionCtx<'_>) -> UiView {
-    let style = resolve_style(ctx.world, ctx.entity);
-    let parts = child_entity_views(&ctx);
-
-    let display = first_part_view::<PartComboBoxDisplay>(&ctx, &parts).unwrap_or_else(|| {
-        let selected = combo_box
-            .clamped_selected()
-            .and_then(|index| combo_box.options.get(index))
-            .map(|opt| opt.label.clone())
-            .unwrap_or_else(|| combo_box.placeholder.clone());
-        Arc::new(label(selected))
-    });
-    let chevron = first_part_view::<PartComboBoxChevron>(&ctx, &parts)
-        .unwrap_or_else(|| Arc::new(label(if combo_box.is_open { "▴" } else { "▾" })));
-
-    Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(
-            ctx.entity,
-            OverlayUiAction::ToggleCombo,
-            flex_row(vec![display.into_any_flex(), chevron.into_any_flex()])
-                .gap(Length::px(style.layout.gap.max(8.0))),
         ),
         &style,
     ))

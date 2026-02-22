@@ -1841,3 +1841,58 @@ fn template_expansion_and_widget_actions_update_checkbox_state() {
         "☑"
     );
 }
+
+#[test]
+fn third_party_ui_control_can_register_via_trait_api() {
+    #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+    struct UiKnob;
+
+    #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+    struct PartKnobIndicator;
+
+    impl crate::UiControlTemplate for UiKnob {
+        fn expand(world: &mut World, entity: Entity) {
+            let _ = crate::ensure_template_part::<PartKnobIndicator, _>(world, entity, || {
+                (
+                    crate::UiLabel::new("○"),
+                    crate::StyleClass(vec!["template.knob.indicator".to_string()]),
+                )
+            });
+        }
+
+        fn project(_: &Self, _ctx: crate::ProjectionCtx<'_>) -> crate::UiView {
+            Arc::new(crate::xilem::view::label("knob"))
+        }
+
+        fn default_style_ron() -> &'static str {
+            r##"(
+  rules: [
+    (
+      selector: Type("UiKnob"),
+      setter: (
+        colors: (
+          text: Hex("#F8FAFC"),
+        ),
+      ),
+    ),
+  ],
+)
+"##
+        }
+    }
+
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin)
+        .register_ui_control::<UiKnob>();
+
+    let knob = app.world_mut().spawn((UiRoot, UiKnob)).id();
+    app.update();
+
+    assert!(app
+        .world()
+        .resource::<crate::StyleTypeRegistry>()
+        .resolve("UiKnob")
+        .is_some());
+
+    assert!(crate::find_template_part::<PartKnobIndicator>(app.world(), knob).is_some());
+}

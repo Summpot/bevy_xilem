@@ -347,6 +347,56 @@ while the styling engine remains locale-agnostic data.
 
 ### 6) ECS control adapter coverage
 
+### 6.1) Component-centric control encapsulation (`UiControlTemplate`)
+
+Built-in logical controls are organized under:
+
+- `crates/bevy_xilem/src/controls/*.rs`
+
+Each control module owns its logical component shape, template-part policy,
+fallback style RON, and the trait contract used for registration.
+
+The unifying trait is:
+
+- `UiControlTemplate`
+
+Trait responsibilities:
+
+- `expand(world, entity)` for one-time logical→template expansion,
+- `project(&T, ProjectionCtx) -> UiView` for ECS→Masonry projection,
+- `default_style_ron() -> &'static str` for control-local baseline styles.
+
+Logical tree vs template parts:
+
+- **Logical tree:** app-owned ECS entities that encode behavior and state.
+- **Template parts:** framework-owned child entities (markers + classes) used to
+  represent sub-elements such as slider thumb/track or dialog title/body/dismiss.
+
+### 6.2) Streamlined registration API
+
+`AppBevyXilemExt` exposes:
+
+- `.register_ui_control::<T: UiControlTemplate>()`
+
+One call performs:
+
+- projector registration,
+- `Added<T>` expansion system hookup,
+- selector type alias registration,
+- fallback style parsing + base-style merge.
+
+Duplicate registration of the same control type is deduplicated by
+`RegisteredUiControlTypes`.
+
+### 6.3) Base vs active stylesheet tiers
+
+Runtime styling distinguishes two explicit tiers:
+
+- `BaseStyleSheet` (control fallback styles),
+- `ActiveStyleSheet` (user-provided stylesheet asset).
+
+Effective cascade order keeps active rules overriding base rules by selector.
+
 `bevy_xilem` scanned `xilem_masonry::view::*` controls and currently provides ECS adapters
 for controls that naturally produce user actions:
 
@@ -371,7 +421,8 @@ Template-part expansion model:
 - Built-in controls can be expanded into child entities tagged with marker components
   (`PartDialogTitle`, `PartDialogDismiss`, `PartComboBoxDisplay`,
   `PartCheckboxIndicator`, `PartSliderTrack`, etc.).
-- `expand_builtin_control_templates` maintains these parts from logical state.
+- `register_ui_control::<T>()` installs `Added<T>` expansion hooks by default.
+- `expand_builtin_control_templates` remains as a compatibility helper.
 - Projectors assemble visuals using `ctx.children` and marker lookups.
 - Public helper APIs for user-defined template systems:
   `spawn_template_part`, `ensure_template_part`, `find_template_part`.
@@ -434,6 +485,8 @@ regular UI content.
 - `UiSynthesisStats`
 - `UiEventQueue`
 - `StyleSheet`
+- `BaseStyleSheet`
+- `ActiveStyleSheet`
 - `ActiveStyleSheetAsset`
 - `StyleAssetEventCursor`
 - `XilemFontBridge`
@@ -453,7 +506,7 @@ It ensures Bevy asset runtime support is available and registers:
 and registers systems:
 
 - `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> initialize_masonry_runtime_from_primary_window -> bubble_ui_pointer_events -> handle_global_overlay_clicks -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
-- `Update`: `expand_builtin_control_templates -> ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> handle_overlay_actions -> ... -> ensure_active_stylesheet_asset_handle -> sync_stylesheet_asset_events -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
+- `Update`: `ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> handle_overlay_actions -> ... -> ensure_active_stylesheet_asset_handle -> sync_stylesheet_asset_events -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime -> sync_overlay_positions`
 - `Last`: `paint_masonry_ui` (explicit Masonry/Vello render + present pass)
 
@@ -471,7 +524,8 @@ Transition execution details:
 - `resolve_style` reads `ComputedStyle` + `CurrentColorStyle` so projectors render in-between values,
   producing smooth CSS-like transitions instead of color snapping.
 
-It also registers built-in projectors.
+It registers core non-control projectors and then built-in controls via
+`register_ui_control::<...>()`.
 
 ## Bevy-native run helpers
 
