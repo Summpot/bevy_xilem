@@ -43,4 +43,24 @@ impl UiControlTemplate for UiSplitPane {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_split_pane(component, ctx)
     }
+
+    fn default_style_ron() -> &'static str {
+        r##"(
+    rules: [
+        (
+            selector: Type("UiSplitPane"),
+            setter: (
+                layout: (
+                    border_width: 1.0,
+                    corner_radius: 6.0,
+                ),
+                colors: (
+                    border: Hex("#3F3F3F"),
+                ),
+            ),
+        ),
+    ],
+)
+"##
+    }
 }

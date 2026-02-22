@@ -84,14 +84,14 @@ impl UiControlTemplate for UiCheckbox {
           gap: 8.0,
         ),
         colors: (
-          bg: Hex("#1A2338"),
-          hover_bg: Hex("#22304C"),
-          pressed_bg: Hex("#162136"),
-          border: Hex("#445B8A"),
-          text: Hex("#DCE7FF"),
+          bg: Hex("#272727"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
         ),
         transition: (
-          duration: 0.12,
+          duration: 0.10,
         ),
       ),
     ),
@@ -99,7 +99,7 @@ impl UiControlTemplate for UiCheckbox {
       selector: Class("template.checkbox.indicator"),
       setter: (
         colors: (
-          text: Hex("#7CC2FF"),
+          text: Hex("#0078D4"),
         ),
       ),
     ),

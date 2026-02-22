@@ -7,9 +7,9 @@ use std::{
 };
 
 use crate::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, Hovered, Pressed, ProjectionCtx,
-    Selector, StyleRule, StyleSetter, StyleSheet, SyncTextSource, UiEventQueue,
-    UiProjectorRegistry, UiRoot, UiView, bubble_ui_pointer_events, ecs_button,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, DEFAULT_STYLE_SHEET_ASSET_PATH, Hovered,
+    Pressed, ProjectionCtx, Selector, StyleRule, StyleSetter, StyleSheet, SyncTextSource,
+    UiEventQueue, UiProjectorRegistry, UiRoot, UiView, bubble_ui_pointer_events, ecs_button,
     ensure_overlay_defaults, ensure_overlay_root, ensure_overlay_root_entity,
     handle_overlay_actions, register_builtin_projectors, reparent_overlay_entities, resolve_style,
     resolve_style_for_entity_classes, spawn_in_overlay_root, synthesize_roots_with_stats,
@@ -74,6 +74,29 @@ fn plugin_wires_synthesis_and_runtime() {
     assert_eq!(synthesized.roots.len(), 2);
 
     let _runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+}
+
+#[test]
+fn plugin_auto_registers_builtin_controls_without_manual_setup() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    app.world_mut()
+        .spawn((UiRoot, crate::UiButton::new("auto-builtins")));
+
+    app.update();
+
+    let stats = app.world().resource::<crate::UiSynthesisStats>();
+    assert_eq!(stats.unhandled_count, 0);
+}
+
+#[test]
+fn plugin_sets_default_stylesheet_asset_path() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let active = app.world().resource::<crate::ActiveStyleSheetAsset>();
+    assert_eq!(active.path.as_deref(), Some(DEFAULT_STYLE_SHEET_ASSET_PATH));
 }
 
 #[test]
@@ -1888,11 +1911,12 @@ fn third_party_ui_control_can_register_via_trait_api() {
     let knob = app.world_mut().spawn((UiRoot, UiKnob)).id();
     app.update();
 
-    assert!(app
-        .world()
-        .resource::<crate::StyleTypeRegistry>()
-        .resolve("UiKnob")
-        .is_some());
+    assert!(
+        app.world()
+            .resource::<crate::StyleTypeRegistry>()
+            .resolve("UiKnob")
+            .is_some()
+    );
 
     assert!(crate::find_template_part::<PartKnobIndicator>(app.world(), knob).is_some());
 }

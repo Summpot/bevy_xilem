@@ -163,18 +163,38 @@ impl UiControlTemplate for UiComboBox {
     fn default_style_ron() -> &'static str {
         r##"(
   rules: [
+        (
+            selector: Type("UiComboBox"),
+            setter: (
+                layout: (
+                    padding: 6.0,
+                    corner_radius: 6.0,
+                    border_width: 1.0,
+                ),
+                colors: (
+                    bg: Hex("#272727"),
+                    hover_bg: Hex("#323232"),
+                    pressed_bg: Hex("#1F1F1F"),
+                    border: Hex("#3F3F3F"),
+                    text: Hex("#F3F3F3"),
+                ),
+                transition: (
+                    duration: 0.10,
+                ),
+            ),
+        ),
     (
       selector: Class("overlay.dropdown.menu"),
       setter: (
         layout: (
           padding: 8.0,
-          corner_radius: 10.0,
+                    corner_radius: 6.0,
           border_width: 1.0,
           gap: 6.0,
         ),
         colors: (
-          bg: Hex("#161C2A"),
-          border: Hex("#384664"),
+                    bg: Hex("#1F1F1F"),
+                    border: Hex("#3F3F3F"),
         ),
       ),
     ),
@@ -183,16 +203,19 @@ impl UiControlTemplate for UiComboBox {
       setter: (
         layout: (
           padding: 6.0,
-          corner_radius: 6.0,
+                    corner_radius: 4.0,
         ),
         text: (
           size: 15.0,
         ),
         colors: (
-          text: Hex("#DCE7FF"),
-          hover_bg: Hex("#22314E"),
-          pressed_bg: Hex("#1A2940"),
+                    text: Hex("#F3F3F3"),
+                    hover_bg: Hex("#323232"),
+                    pressed_bg: Hex("#272727"),
         ),
+                transition: (
+                    duration: 0.10,
+                ),
       ),
     ),
   ],
@@ -204,5 +227,21 @@ impl UiControlTemplate for UiComboBox {
 impl UiControlTemplate for UiDropdownMenu {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::dropdown::project_dropdown_menu(component, ctx)
+    }
+
+    fn default_style_ron() -> &'static str {
+        r##"(
+    rules: [
+        (
+            selector: Type("UiDropdownMenu"),
+            setter: (
+                layout: (
+                    padding: 0.0,
+                ),
+            ),
+        ),
+    ],
+)
+"##
     }
 }

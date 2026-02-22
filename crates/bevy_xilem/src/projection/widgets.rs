@@ -88,10 +88,10 @@ fn tree_node_depth(world: &bevy_ecs::world::World, entity: bevy_ecs::entity::Ent
 fn default_panel_style(world: &bevy_ecs::world::World, class: &str) -> ResolvedStyle {
     let mut style = resolve_style_for_classes(world, [class]);
     if style.colors.bg.is_none() {
-        style.colors.bg = Some(Color::from_rgb8(0x16, 0x1C, 0x2A));
+        style.colors.bg = Some(Color::from_rgb8(0x1F, 0x1F, 0x1F));
     }
     if style.colors.border.is_none() {
-        style.colors.border = Some(Color::from_rgb8(0x38, 0x46, 0x64));
+        style.colors.border = Some(Color::from_rgb8(0x3F, 0x3F, 0x3F));
     }
     if style.layout.padding <= 0.0 {
         style.layout.padding = 8.0;
@@ -190,7 +190,7 @@ pub(crate) fn project_tab_bar(tab_bar: &UiTabBar, ctx: ProjectionCtx<'_>) -> UiV
         active_style.layout.padding = 8.0;
     }
     if active_style.colors.border.is_none() {
-        active_style.colors.border = Some(Color::from_rgb8(0x60, 0xA5, 0xFA));
+        active_style.colors.border = Some(Color::from_rgb8(0x00, 0x78, 0xD4));
     }
     if active_style.layout.border_width <= 0.0 {
         active_style.layout.border_width = 2.0;
@@ -300,7 +300,7 @@ pub(crate) fn project_table(table: &UiTable, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let mut header_style = resolve_style_for_classes(ctx.world, ["widget.table.header"]);
     if header_style.colors.bg.is_none() {
-        header_style.colors.bg = Some(Color::from_rgba8(255, 255, 255, 30));
+        header_style.colors.bg = Some(Color::from_rgb8(0x2A, 0x2A, 0x2A));
     }
     if header_style.layout.padding <= 0.0 {
         header_style.layout.padding = 6.0;
@@ -462,10 +462,10 @@ pub(crate) fn project_tooltip(tooltip: &UiTooltip, ctx: ProjectionCtx<'_>) -> Ui
 
     let mut style = default_panel_style(ctx.world, "overlay.tooltip");
     if style.colors.bg.is_none() {
-        style.colors.bg = Some(Color::from_rgb8(0x0F, 0x17, 0x2A));
+        style.colors.bg = Some(Color::from_rgb8(0x2B, 0x2B, 0x2B));
     }
     if style.colors.text.is_none() {
-        style.colors.text = Some(Color::from_rgb8(0xE2, 0xE8, 0xF0));
+        style.colors.text = Some(Color::from_rgb8(0xF3, 0xF3, 0xF3));
     }
     if style.layout.padding <= 0.0 {
         style.layout.padding = 6.0;
@@ -642,7 +642,7 @@ pub(crate) fn project_group_box(group_box: &UiGroupBox, ctx: ProjectionCtx<'_>) 
         style.layout.border_width = 1.0;
     }
     if style.colors.border.is_none() {
-        style.colors.border = Some(Color::from_rgba8(255, 255, 255, 60));
+        style.colors.border = Some(Color::from_rgb8(0x3F, 0x3F, 0x3F));
     }
     if style.layout.padding <= 0.0 {
         style.layout.padding = 10.0;
@@ -757,11 +757,11 @@ pub(crate) fn project_date_picker_panel(
     }
     let mut today_style = cell_style.clone();
     if today_style.colors.border.is_none() {
-        today_style.colors.border = Some(Color::from_rgb8(0x60, 0xA5, 0xFA));
+        today_style.colors.border = Some(Color::from_rgb8(0x00, 0x78, 0xD4));
         today_style.layout.border_width = 1.0;
     }
     let mut selected_style = cell_style.clone();
-    selected_style.colors.bg = Some(Color::from_rgb8(0x1D, 0x4E, 0xD8));
+    selected_style.colors.bg = Some(Color::from_rgb8(0x00, 0x78, 0xD4));
 
     let view_year = panel_comp.view_year;
     let view_month = panel_comp.view_month;

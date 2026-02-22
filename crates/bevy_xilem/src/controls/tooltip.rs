@@ -42,9 +42,9 @@ impl UiControlTemplate for UiTooltip {
           border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#0F172A"),
-          border: Hex("#24314A"),
-          text: Hex("#E2E8F0"),
+          bg: Hex("#2B2B2B"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
         ),
       ),
     ),

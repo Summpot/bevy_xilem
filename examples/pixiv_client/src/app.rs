@@ -2292,12 +2292,7 @@ fn build_app() -> App {
         TextPlugin::default(),
         BevyXilemPlugin,
     ))
-    .register_ui_control::<bevy_xilem::UiButton>()
-    .register_ui_control::<bevy_xilem::UiTextInput>()
-    .register_ui_control::<bevy_xilem::UiDialog>()
-    .register_ui_control::<bevy_xilem::UiComboBox>()
-    .register_ui_control::<bevy_xilem::UiToast>()
-    .load_style_sheet("themes/default_theme.ron")
+    .load_style_sheet(bevy_xilem::DEFAULT_STYLE_SHEET_ASSET_PATH)
     .insert_resource(AppI18n::new(parse_locale("en-US")))
     .register_i18n_bundle(
         "en-US",

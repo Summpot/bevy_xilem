@@ -36,6 +36,19 @@ impl UiControlTemplate for UiTable {
         r##"(
   rules: [
     (
+      selector: Type("UiTable"),
+      setter: (
+        layout: (
+          gap: 1.0,
+          border_width: 1.0,
+          corner_radius: 6.0,
+        ),
+        colors: (
+          border: Hex("#3F3F3F"),
+        ),
+      ),
+    ),
+    (
       selector: Class("widget.table.header"),
       setter: (
         layout: (
@@ -43,8 +56,9 @@ impl UiControlTemplate for UiTable {
           border_width: 1.0,
         ),
         colors: (
-          bg: Rgba8(255, 255, 255, 30),
-          border: Rgba8(255, 255, 255, 45),
+          bg: Hex("#2A2A2A"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
         ),
       ),
     ),
@@ -52,7 +66,13 @@ impl UiControlTemplate for UiTable {
       selector: Class("widget.table.cell"),
       setter: (
         layout: (
-          padding: 4.0,
+          padding: 6.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          bg: Hex("#242424"),
+          border: Hex("#333333"),
+          text: Hex("#E0E0E0"),
         ),
       ),
     ),

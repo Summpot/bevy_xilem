@@ -1,11 +1,10 @@
 (
   rules: [
-    // ---- Global defaults ----
     (
       selector: Type("UiRoot"),
       setter: (
         colors: (
-          bg: Hex("#0D121E"),
+          bg: Hex("#1B1B1B"),
         ),
       ),
     ),
@@ -25,13 +24,11 @@
         ),
       ),
     ),
-
-    // ---- Primitive controls ----
     (
       selector: Type("UiLabel"),
       setter: (
         colors: (
-          text: Hex("#E2E8F0"),
+          text: Hex("#F3F3F3"),
         ),
         text: (
           size: 15.0,
@@ -42,19 +39,19 @@
       selector: Type("UiButton"),
       setter: (
         layout: (
-          padding: 8.0,
-          corner_radius: 8.0,
+          padding: 6.0,
+          corner_radius: 6.0,
           border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#25334F"),
-          hover_bg: Hex("#2E3E5F"),
-          pressed_bg: Hex("#1D2B44"),
-          border: Hex("#4F6695"),
-          text: Hex("#DFE9FF"),
+          bg: Hex("#272727"),
+          hover_bg: Hex("#313131"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
         ),
         transition: (
-          duration: 0.12,
+          duration: 0.10,
         ),
       ),
     ),
@@ -68,14 +65,14 @@
           gap: 8.0,
         ),
         colors: (
-          bg: Hex("#1A2338"),
-          hover_bg: Hex("#22304C"),
-          pressed_bg: Hex("#162136"),
-          border: Hex("#445B8A"),
-          text: Hex("#DCE7FF"),
+          bg: Hex("#272727"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
         ),
         transition: (
-          duration: 0.12,
+          duration: 0.10,
         ),
       ),
     ),
@@ -89,9 +86,14 @@
           gap: 8.0,
         ),
         colors: (
-          bg: Hex("#161F33"),
-          border: Hex("#41557F"),
-          text: Hex("#DCE7FF"),
+          bg: Hex("#272727"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+        transition: (
+          duration: 0.10,
         ),
       ),
     ),
@@ -105,14 +107,14 @@
           gap: 8.0,
         ),
         colors: (
-          bg: Hex("#21314D"),
-          hover_bg: Hex("#2A3D5F"),
-          pressed_bg: Hex("#1A2940"),
-          border: Hex("#4D6798"),
-          text: Hex("#E3ECFF"),
+          bg: Hex("#2D2D2D"),
+          hover_bg: Hex("#383838"),
+          pressed_bg: Hex("#242424"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
         ),
         transition: (
-          duration: 0.12,
+          duration: 0.10,
         ),
       ),
     ),
@@ -120,24 +122,223 @@
       selector: Type("UiTextInput"),
       setter: (
         layout: (
-          padding: 8.0,
-          corner_radius: 8.0,
+          padding: 6.0,
+          corner_radius: 6.0,
           border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#131C2E"),
-          border: Hex("#41557F"),
-          text: Hex("#E6EEFF"),
+          bg: Hex("#202020"),
+          hover_bg: Hex("#292929"),
+          pressed_bg: Hex("#1B1B1B"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F5F5F5"),
+        ),
+        transition: (
+          duration: 0.10,
         ),
       ),
     ),
-
-    // ---- Dialog / overlay surfaces ----
+    (
+      selector: Type("UiComboBox"),
+      setter: (
+        layout: (
+          padding: 6.0,
+          corner_radius: 6.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          bg: Hex("#272727"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiRadioGroup"),
+      setter: (
+        layout: (
+          padding: 6.0,
+          corner_radius: 6.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          bg: Hex("#272727"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiTabBar"),
+      setter: (
+        layout: (
+          gap: 6.0,
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiTreeNode"),
+      setter: (
+        layout: (
+          padding: 4.0,
+          corner_radius: 4.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          bg: Hex("#272727"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiTable"),
+      setter: (
+        layout: (
+          gap: 1.0,
+          corner_radius: 6.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          border: Hex("#3F3F3F"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiMenuBar"),
+      setter: (
+        layout: (
+          padding: 4.0,
+          gap: 4.0,
+          corner_radius: 6.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          bg: Hex("#232323"),
+          border: Hex("#3F3F3F"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiMenuBarItem"),
+      setter: (
+        layout: (
+          padding: 6.0,
+          corner_radius: 4.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          bg: Hex("#272727"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiSpinner"),
+      setter: (
+        layout: (
+          padding: 6.0,
+          corner_radius: 6.0,
+          border_width: 1.0,
+          gap: 8.0,
+        ),
+        colors: (
+          bg: Hex("#272727"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiColorPicker"),
+      setter: (
+        layout: (
+          padding: 6.0,
+          corner_radius: 6.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          bg: Hex("#272727"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiGroupBox"),
+      setter: (
+        layout: (
+          padding: 10.0,
+          corner_radius: 6.0,
+          border_width: 1.0,
+          gap: 6.0,
+        ),
+        colors: (
+          bg: Hex("#242424"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiSplitPane"),
+      setter: (
+        layout: (
+          border_width: 1.0,
+          corner_radius: 6.0,
+        ),
+        colors: (
+          border: Hex("#3F3F3F"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiToast"),
+      setter: (
+        layout: (
+          padding: 8.0,
+          corner_radius: 6.0,
+          border_width: 1.0,
+          gap: 8.0,
+        ),
+        colors: (
+          bg: Hex("#272727"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiDatePicker"),
+      setter: (
+        layout: (
+          padding: 6.0,
+          corner_radius: 6.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          bg: Hex("#272727"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+      ),
+    ),
     (
       selector: Class("overlay.modal.dimmer"),
       setter: (
         colors: (
-          bg: Rgba8(0, 0, 0, 160),
+          bg: Rgba8(0, 0, 0, 150),
         ),
       ),
     ),
@@ -145,19 +346,14 @@
       selector: Type("UiDialog"),
       setter: (
         layout: (
-          padding: 18.0,
+          padding: 16.0,
           gap: 10.0,
-          corner_radius: 12.0,
+          corner_radius: 6.0,
           border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#181E2D"),
-          border: Hex("#3A4868"),
-        ),
-        box_shadow: (
-          color: Rgba8(0, 0, 0, 92),
-          offset_y: 10.0,
-          blur: 22.0,
+          bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
         ),
       ),
     ),
@@ -165,10 +361,10 @@
       selector: Class("overlay.dialog.title"),
       setter: (
         text: (
-          size: 24.0,
+          size: 22.0,
         ),
         colors: (
-          text: Hex("#F1F5FF"),
+          text: Hex("#F9F9F9"),
         ),
       ),
     ),
@@ -179,7 +375,7 @@
           size: 16.0,
         ),
         colors: (
-          text: Hex("#C6D2EE"),
+          text: Hex("#D0D0D0"),
         ),
       ),
     ),
@@ -187,41 +383,31 @@
       selector: Class("overlay.dialog.dismiss"),
       setter: (
         layout: (
-          padding: 8.0,
-          corner_radius: 8.0,
+          padding: 6.0,
+          corner_radius: 6.0,
           border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#273652"),
-          hover_bg: Hex("#31466B"),
-          pressed_bg: Hex("#1E2D47"),
-          border: Hex("#4E6697"),
-          text: Hex("#E3ECFF"),
-        ),
-        text: (
-          size: 15.0,
+          bg: Hex("#0078D4"),
+          hover_bg: Hex("#1589E0"),
+          pressed_bg: Hex("#006CBE"),
+          border: Hex("#0078D4"),
+          text: Hex("#FFFFFF"),
         ),
       ),
     ),
-
-    // ---- Combo / dropdown ----
     (
       selector: Class("overlay.dropdown.menu"),
       setter: (
         layout: (
           padding: 8.0,
-          corner_radius: 10.0,
+          corner_radius: 6.0,
           border_width: 1.0,
           gap: 6.0,
         ),
         colors: (
-          bg: Hex("#161C2A"),
-          border: Hex("#384664"),
-        ),
-        box_shadow: (
-          color: Rgba8(0, 0, 0, 71),
-          offset_y: 8.0,
-          blur: 16.0,
+          bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
         ),
       ),
     ),
@@ -230,32 +416,30 @@
       setter: (
         layout: (
           padding: 6.0,
-          corner_radius: 6.0,
+          corner_radius: 4.0,
         ),
         text: (
           size: 15.0,
         ),
         colors: (
-          text: Hex("#DCE7FF"),
-          hover_bg: Hex("#22314E"),
-          pressed_bg: Hex("#1A2940"),
+          text: Hex("#F3F3F3"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#272727"),
         ),
       ),
     ),
-
-    // ---- Menu panel ----
     (
       selector: Class("overlay.menu.panel"),
       setter: (
         layout: (
           padding: 8.0,
-          corner_radius: 8.0,
+          corner_radius: 6.0,
           border_width: 1.0,
           gap: 4.0,
         ),
         colors: (
-          bg: Hex("#161C2A"),
-          border: Hex("#384664"),
+          bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
         ),
       ),
     ),
@@ -264,11 +448,17 @@
       setter: (
         layout: (
           padding: 6.0,
+          corner_radius: 4.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          text: Hex("#F3F3F3"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#272727"),
+          border: Hex("#3F3F3F"),
         ),
       ),
     ),
-
-    // ---- Tooltip ----
     (
       selector: Class("overlay.tooltip"),
       setter: (
@@ -278,26 +468,24 @@
           border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#0F172A"),
-          border: Hex("#24314A"),
-          text: Hex("#E2E8F0"),
+          bg: Hex("#2B2B2B"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
         ),
       ),
     ),
-
-    // ---- Color picker ----
     (
       selector: Class("overlay.color_picker.panel"),
       setter: (
         layout: (
           padding: 8.0,
-          corner_radius: 8.0,
+          corner_radius: 6.0,
           border_width: 1.0,
           gap: 6.0,
         ),
         colors: (
-          bg: Hex("#161C2A"),
-          border: Hex("#384664"),
+          bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
         ),
       ),
     ),
@@ -309,7 +497,7 @@
           border_width: 1.0,
         ),
         colors: (
-          border: Rgba8(255, 255, 255, 80),
+          border: Hex("#3F3F3F"),
         ),
       ),
     ),
@@ -317,24 +505,22 @@
       selector: Class("overlay.color_picker.value"),
       setter: (
         colors: (
-          text: Hex("#DCE7FF"),
+          text: Hex("#F3F3F3"),
         ),
       ),
     ),
-
-    // ---- Date picker ----
     (
       selector: Class("overlay.date_picker.panel"),
       setter: (
         layout: (
           padding: 8.0,
-          corner_radius: 8.0,
+          corner_radius: 6.0,
           border_width: 1.0,
           gap: 4.0,
         ),
         colors: (
-          bg: Hex("#161C2A"),
-          border: Hex("#384664"),
+          bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
         ),
       ),
     ),
@@ -344,9 +530,13 @@
         layout: (
           padding: 4.0,
           corner_radius: 4.0,
+          border_width: 1.0,
         ),
         colors: (
-          text: Hex("#DCE7FF"),
+          text: Hex("#F3F3F3"),
+          border: Hex("#3F3F3F"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#272727"),
         ),
       ),
     ),
@@ -354,17 +544,21 @@
       selector: Class("overlay.date_picker.nav"),
       setter: (
         colors: (
-          text: Hex("#EAF1FF"),
+          text: Hex("#F3F3F3"),
         ),
       ),
     ),
-
-    // ---- Extended built-ins ----
     (
       selector: Class("widget.radio.item"),
       setter: (
         layout: (
-          padding: 4.0,
+          padding: 6.0,
+          corner_radius: 4.0,
+        ),
+        colors: (
+          text: Hex("#F3F3F3"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#1F1F1F"),
         ),
       ),
     ),
@@ -372,14 +566,16 @@
       selector: Class("widget.tab.header"),
       setter: (
         layout: (
-          padding: 8.0,
+          padding: 6.0,
           corner_radius: 6.0,
           border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#1B263D"),
-          border: Hex("#41557F"),
-          text: Hex("#DCE7FF"),
+          bg: Hex("#272727"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
         ),
       ),
     ),
@@ -387,14 +583,14 @@
       selector: Class("widget.tab.active"),
       setter: (
         layout: (
-          padding: 8.0,
+          padding: 6.0,
           corner_radius: 6.0,
-          border_width: 2.0,
+          border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#243655"),
-          border: Hex("#60A5FA"),
-          text: Hex("#EFF5FF"),
+          bg: Hex("#103754"),
+          border: Hex("#0078D4"),
+          text: Hex("#FFFFFF"),
         ),
       ),
     ),
@@ -406,8 +602,9 @@
           border_width: 1.0,
         ),
         colors: (
-          bg: Rgba8(255, 255, 255, 30),
-          border: Rgba8(255, 255, 255, 45),
+          bg: Hex("#2A2A2A"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
         ),
       ),
     ),
@@ -415,7 +612,13 @@
       selector: Class("widget.table.cell"),
       setter: (
         layout: (
-          padding: 4.0,
+          padding: 6.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          bg: Hex("#242424"),
+          border: Hex("#333333"),
+          text: Hex("#E0E0E0"),
         ),
       ),
     ),
@@ -426,17 +629,15 @@
           size: 15.0,
         ),
         colors: (
-          text: Hex("#E7EEFF"),
+          text: Hex("#F3F3F3"),
         ),
       ),
     ),
-
-    // ---- Template parts ----
     (
       selector: Class("template.checkbox.indicator"),
       setter: (
         colors: (
-          text: Hex("#7CC2FF"),
+          text: Hex("#0078D4"),
         ),
       ),
     ),
@@ -444,7 +645,7 @@
       selector: Class("template.slider.track"),
       setter: (
         colors: (
-          text: Hex("#BFD4FF"),
+          text: Hex("#D0D0D0"),
         ),
       ),
     ),
@@ -452,7 +653,7 @@
       selector: Class("template.slider.thumb"),
       setter: (
         colors: (
-          text: Hex("#60A5FA"),
+          text: Hex("#0078D4"),
         ),
       ),
     ),
@@ -460,7 +661,7 @@
       selector: Class("template.switch.thumb"),
       setter: (
         colors: (
-          text: Hex("#60A5FA"),
+          text: Hex("#0078D4"),
         ),
       ),
     ),

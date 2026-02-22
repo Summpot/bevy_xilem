@@ -161,7 +161,8 @@ Asset-driven stylesheet details:
   asset content into the global `StyleSheet` resource.
 - Resource updates reuse the existing invalidation path (`mark_style_dirty`), so transition and
   cascade behavior remains unchanged while enabling hot-reload.
-- Default runtime stylesheet path is `assets/themes/default_theme.ron`.
+- Default runtime stylesheet path is `themes/default_theme.ron`
+  (resolved relative to Bevy `AssetServer` root, typically `assets/`).
 
 Label text wrapping policy:
 
@@ -378,6 +379,12 @@ Logical tree vs template parts:
 
 - `.register_ui_control::<T: UiControlTemplate>()`
 
+Built-in controls are registered centrally by `BevyXilemPlugin` through
+`BevyXilemBuiltinsPlugin`, so applications/examples do not need to manually
+call `.register_ui_control::<...>()` for built-ins.
+`register_ui_control::<T>()` remains the extension path for third-party/custom
+control templates.
+
 One call performs:
 
 - projector registration,
@@ -524,8 +531,8 @@ Transition execution details:
 - `resolve_style` reads `ComputedStyle` + `CurrentColorStyle` so projectors render in-between values,
   producing smooth CSS-like transitions instead of color snapping.
 
-It registers core non-control projectors and then built-in controls via
-`register_ui_control::<...>()`.
+It registers core non-control projectors and installs
+`BevyXilemBuiltinsPlugin`, which centrally registers built-in controls.
 
 ## Bevy-native run helpers
 

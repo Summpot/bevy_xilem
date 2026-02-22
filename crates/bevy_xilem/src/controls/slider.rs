@@ -120,9 +120,14 @@ impl UiControlTemplate for UiSlider {
           gap: 8.0,
         ),
         colors: (
-          bg: Hex("#161F33"),
-          border: Hex("#41557F"),
-          text: Hex("#DCE7FF"),
+                    bg: Hex("#272727"),
+                    hover_bg: Hex("#323232"),
+                    pressed_bg: Hex("#1F1F1F"),
+                    border: Hex("#3F3F3F"),
+                    text: Hex("#F3F3F3"),
+                ),
+                transition: (
+                    duration: 0.10,
         ),
       ),
     ),
@@ -130,7 +135,7 @@ impl UiControlTemplate for UiSlider {
       selector: Class("template.slider.track"),
       setter: (
         colors: (
-          text: Hex("#BFD4FF"),
+                    text: Hex("#D0D0D0"),
         ),
       ),
     ),
@@ -138,7 +143,7 @@ impl UiControlTemplate for UiSlider {
       selector: Class("template.slider.thumb"),
       setter: (
         colors: (
-          text: Hex("#60A5FA"),
+                    text: Hex("#0078D4"),
         ),
       ),
     ),

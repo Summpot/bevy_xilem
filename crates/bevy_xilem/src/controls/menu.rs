@@ -65,11 +65,62 @@ impl UiControlTemplate for UiMenuBar {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_menu_bar(component, ctx)
     }
+
+    fn default_style_ron() -> &'static str {
+        r##"(
+  rules: [
+    (
+      selector: Type("UiMenuBar"),
+      setter: (
+        layout: (
+          padding: 4.0,
+          gap: 4.0,
+          corner_radius: 6.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          bg: Hex("#232323"),
+          border: Hex("#3F3F3F"),
+        ),
+      ),
+    ),
+  ],
+)
+"##
+    }
 }
 
 impl UiControlTemplate for UiMenuBarItem {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_menu_bar_item(component, ctx)
+    }
+
+    fn default_style_ron() -> &'static str {
+        r##"(
+  rules: [
+    (
+      selector: Type("UiMenuBarItem"),
+      setter: (
+        layout: (
+          padding: 6.0,
+          corner_radius: 4.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          bg: Hex("#272727"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+        transition: (
+          duration: 0.10,
+        ),
+      ),
+    ),
+  ],
+)
+"##
     }
 }
 
@@ -86,13 +137,13 @@ impl UiControlTemplate for UiMenuItemPanel {
       setter: (
         layout: (
           padding: 8.0,
-          corner_radius: 8.0,
+          corner_radius: 6.0,
           border_width: 1.0,
           gap: 4.0,
         ),
         colors: (
-          bg: Hex("#161C2A"),
-          border: Hex("#384664"),
+          bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
         ),
       ),
     ),
@@ -101,6 +152,17 @@ impl UiControlTemplate for UiMenuItemPanel {
       setter: (
         layout: (
           padding: 6.0,
+          corner_radius: 4.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          text: Hex("#F3F3F3"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#272727"),
+          border: Hex("#3F3F3F"),
+        ),
+        transition: (
+          duration: 0.10,
         ),
       ),
     ),

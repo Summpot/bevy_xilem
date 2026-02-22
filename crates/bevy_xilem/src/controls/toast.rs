@@ -51,4 +51,28 @@ impl UiControlTemplate for UiToast {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_toast(component, ctx)
     }
+
+    fn default_style_ron() -> &'static str {
+        r##"(
+    rules: [
+        (
+            selector: Type("UiToast"),
+            setter: (
+                layout: (
+                    padding: 8.0,
+                    corner_radius: 6.0,
+                    border_width: 1.0,
+                    gap: 8.0,
+                ),
+                colors: (
+                    bg: Hex("#272727"),
+                    border: Hex("#3F3F3F"),
+                    text: Hex("#F3F3F3"),
+                ),
+            ),
+        ),
+    ],
+)
+"##
+    }
 }

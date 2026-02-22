@@ -89,14 +89,14 @@ impl UiControlTemplate for UiSwitch {
           gap: 8.0,
         ),
         colors: (
-          bg: Hex("#21314D"),
-          hover_bg: Hex("#2A3D5F"),
-          pressed_bg: Hex("#1A2940"),
-          border: Hex("#4D6798"),
-          text: Hex("#E3ECFF"),
+          bg: Hex("#2D2D2D"),
+          hover_bg: Hex("#383838"),
+          pressed_bg: Hex("#242424"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
         ),
         transition: (
-          duration: 0.12,
+          duration: 0.10,
         ),
       ),
     ),
@@ -104,7 +104,7 @@ impl UiControlTemplate for UiSwitch {
       selector: Class("template.switch.thumb"),
       setter: (
         colors: (
-          text: Hex("#60A5FA"),
+          text: Hex("#0078D4"),
         ),
       ),
     ),

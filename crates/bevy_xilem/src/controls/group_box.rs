@@ -29,13 +29,29 @@ impl UiControlTemplate for UiGroupBox {
         r##"(
   rules: [
     (
+      selector: Type("UiGroupBox"),
+      setter: (
+        layout: (
+          padding: 10.0,
+          corner_radius: 6.0,
+          border_width: 1.0,
+          gap: 6.0,
+        ),
+        colors: (
+          bg: Hex("#242424"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+      ),
+    ),
+    (
       selector: Class("widget.group_box.title"),
       setter: (
         text: (
           size: 15.0,
         ),
         colors: (
-          text: Hex("#E7EEFF"),
+          text: Hex("#F3F3F3"),
         ),
       ),
     ),

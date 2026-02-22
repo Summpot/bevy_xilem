@@ -38,6 +38,19 @@ use crate::{
 #[derive(Default)]
 pub struct BevyXilemPlugin;
 
+/// Registers all built-in ECS UI controls.
+///
+/// This plugin is automatically added by [`BevyXilemPlugin`], so users get
+/// plug-and-play built-ins without manual registration in app setup code.
+#[derive(Default)]
+pub struct BevyXilemBuiltinsPlugin;
+
+impl Plugin for BevyXilemBuiltinsPlugin {
+    fn build(&self, app: &mut App) {
+        register_builtin_ui_controls(app);
+    }
+}
+
 impl Plugin for BevyXilemPlugin {
     fn build(&self, app: &mut App) {
         if !app.is_plugin_added::<TaskPoolPlugin>() {
@@ -47,7 +60,7 @@ impl Plugin for BevyXilemPlugin {
             app.add_plugins(AssetPlugin::default());
         }
 
-        app.add_plugins((TimePlugin, TweeningPlugin))
+        app.add_plugins((TimePlugin, TweeningPlugin, BevyXilemBuiltinsPlugin))
             .init_asset::<StyleSheet>()
             .init_asset_loader::<StyleSheetRonLoader>()
             .init_resource::<UiProjectorRegistry>()
@@ -126,7 +139,5 @@ impl Plugin for BevyXilemPlugin {
             let mut registry = app.world_mut().resource_mut::<UiProjectorRegistry>();
             register_core_projectors(&mut registry);
         }
-
-        register_builtin_ui_controls(app);
     }
 }

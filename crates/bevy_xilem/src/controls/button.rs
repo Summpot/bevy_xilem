@@ -29,19 +29,19 @@ impl UiControlTemplate for UiButton {
       selector: Type("UiButton"),
       setter: (
         layout: (
-          padding: 8.0,
-          corner_radius: 8.0,
+          padding: 6.0,
+          corner_radius: 6.0,
           border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#25334F"),
-          hover_bg: Hex("#2E3E5F"),
-          pressed_bg: Hex("#1D2B44"),
-          border: Hex("#4F6695"),
-          text: Hex("#DFE9FF"),
+          bg: Hex("#272727"),
+          hover_bg: Hex("#313131"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
         ),
         transition: (
-          duration: 0.12,
+          duration: 0.10,
         ),
       ),
     ),

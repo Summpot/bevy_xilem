@@ -100,7 +100,7 @@ impl UiControlTemplate for UiDialog {
       selector: Class("overlay.modal.dimmer"),
       setter: (
         colors: (
-          bg: Rgba8(0, 0, 0, 160),
+          bg: Rgba8(0, 0, 0, 150),
         ),
       ),
     ),
@@ -108,14 +108,14 @@ impl UiControlTemplate for UiDialog {
       selector: Type("UiDialog"),
       setter: (
         layout: (
-          padding: 18.0,
+          padding: 16.0,
           gap: 10.0,
-          corner_radius: 12.0,
+          corner_radius: 6.0,
           border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#181E2D"),
-          border: Hex("#3A4868"),
+          bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
         ),
       ),
     ),
@@ -123,10 +123,10 @@ impl UiControlTemplate for UiDialog {
       selector: Class("overlay.dialog.title"),
       setter: (
         text: (
-          size: 24.0,
+          size: 22.0,
         ),
         colors: (
-          text: Hex("#F1F5FF"),
+          text: Hex("#F9F9F9"),
         ),
       ),
     ),
@@ -137,7 +137,7 @@ impl UiControlTemplate for UiDialog {
           size: 16.0,
         ),
         colors: (
-          text: Hex("#C6D2EE"),
+          text: Hex("#D0D0D0"),
         ),
       ),
     ),
@@ -145,19 +145,22 @@ impl UiControlTemplate for UiDialog {
       selector: Class("overlay.dialog.dismiss"),
       setter: (
         layout: (
-          padding: 8.0,
-          corner_radius: 8.0,
+          padding: 6.0,
+          corner_radius: 6.0,
           border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#273652"),
-          hover_bg: Hex("#31466B"),
-          pressed_bg: Hex("#1E2D47"),
-          border: Hex("#4E6697"),
-          text: Hex("#E3ECFF"),
+          bg: Hex("#0078D4"),
+          hover_bg: Hex("#1589E0"),
+          pressed_bg: Hex("#006CBE"),
+          border: Hex("#0078D4"),
+          text: Hex("#FFFFFF"),
         ),
         text: (
           size: 15.0,
+        ),
+        transition: (
+          duration: 0.10,
         ),
       ),
     ),

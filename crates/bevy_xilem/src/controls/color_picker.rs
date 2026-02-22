@@ -44,6 +44,34 @@ impl UiControlTemplate for UiColorPicker {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_color_picker(component, ctx)
     }
+
+    fn default_style_ron() -> &'static str {
+        r##"(
+  rules: [
+    (
+      selector: Type("UiColorPicker"),
+      setter: (
+        layout: (
+          padding: 6.0,
+          corner_radius: 6.0,
+          border_width: 1.0,
+        ),
+        colors: (
+          bg: Hex("#272727"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+        transition: (
+          duration: 0.10,
+        ),
+      ),
+    ),
+  ],
+)
+"##
+    }
 }
 
 impl UiControlTemplate for UiColorPickerPanel {
@@ -59,13 +87,13 @@ impl UiControlTemplate for UiColorPickerPanel {
       setter: (
         layout: (
           padding: 8.0,
-          corner_radius: 8.0,
+          corner_radius: 6.0,
           border_width: 1.0,
           gap: 6.0,
         ),
         colors: (
-          bg: Hex("#161C2A"),
-          border: Hex("#384664"),
+          bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
         ),
       ),
     ),
@@ -77,7 +105,7 @@ impl UiControlTemplate for UiColorPickerPanel {
           border_width: 1.0,
         ),
         colors: (
-          border: Rgba8(255, 255, 255, 80),
+          border: Hex("#3F3F3F"),
         ),
       ),
     ),
@@ -85,7 +113,7 @@ impl UiControlTemplate for UiColorPickerPanel {
       selector: Class("overlay.color_picker.value"),
       setter: (
         colors: (
-          text: Hex("#DCE7FF"),
+          text: Hex("#F3F3F3"),
         ),
       ),
     ),

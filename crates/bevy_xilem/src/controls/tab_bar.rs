@@ -46,17 +46,30 @@ impl UiControlTemplate for UiTabBar {
         r##"(
   rules: [
     (
+      selector: Type("UiTabBar"),
+      setter: (
+        layout: (
+          gap: 6.0,
+        ),
+      ),
+    ),
+    (
       selector: Class("widget.tab.header"),
       setter: (
         layout: (
-          padding: 8.0,
+          padding: 6.0,
           corner_radius: 6.0,
           border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#1B263D"),
-          border: Hex("#41557F"),
-          text: Hex("#DCE7FF"),
+          bg: Hex("#272727"),
+          hover_bg: Hex("#323232"),
+          pressed_bg: Hex("#1F1F1F"),
+          border: Hex("#3F3F3F"),
+          text: Hex("#F3F3F3"),
+        ),
+        transition: (
+          duration: 0.10,
         ),
       ),
     ),
@@ -64,14 +77,14 @@ impl UiControlTemplate for UiTabBar {
       selector: Class("widget.tab.active"),
       setter: (
         layout: (
-          padding: 8.0,
+          padding: 6.0,
           corner_radius: 6.0,
-          border_width: 2.0,
+          border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#243655"),
-          border: Hex("#60A5FA"),
-          text: Hex("#EFF5FF"),
+          bg: Hex("#103754"),
+          border: Hex("#0078D4"),
+          text: Hex("#FFFFFF"),
         ),
       ),
     ),

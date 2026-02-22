@@ -70,14 +70,19 @@ impl UiControlTemplate for UiTextInput {
       selector: Type("UiTextInput"),
       setter: (
         layout: (
-          padding: 8.0,
-          corner_radius: 8.0,
+                    padding: 6.0,
+                    corner_radius: 6.0,
           border_width: 1.0,
         ),
         colors: (
-          bg: Hex("#131C2E"),
-          border: Hex("#41557F"),
-          text: Hex("#E6EEFF"),
+                    bg: Hex("#202020"),
+                    hover_bg: Hex("#292929"),
+                    pressed_bg: Hex("#1B1B1B"),
+                    border: Hex("#3F3F3F"),
+                    text: Hex("#F5F5F5"),
+                ),
+                transition: (
+                    duration: 0.10,
         ),
       ),
     ),

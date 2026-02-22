@@ -688,10 +688,7 @@ fn build_download_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .register_ui_control::<bevy_xilem::UiButton>()
-        .register_ui_control::<bevy_xilem::UiTextInput>()
-        .register_ui_control::<bevy_xilem::UiDialog>()
-        .load_style_sheet("themes/default_theme.ron")
+        .load_style_sheet(bevy_xilem::DEFAULT_STYLE_SHEET_ASSET_PATH)
         .insert_resource(DownloadState::default())
         .register_projector::<DownloadRootView>(project_download_root)
         .register_projector::<DownloadTitle>(project_download_title)
