@@ -1,4 +1,5 @@
 use bevy_app::App;
+use bevy_asset::AssetServer;
 use bevy_ecs::prelude::Component;
 use fluent::{FluentResource, concurrent::FluentBundle};
 use masonry::peniko::Blob;
@@ -6,8 +7,9 @@ use std::{fs, io, path::Path, sync::Arc};
 use unic_langid::LanguageIdentifier;
 
 use crate::{
-    AppI18n, MasonryRuntime, ProjectionCtx, UiEventQueue, UiProjector, UiProjectorRegistry, UiView,
-    XilemFontBridge,
+    ActiveStyleSheetAsset, AppI18n, MasonryRuntime, ProjectionCtx, StyleSheet, StyleTypeRegistry,
+    UiEventQueue, UiProjector, UiProjectorRegistry, UiView, XilemFontBridge,
+    set_active_stylesheet_asset_path,
 };
 
 /// Synchronous source for binary assets (fonts).
@@ -95,6 +97,17 @@ pub trait AppBevyXilemExt {
     /// Use this when component-based registration is insufficient.
     fn register_raw_projector<P: UiProjector>(&mut self, projector: P) -> &mut Self;
 
+    /// Load a RON stylesheet asset and bind it as the active runtime style source.
+    ///
+    /// The file is hot-reloaded through Bevy's asset pipeline.
+    fn load_style_sheet(&mut self, asset_path: impl Into<String>) -> &mut Self;
+
+    /// Register a selector type alias usable by `Selector::Type("...")` in stylesheet RON.
+    fn register_style_selector_type<T: Component>(
+        &mut self,
+        selector_name: impl Into<String>,
+    ) -> &mut Self;
+
     /// Register a font synchronously from bytes or filesystem path.
     ///
     /// Font registration is fail-fast and writes into the active Masonry/Xilem runtime font
@@ -139,6 +152,36 @@ impl AppBevyXilemExt for App {
         self.world_mut()
             .resource_mut::<UiProjectorRegistry>()
             .register_projector(projector);
+        self
+    }
+
+    fn load_style_sheet(&mut self, asset_path: impl Into<String>) -> &mut Self {
+        let asset_path = asset_path.into();
+        set_active_stylesheet_asset_path(self.world_mut(), asset_path);
+
+        if let Some(path) = self
+            .world()
+            .get_resource::<ActiveStyleSheetAsset>()
+            .and_then(|active| active.path.clone())
+            && let Some(asset_server) = self.world().get_resource::<AssetServer>()
+        {
+            let handle = asset_server.load::<StyleSheet>(path);
+            self.world_mut()
+                .resource_mut::<ActiveStyleSheetAsset>()
+                .handle = Some(handle);
+        }
+
+        self
+    }
+
+    fn register_style_selector_type<T: Component>(
+        &mut self,
+        selector_name: impl Into<String>,
+    ) -> &mut Self {
+        self.init_resource::<StyleTypeRegistry>();
+        let mut registry = self.world_mut().resource_mut::<StyleTypeRegistry>();
+        registry.register_type_aliases::<T>();
+        registry.register_type_name::<T>(selector_name);
         self
     }
 

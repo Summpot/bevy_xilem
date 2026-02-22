@@ -1,15 +1,27 @@
-use std::{any::TypeId, borrow::Cow, collections::HashSet, time::Duration};
+use std::{
+    any::TypeId,
+    borrow::Cow,
+    collections::{HashMap, HashSet},
+    io,
+    time::Duration,
+};
 
+use bevy_asset::{
+    Asset, AssetEvent, AssetLoader, AssetServer, Assets, Handle, LoadContext, io::Reader,
+};
 use bevy_ecs::{
     change_detection::Mut,
     component::ComponentId,
     entity::Entity,
     hierarchy::{ChildOf, Children},
+    message::{MessageCursor, Messages},
     prelude::*,
 };
+use bevy_reflect::TypePath;
 use bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim};
 use masonry::core::HasProperty;
 use masonry::theme;
+use serde::Deserialize;
 use xilem::{Color, style::Style as _};
 use xilem_masonry::masonry::parley::{FontFamily, GenericFamily, style::FontStack};
 use xilem_masonry::masonry::properties::{
@@ -31,7 +43,7 @@ pub struct StyleClass(pub Vec<String>);
 pub struct StyleDirty;
 
 /// Inline layout style that can be attached to entities.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Deserialize)]
 pub struct LayoutStyle {
     pub padding: Option<f64>,
     pub gap: Option<f64>,
@@ -54,7 +66,7 @@ pub struct ColorStyle {
 }
 
 /// Inline text style that can be attached to entities.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Deserialize)]
 pub struct TextStyle {
     pub size: Option<f32>,
 }
@@ -68,7 +80,7 @@ pub struct Hovered;
 pub struct Pressed;
 
 /// Transition settings for style animation.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Deserialize)]
 pub struct StyleTransition {
     /// Duration in seconds.
     pub duration: f32,
@@ -106,7 +118,7 @@ pub struct TargetColorStyle {
 struct StyleManagedTween;
 
 /// Pseudo classes supported by selectors.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub enum PseudoClass {
     Hovered,
     Pressed,
@@ -116,6 +128,7 @@ pub enum PseudoClass {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Selector {
     Type(TypeId),
+    TypeName(String),
     Class(String),
     PseudoClass(PseudoClass),
     And(Vec<Selector>),
@@ -134,6 +147,11 @@ impl Selector {
     #[must_use]
     pub fn class(name: impl Into<String>) -> Self {
         Self::Class(name.into())
+    }
+
+    #[must_use]
+    pub fn type_name(name: impl Into<String>) -> Self {
+        Self::TypeName(name.into())
     }
 
     #[must_use]
@@ -157,7 +175,7 @@ impl Selector {
     #[must_use]
     fn contains_type(&self) -> bool {
         match self {
-            Selector::Type(_) => true,
+            Selector::Type(_) | Selector::TypeName(_) => true,
             Selector::Class(_) | Selector::PseudoClass(_) => false,
             Selector::And(selectors) => selectors.iter().any(Self::contains_type),
             Selector::Descendant {
@@ -172,7 +190,10 @@ impl Selector {
         match self {
             Selector::Descendant { .. } => true,
             Selector::And(selectors) => selectors.iter().any(Self::contains_descendant),
-            Selector::Type(_) | Selector::Class(_) | Selector::PseudoClass(_) => false,
+            Selector::Type(_)
+            | Selector::TypeName(_)
+            | Selector::Class(_)
+            | Selector::PseudoClass(_) => false,
         }
     }
 }
@@ -208,9 +229,49 @@ impl StyleRule {
 }
 
 /// Global class-based style table.
-#[derive(Resource, Debug, Clone, Default)]
+#[derive(Resource, Asset, TypePath, Debug, Clone, Default)]
 pub struct StyleSheet {
     pub rules: Vec<StyleRule>,
+}
+
+/// Handle/path of the active stylesheet asset used for runtime style hot-reload.
+#[derive(Resource, Debug, Clone, Default)]
+pub struct ActiveStyleSheetAsset {
+    pub handle: Option<Handle<StyleSheet>>,
+    pub path: Option<String>,
+}
+
+/// Message cursor for [`AssetEvent<StyleSheet>`] in world-exclusive systems.
+#[derive(Resource, Default)]
+pub struct StyleAssetEventCursor(pub MessageCursor<AssetEvent<StyleSheet>>);
+
+/// Selector set currently owned by the active stylesheet asset.
+#[derive(Resource, Debug, Clone, Default)]
+pub struct ActiveStyleSheetSelectors(pub HashSet<Selector>);
+
+/// Name-to-component-type map used by selector type tags loaded from RON assets.
+#[derive(Resource, Debug, Clone, Default)]
+pub struct StyleTypeRegistry {
+    by_name: HashMap<String, TypeId>,
+}
+
+impl StyleTypeRegistry {
+    pub fn register_type_name<T: Component>(&mut self, name: impl Into<String>) {
+        self.by_name.insert(name.into(), TypeId::of::<T>());
+    }
+
+    pub fn register_type_aliases<T: Component>(&mut self) {
+        let full = std::any::type_name::<T>();
+        self.register_type_name::<T>(full);
+        if let Some(short) = full.rsplit("::").next() {
+            self.register_type_name::<T>(short);
+        }
+    }
+
+    #[must_use]
+    pub fn resolve(&self, name: &str) -> Option<TypeId> {
+        self.by_name.get(name).copied()
+    }
 }
 
 impl StyleSheet {
@@ -264,6 +325,162 @@ impl StyleSheet {
             .iter()
             .any(|rule| rule.selector.contains_descendant())
     }
+}
+
+/// Default stylesheet asset path loaded by [`crate::BevyXilemPlugin`].
+pub const DEFAULT_STYLE_SHEET_ASSET_PATH: &str = "themes/default_theme.ron";
+
+/// Register built-in ECS component type aliases usable from RON selectors.
+pub fn register_builtin_style_type_aliases(world: &mut World) {
+    world.init_resource::<StyleTypeRegistry>();
+    let mut registry = world.resource_mut::<StyleTypeRegistry>();
+
+    use crate::ecs::*;
+    registry.register_type_aliases::<UiRoot>();
+    registry.register_type_aliases::<UiOverlayRoot>();
+    registry.register_type_aliases::<UiFlexColumn>();
+    registry.register_type_aliases::<UiFlexRow>();
+    registry.register_type_aliases::<UiLabel>();
+    registry.register_type_aliases::<UiButton>();
+    registry.register_type_aliases::<UiCheckbox>();
+    registry.register_type_aliases::<UiSlider>();
+    registry.register_type_aliases::<UiSwitch>();
+    registry.register_type_aliases::<UiTextInput>();
+    registry.register_type_aliases::<UiDialog>();
+    registry.register_type_aliases::<UiComboBox>();
+    registry.register_type_aliases::<UiDropdownMenu>();
+    registry.register_type_aliases::<UiRadioGroup>();
+    registry.register_type_aliases::<UiTabBar>();
+    registry.register_type_aliases::<UiTreeNode>();
+    registry.register_type_aliases::<UiTable>();
+    registry.register_type_aliases::<UiMenuBar>();
+    registry.register_type_aliases::<UiMenuBarItem>();
+    registry.register_type_aliases::<UiMenuItemPanel>();
+    registry.register_type_aliases::<UiTooltip>();
+    registry.register_type_aliases::<UiSpinner>();
+    registry.register_type_aliases::<UiColorPicker>();
+    registry.register_type_aliases::<UiColorPickerPanel>();
+    registry.register_type_aliases::<UiGroupBox>();
+    registry.register_type_aliases::<UiSplitPane>();
+    registry.register_type_aliases::<UiToast>();
+    registry.register_type_aliases::<UiDatePicker>();
+    registry.register_type_aliases::<UiDatePickerPanel>();
+}
+
+/// Set the active stylesheet asset path used for loading + hot-reload.
+pub fn set_active_stylesheet_asset_path(world: &mut World, asset_path: impl Into<String>) {
+    let asset_path = asset_path.into();
+    world.init_resource::<ActiveStyleSheetAsset>();
+
+    let needs_reload = world
+        .get_resource::<ActiveStyleSheetAsset>()
+        .is_none_or(|active| active.path.as_deref() != Some(asset_path.as_str()));
+
+    if !needs_reload {
+        return;
+    }
+
+    let mut active = world.resource_mut::<ActiveStyleSheetAsset>();
+    active.path = Some(asset_path);
+    active.handle = None;
+}
+
+/// Ensure the active stylesheet asset handle is loaded from the configured path.
+pub fn ensure_active_stylesheet_asset_handle(world: &mut World) {
+    let path = world
+        .get_resource::<ActiveStyleSheetAsset>()
+        .and_then(|active| active.path.clone());
+
+    let Some(path) = path else {
+        return;
+    };
+
+    let has_handle = world
+        .get_resource::<ActiveStyleSheetAsset>()
+        .is_some_and(|active| active.handle.is_some());
+    if has_handle {
+        return;
+    }
+
+    let Some(asset_server) = world.get_resource::<AssetServer>() else {
+        return;
+    };
+
+    let handle = asset_server.load::<StyleSheet>(path);
+    world.resource_mut::<ActiveStyleSheetAsset>().handle = Some(handle);
+}
+
+/// Apply loaded stylesheet asset updates to the live [`StyleSheet`] resource.
+pub fn sync_stylesheet_asset_events(world: &mut World) {
+    let active_handle_id = world
+        .get_resource::<ActiveStyleSheetAsset>()
+        .and_then(|active| active.handle.as_ref())
+        .map(|handle| handle.id());
+
+    let Some(active_handle_id) = active_handle_id else {
+        return;
+    };
+
+    if !world.contains_resource::<Messages<AssetEvent<StyleSheet>>>() {
+        return;
+    }
+
+    let mut should_refresh = false;
+    world.resource_scope(|world, mut cursor: Mut<StyleAssetEventCursor>| {
+        let messages = world.resource::<Messages<AssetEvent<StyleSheet>>>();
+        for event in cursor.0.read(messages) {
+            match event {
+                AssetEvent::Added { id }
+                | AssetEvent::Modified { id }
+                | AssetEvent::LoadedWithDependencies { id } => {
+                    if *id == active_handle_id {
+                        should_refresh = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
+
+    if !should_refresh {
+        return;
+    }
+
+    let Some(active_handle) = world
+        .get_resource::<ActiveStyleSheetAsset>()
+        .and_then(|active| active.handle.clone())
+    else {
+        return;
+    };
+
+    let Some(loaded_stylesheet) = world
+        .get_resource::<Assets<StyleSheet>>()
+        .and_then(|assets| assets.get(&active_handle))
+        .cloned()
+    else {
+        return;
+    };
+
+    world.init_resource::<ActiveStyleSheetSelectors>();
+
+    let incoming_selectors = loaded_stylesheet
+        .rules
+        .iter()
+        .map(|rule| rule.selector.clone())
+        .collect::<HashSet<_>>();
+
+    let previous_asset_selectors = world
+        .get_resource::<ActiveStyleSheetSelectors>()
+        .map(|selectors| selectors.0.clone())
+        .unwrap_or_default();
+
+    let mut runtime_sheet = world.resource_mut::<StyleSheet>();
+    runtime_sheet
+        .rules
+        .retain(|rule| !previous_asset_selectors.contains(&rule.selector));
+    runtime_sheet.rules.extend(loaded_stylesheet.rules);
+
+    world.resource_mut::<ActiveStyleSheetSelectors>().0 = incoming_selectors;
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -409,6 +626,11 @@ fn selector_matches_entity(world: &World, entity: Entity, selector: &Selector) -
             .components()
             .get_id(*type_id)
             .is_some_and(|component_id| component_matches_type(world, entity, component_id)),
+        Selector::TypeName(name) => world
+            .get_resource::<StyleTypeRegistry>()
+            .and_then(|registry| registry.resolve(name))
+            .and_then(|type_id| world.components().get_id(type_id))
+            .is_some_and(|component_id| component_matches_type(world, entity, component_id)),
         Selector::Class(name) => world
             .get::<StyleClass>(entity)
             .is_some_and(|style_class| style_class.0.iter().any(|class| class == name)),
@@ -434,7 +656,7 @@ fn selector_matches_class_context(
     has_class: &impl Fn(&str) -> bool,
 ) -> bool {
     match selector {
-        Selector::Type(_) => false,
+        Selector::Type(_) | Selector::TypeName(_) => false,
         Selector::Class(name) => has_class(name),
         Selector::PseudoClass(PseudoClass::Hovered) => {
             entity.is_some_and(|entity| world.get::<Hovered>(entity).is_some())
@@ -1180,4 +1402,315 @@ pub fn apply_text_input_style(
         styled = styled.text_color(text_color);
     }
     styled
+}
+
+#[derive(Debug, Deserialize)]
+struct StyleSheetDef {
+    #[serde(default)]
+    rules: Vec<StyleRuleDef>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StyleRuleDef {
+    selector: SelectorDef,
+    #[serde(default)]
+    setter: StyleSetterDef,
+}
+
+#[derive(Debug, Deserialize)]
+enum SelectorDef {
+    Type(String),
+    Class(String),
+    PseudoClass(PseudoClass),
+    And(Vec<SelectorDef>),
+    Descendant {
+        ancestor: Box<SelectorDef>,
+        descendant: Box<SelectorDef>,
+    },
+}
+
+impl From<SelectorDef> for Selector {
+    fn from(value: SelectorDef) -> Self {
+        match value {
+            SelectorDef::Type(name) => Selector::type_name(name),
+            SelectorDef::Class(name) => Selector::class(name),
+            SelectorDef::PseudoClass(pseudo) => Selector::pseudo(pseudo),
+            SelectorDef::And(selectors) => {
+                Selector::and(selectors.into_iter().map(Into::into).collect::<Vec<_>>())
+            }
+            SelectorDef::Descendant {
+                ancestor,
+                descendant,
+            } => Selector::descendant((*ancestor).into(), (*descendant).into()),
+        }
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct StyleSetterDef {
+    #[serde(default)]
+    layout: LayoutStyleDef,
+    #[serde(default)]
+    colors: ColorStyleDef,
+    #[serde(default)]
+    text: TextStyleDef,
+    #[serde(default)]
+    font_family: OptionalValue<Vec<String>>,
+    #[serde(default)]
+    box_shadow: OptionalValue<BoxShadowDef>,
+    #[serde(default)]
+    transition: OptionalValue<StyleTransition>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct LayoutStyleDef {
+    #[serde(default)]
+    padding: OptionalValue<f64>,
+    #[serde(default)]
+    gap: OptionalValue<f64>,
+    #[serde(default)]
+    corner_radius: OptionalValue<f64>,
+    #[serde(default)]
+    border_width: OptionalValue<f64>,
+}
+
+impl LayoutStyleDef {
+    fn into_layout(self) -> LayoutStyle {
+        LayoutStyle {
+            padding: self.padding.into_option(),
+            gap: self.gap.into_option(),
+            corner_radius: self.corner_radius.into_option(),
+            border_width: self.border_width.into_option(),
+        }
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct TextStyleDef {
+    #[serde(default)]
+    size: OptionalValue<f32>,
+}
+
+impl TextStyleDef {
+    fn into_text(self) -> TextStyle {
+        TextStyle {
+            size: self.size.into_option(),
+        }
+    }
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct ColorStyleDef {
+    #[serde(default)]
+    bg: OptionalColorDef,
+    #[serde(default, rename = "text")]
+    text_color: OptionalColorDef,
+    #[serde(default)]
+    border: OptionalColorDef,
+    #[serde(default)]
+    hover_bg: OptionalColorDef,
+    #[serde(default)]
+    hover_text: OptionalColorDef,
+    #[serde(default)]
+    hover_border: OptionalColorDef,
+    #[serde(default)]
+    pressed_bg: OptionalColorDef,
+    #[serde(default)]
+    pressed_text: OptionalColorDef,
+    #[serde(default)]
+    pressed_border: OptionalColorDef,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+enum ColorDef {
+    Rgb8(u8, u8, u8),
+    Rgba8(u8, u8, u8, u8),
+    Hex(String),
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+enum OptionalColorDef {
+    #[default]
+    None,
+    Rgb8(u8, u8, u8),
+    Rgba8(u8, u8, u8, u8),
+    Hex(String),
+}
+
+impl OptionalColorDef {
+    fn into_color(self) -> io::Result<Option<Color>> {
+        match self {
+            Self::None => Ok(None),
+            Self::Rgb8(r, g, b) => Ok(Some(Color::from_rgb8(r, g, b))),
+            Self::Rgba8(r, g, b, a) => Ok(Some(Color::from_rgba8(r, g, b, a))),
+            Self::Hex(hex) => parse_hex_color(&hex).map(Some),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+enum OptionalValue<T> {
+    Value(T),
+    Optional(Option<T>),
+}
+
+impl<T> Default for OptionalValue<T> {
+    fn default() -> Self {
+        Self::Optional(None)
+    }
+}
+
+impl<T> OptionalValue<T> {
+    fn into_option(self) -> Option<T> {
+        match self {
+            Self::Value(value) => Some(value),
+            Self::Optional(value) => value,
+        }
+    }
+}
+
+impl ColorDef {
+    fn into_color(self) -> io::Result<Color> {
+        match self {
+            Self::Rgb8(r, g, b) => Ok(Color::from_rgb8(r, g, b)),
+            Self::Rgba8(r, g, b, a) => Ok(Color::from_rgba8(r, g, b, a)),
+            Self::Hex(hex) => parse_hex_color(&hex),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct BoxShadowDef {
+    color: ColorDef,
+    #[serde(default)]
+    offset_x: f64,
+    #[serde(default)]
+    offset_y: f64,
+    #[serde(default)]
+    blur: f64,
+}
+
+impl BoxShadowDef {
+    fn into_box_shadow(self) -> io::Result<BoxShadow> {
+        Ok(
+            BoxShadow::new(self.color.into_color()?, (self.offset_x, self.offset_y))
+                .blur(self.blur),
+        )
+    }
+}
+
+impl StyleSetterDef {
+    fn into_setter(self) -> io::Result<StyleSetter> {
+        Ok(StyleSetter {
+            layout: self.layout.into_layout(),
+            colors: self.colors.into_color_style()?,
+            text: self.text.into_text(),
+            font_family: self.font_family.into_option(),
+            box_shadow: self
+                .box_shadow
+                .into_option()
+                .map(BoxShadowDef::into_box_shadow)
+                .transpose()?,
+            transition: self.transition.into_option(),
+        })
+    }
+}
+
+impl ColorStyleDef {
+    fn into_color_style(self) -> io::Result<ColorStyle> {
+        fn map_color(value: OptionalColorDef) -> io::Result<Option<Color>> {
+            value.into_color()
+        }
+
+        Ok(ColorStyle {
+            bg: map_color(self.bg)?,
+            text: map_color(self.text_color)?,
+            border: map_color(self.border)?,
+            hover_bg: map_color(self.hover_bg)?,
+            hover_text: map_color(self.hover_text)?,
+            hover_border: map_color(self.hover_border)?,
+            pressed_bg: map_color(self.pressed_bg)?,
+            pressed_text: map_color(self.pressed_text)?,
+            pressed_border: map_color(self.pressed_border)?,
+        })
+    }
+}
+
+fn parse_hex_color(hex: &str) -> io::Result<Color> {
+    let hex = hex.trim();
+    let hex = hex.strip_prefix('#').unwrap_or(hex);
+
+    let invalid = || {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("invalid hex color `{hex}`; expected #RRGGBB or #RRGGBBAA"),
+        )
+    };
+
+    match hex.len() {
+        6 => {
+            let r = u8::from_str_radix(&hex[0..2], 16).map_err(|_| invalid())?;
+            let g = u8::from_str_radix(&hex[2..4], 16).map_err(|_| invalid())?;
+            let b = u8::from_str_radix(&hex[4..6], 16).map_err(|_| invalid())?;
+            Ok(Color::from_rgb8(r, g, b))
+        }
+        8 => {
+            let r = u8::from_str_radix(&hex[0..2], 16).map_err(|_| invalid())?;
+            let g = u8::from_str_radix(&hex[2..4], 16).map_err(|_| invalid())?;
+            let b = u8::from_str_radix(&hex[4..6], 16).map_err(|_| invalid())?;
+            let a = u8::from_str_radix(&hex[6..8], 16).map_err(|_| invalid())?;
+            Ok(Color::from_rgba8(r, g, b, a))
+        }
+        _ => Err(invalid()),
+    }
+}
+
+fn stylesheet_from_ron_bytes(bytes: &[u8]) -> io::Result<StyleSheet> {
+    let parsed: StyleSheetDef = ron::de::from_bytes(bytes).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("failed to parse stylesheet RON: {error}"),
+        )
+    })?;
+
+    let mut sheet = StyleSheet::default();
+    for rule in parsed.rules {
+        sheet.add_rule(StyleRule {
+            selector: rule.selector.into(),
+            setter: rule.setter.into_setter()?,
+        });
+    }
+
+    Ok(sheet)
+}
+
+#[cfg(test)]
+pub(crate) fn parse_stylesheet_ron_for_tests(ron_text: &str) -> io::Result<StyleSheet> {
+    stylesheet_from_ron_bytes(ron_text.as_bytes())
+}
+
+/// Asset loader for stylesheet `.ron` files.
+#[derive(Default, TypePath)]
+pub struct StyleSheetRonLoader;
+
+impl AssetLoader for StyleSheetRonLoader {
+    type Asset = StyleSheet;
+    type Settings = ();
+    type Error = io::Error;
+
+    async fn load(
+        &self,
+        reader: &mut dyn Reader,
+        _settings: &Self::Settings,
+        _load_context: &mut LoadContext<'_>,
+    ) -> Result<Self::Asset, Self::Error> {
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes).await?;
+        stylesheet_from_ron_bytes(&bytes)
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["ron"]
+    }
 }

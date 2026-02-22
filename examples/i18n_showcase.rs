@@ -603,6 +603,7 @@ fn build_i18n_app() -> App {
         TextPlugin::default(),
         BevyXilemPlugin,
     ))
+    .load_style_sheet("themes/default_theme.ron")
     .insert_resource(AppI18n::new(parse_locale("en-US")))
     .register_xilem_font(SyncAssetSource::FilePath("assets/fonts/Inter-Regular.otf"))
     .register_xilem_font(SyncAssetSource::FilePath(

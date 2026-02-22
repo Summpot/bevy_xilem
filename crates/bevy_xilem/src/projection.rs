@@ -10,10 +10,10 @@ pub mod widgets;
 pub use core::*;
 
 use crate::ecs::{
-    UiButton, UiColorPicker, UiColorPickerPanel, UiComboBox, UiDatePicker, UiDatePickerPanel,
-    UiDialog, UiDropdownMenu, UiFlexColumn, UiFlexRow, UiGroupBox, UiLabel, UiMenuBar,
-    UiMenuBarItem, UiMenuItemPanel, UiOverlayRoot, UiRadioGroup, UiSpinner, UiSplitPane, UiTabBar,
-    UiTable, UiToast, UiTooltip, UiTreeNode,
+    UiButton, UiCheckbox, UiColorPicker, UiColorPickerPanel, UiComboBox, UiDatePicker,
+    UiDatePickerPanel, UiDialog, UiDropdownMenu, UiFlexColumn, UiFlexRow, UiGroupBox, UiLabel,
+    UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiOverlayRoot, UiRadioGroup, UiSlider, UiSpinner,
+    UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput, UiToast, UiTooltip, UiTreeNode,
 };
 
 /// Register built-in projectors for built-in ECS demo components.
@@ -23,6 +23,10 @@ pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
         .register_component::<UiFlexRow>(layout::project_flex_row)
         .register_component::<UiLabel>(elements::project_label)
         .register_component::<UiButton>(elements::project_button)
+        .register_component::<UiCheckbox>(elements::project_checkbox)
+        .register_component::<UiSlider>(elements::project_slider)
+        .register_component::<UiSwitch>(elements::project_switch)
+        .register_component::<UiTextInput>(elements::project_text_input)
         .register_component::<UiOverlayRoot>(overlay::project_overlay_root)
         .register_component::<UiDialog>(dialog::project_dialog)
         .register_component::<UiComboBox>(dropdown::project_combo_box)

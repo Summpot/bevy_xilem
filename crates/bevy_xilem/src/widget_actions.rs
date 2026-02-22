@@ -3,15 +3,17 @@ use bevy_time::Time;
 
 use crate::{
     AnchoredTo, HasTooltip, Hovered, OverlayAnchorRect, OverlayComputedPosition, OverlayConfig,
-    OverlayPlacement, OverlayState, UiOverlayRoot, UiRadioGroup, UiRadioGroupChanged, UiTabBar,
-    UiTabChanged, UiToast, UiTooltip, UiTreeNode, UiTreeNodeToggled, events::UiEventQueue,
+    OverlayPlacement, OverlayState, UiCheckbox, UiCheckboxChanged, UiOverlayRoot, UiRadioGroup,
+    UiRadioGroupChanged, UiSlider, UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar,
+    UiTabChanged, UiTextInput, UiTextInputChanged, UiToast, UiTooltip, UiTreeNode,
+    UiTreeNodeToggled, events::UiEventQueue,
 };
 
 /// Internal action enum for non-overlay widget interactions.
 ///
 /// These actions are emitted by built-in widget projectors and consumed by
 /// [`handle_widget_actions`] each frame.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum WidgetUiAction {
     /// Select a specific item in a radio group.
     SelectRadioItem { group: Entity, index: usize },
@@ -19,6 +21,14 @@ pub enum WidgetUiAction {
     SelectTab { bar: Entity, index: usize },
     /// Expand or collapse a tree node.
     ToggleTreeNode { node: Entity },
+    /// Toggle a checkbox.
+    ToggleCheckbox { checkbox: Entity },
+    /// Adjust slider value using step increments.
+    StepSlider { slider: Entity, delta: f64 },
+    /// Toggle a switch.
+    ToggleSwitch { switch: Entity },
+    /// Update text input contents.
+    SetTextInput { input: Entity, value: String },
 }
 
 /// Consume [`WidgetUiAction`] entries from [`UiEventQueue`] and apply the
@@ -88,6 +98,71 @@ pub fn handle_widget_actions(world: &mut World) {
                     world
                         .resource::<UiEventQueue>()
                         .push_typed(node, UiTreeNodeToggled { node, is_expanded });
+                }
+            }
+
+            WidgetUiAction::ToggleCheckbox { checkbox } => {
+                if world.get_entity(checkbox).is_err() {
+                    continue;
+                }
+
+                if let Some(mut checkbox_state) = world.get_mut::<UiCheckbox>(checkbox) {
+                    checkbox_state.checked = !checkbox_state.checked;
+                    let checked = checkbox_state.checked;
+                    drop(checkbox_state);
+                    world
+                        .resource::<UiEventQueue>()
+                        .push_typed(checkbox, UiCheckboxChanged { checkbox, checked });
+                }
+            }
+
+            WidgetUiAction::StepSlider { slider, delta } => {
+                if world.get_entity(slider).is_err() {
+                    continue;
+                }
+
+                if let Some(mut slider_state) = world.get_mut::<UiSlider>(slider) {
+                    let step = slider_state.step.max(f64::EPSILON);
+                    let next = (slider_state.value + delta * step)
+                        .clamp(slider_state.min, slider_state.max);
+                    if (next - slider_state.value).abs() > f64::EPSILON {
+                        slider_state.value = next;
+                        world.resource::<UiEventQueue>().push_typed(
+                            slider,
+                            UiSliderChanged {
+                                slider,
+                                value: next,
+                            },
+                        );
+                    }
+                }
+            }
+
+            WidgetUiAction::ToggleSwitch { switch } => {
+                if world.get_entity(switch).is_err() {
+                    continue;
+                }
+
+                if let Some(mut switch_state) = world.get_mut::<UiSwitch>(switch) {
+                    switch_state.on = !switch_state.on;
+                    let on = switch_state.on;
+                    drop(switch_state);
+                    world
+                        .resource::<UiEventQueue>()
+                        .push_typed(switch, UiSwitchChanged { switch, on });
+                }
+            }
+
+            WidgetUiAction::SetTextInput { input, value } => {
+                if world.get_entity(input).is_err() {
+                    continue;
+                }
+
+                if let Some(mut text_input) = world.get_mut::<UiTextInput>(input) {
+                    text_input.value = value.clone();
+                    world
+                        .resource::<UiEventQueue>()
+                        .push_typed(input, UiTextInputChanged { input, value });
                 }
             }
         }

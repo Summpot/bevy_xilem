@@ -605,6 +605,7 @@ fn build_bevy_todo_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
+        .load_style_sheet("themes/default_theme.ron")
         .insert_resource(ActiveFilter(FilterType::All))
         .insert_resource(DraftTodo("My Next Task".to_string()))
         .register_projector::<TodoRootView>(project_todo_root)

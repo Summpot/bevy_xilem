@@ -525,6 +525,7 @@ fn build_bevy_timer_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
+        .load_style_sheet("themes/default_theme.ron")
         .insert_resource(TimerState::default())
         .register_projector::<TimerRootView>(project_timer_root)
         .register_projector::<TimerTitle>(project_timer_title)

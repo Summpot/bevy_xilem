@@ -153,6 +153,16 @@ Style resolution helpers (`resolve_style`, `resolve_style_for_classes`) and appl
 Projectors now primarily consume `ComputedStyle` (through `resolve_style`) rather than
 re-running a full cascade per frame.
 
+Asset-driven stylesheet details:
+
+- `StyleSheet` is also a Bevy asset type loaded via `StyleSheetRonLoader` from `.ron` files.
+- `ActiveStyleSheetAsset { path, handle }` tracks the active runtime stylesheet asset.
+- `sync_stylesheet_asset_events` listens to `AssetEvent<StyleSheet>` and applies updated
+  asset content into the global `StyleSheet` resource.
+- Resource updates reuse the existing invalidation path (`mark_style_dirty`), so transition and
+  cascade behavior remains unchanged while enabling hot-reload.
+- Default runtime stylesheet path is `assets/themes/default_theme.ron`.
+
 Label text wrapping policy:
 
 - `apply_label_style` applies `LineBreaking::WordWrap` by default.
@@ -349,6 +359,23 @@ for controls that naturally produce user actions:
 Non-interactive display/layout controls (`label`, `flex`, `grid`, `prose`, `progress_bar`,
 `sized_box`, etc.) are reused directly since they do not require event adaptation.
 
+Additional ECS-native logical controls and typed events:
+
+- `UiCheckbox` / `UiCheckboxChanged`
+- `UiSlider` / `UiSliderChanged`
+- `UiSwitch` / `UiSwitchChanged`
+- `UiTextInput` / `UiTextInputChanged`
+
+Template-part expansion model:
+
+- Built-in controls can be expanded into child entities tagged with marker components
+  (`PartDialogTitle`, `PartDialogDismiss`, `PartComboBoxDisplay`,
+  `PartCheckboxIndicator`, `PartSliderTrack`, etc.).
+- `expand_builtin_control_templates` maintains these parts from logical state.
+- Projectors assemble visuals using `ctx.children` and marker lookups.
+- Public helper APIs for user-defined template systems:
+  `spawn_template_part`, `ensure_template_part`, `find_template_part`.
+
 ### 7) Two-level UI componentization policy
 
 Projector organization follows two complementary componentization levels:
@@ -407,6 +434,8 @@ regular UI content.
 - `UiSynthesisStats`
 - `UiEventQueue`
 - `StyleSheet`
+- `ActiveStyleSheetAsset`
+- `StyleAssetEventCursor`
 - `XilemFontBridge`
 - `AppI18n`
 - `OverlayStack`
@@ -416,10 +445,15 @@ and registers tweening support with:
 
 - `TweeningPlugin` (from crates.io `bevy_tweening` crate)
 
+It ensures Bevy asset runtime support is available and registers:
+
+- `StyleSheet` asset type
+- `StyleSheetRonLoader` asset loader
+
 and registers systems:
 
 - `PreUpdate`: `collect_bevy_font_assets -> sync_fonts_to_xilem -> initialize_masonry_runtime_from_primary_window -> bubble_ui_pointer_events -> handle_global_overlay_clicks -> inject_bevy_input_into_masonry -> sync_ui_interaction_markers`
-- `Update`: `ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> handle_overlay_actions -> sync_overlay_stack_lifecycle -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
+- `Update`: `expand_builtin_control_templates -> ensure_overlay_root -> reparent_overlay_entities -> ensure_overlay_defaults -> handle_overlay_actions -> ... -> ensure_active_stylesheet_asset_handle -> sync_stylesheet_asset_events -> mark_style_dirty -> sync_style_targets -> animate_style_transitions`
 - `PostUpdate`: `synthesize_ui -> rebuild_masonry_runtime -> sync_overlay_positions`
 - `Last`: `paint_masonry_ui` (explicit Masonry/Vello render + present pass)
 

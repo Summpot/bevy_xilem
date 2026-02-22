@@ -96,6 +96,7 @@ fn build_overlay_hit_routing_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
+        .load_style_sheet("themes/default_theme.ron")
         .register_projector::<UiToast>(project_ui_toast)
         .add_systems(Startup, setup_overlay_hit_routing_world)
         .add_systems(PreUpdate, drain_overlay_hit_routing_events);

@@ -6,7 +6,10 @@ use super::{
     },
 };
 use crate::{
-    ecs::{OverlayComputedPosition, UiDialog},
+    ecs::{
+        OverlayComputedPosition, PartDialogBody, PartDialogDismiss, PartDialogTitle, UiDialog,
+        UiLabel,
+    },
     overlay::OverlayUiAction,
     styling::{
         apply_direct_widget_style, apply_label_style, apply_widget_style, resolve_style,
@@ -14,6 +17,7 @@ use crate::{
     },
     views::{ecs_button, opaque_hitbox_for_entity},
 };
+use bevy_ecs::{hierarchy::Children, prelude::Entity};
 use masonry::layout::Length;
 use std::sync::Arc;
 use xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
@@ -164,21 +168,50 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
         estimated_height
     };
 
+    let child_entities = ctx
+        .world
+        .get::<Children>(ctx.entity)
+        .map(|children| children.iter().copied().collect::<Vec<_>>())
+        .unwrap_or_default();
+
+    let child_parts = child_entities
+        .into_iter()
+        .zip(ctx.children.iter().cloned())
+        .collect::<Vec<_>>();
+
+    let part_view = |predicate: &dyn Fn(Entity) -> bool| {
+        child_parts
+            .iter()
+            .find_map(|(entity, view)| predicate(*entity).then_some(view.clone()))
+    };
+
+    let title_view = part_view(&|entity| ctx.world.get::<PartDialogTitle>(entity).is_some())
+        .unwrap_or_else(|| Arc::new(apply_label_style(label(title), &title_style)));
+    let body_view = part_view(&|entity| ctx.world.get::<PartDialogBody>(entity).is_some())
+        .unwrap_or_else(|| Arc::new(apply_label_style(label(body), &body_style)));
+    let dismiss_text = child_parts
+        .iter()
+        .find_map(|(entity, _)| {
+            ctx.world
+                .get::<PartDialogDismiss>(*entity)
+                .and_then(|_| ctx.world.get::<UiLabel>(*entity))
+                .map(|label| label.text.clone())
+        })
+        .unwrap_or_else(|| dismiss_label.clone());
+
     let dismiss_button = apply_direct_widget_style(
-        ecs_button(
-            ctx.entity,
-            OverlayUiAction::DismissDialog,
-            dismiss_label.clone(),
-        ),
+        ecs_button(ctx.entity, OverlayUiAction::DismissDialog, dismiss_text),
         &dismiss_style,
     )
     .into_any_flex();
 
-    let mut dialog_children = vec![
-        apply_label_style(label(title), &title_style).into_any_flex(),
-        apply_label_style(label(body), &body_style).into_any_flex(),
-    ];
-    dialog_children.extend(ctx.children.into_iter().map(|child| child.into_any_flex()));
+    let mut dialog_children = vec![title_view.into_any_flex(), body_view.into_any_flex()];
+    dialog_children.extend(child_parts.into_iter().filter_map(|(entity, view)| {
+        (ctx.world.get::<PartDialogTitle>(entity).is_none()
+            && ctx.world.get::<PartDialogBody>(entity).is_none()
+            && ctx.world.get::<PartDialogDismiss>(entity).is_none())
+        .then_some(view.into_any_flex())
+    }));
     dialog_children.push(dismiss_button);
 
     let dialog_surface = xilem_masonry::view::sized_box(apply_widget_style(

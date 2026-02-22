@@ -1,5 +1,5 @@
-use bevy_app::{App, Last, Plugin, PostUpdate, PreUpdate, Update};
-use bevy_asset::AssetEvent;
+use bevy_app::{App, Last, Plugin, PostUpdate, PreUpdate, TaskPoolPlugin, Update};
+use bevy_asset::{AssetApp, AssetEvent, AssetPlugin};
 use bevy_ecs::schedule::IntoScheduleConfigs;
 use bevy_input::mouse::{MouseButtonInput, MouseWheel};
 use bevy_text::Font;
@@ -23,10 +23,14 @@ use crate::{
         inject_bevy_input_into_masonry, paint_masonry_ui, rebuild_masonry_runtime,
     },
     styling::{
-        StyleSheet, animate_style_transitions, mark_style_dirty, sync_style_targets,
-        sync_ui_interaction_markers,
+        ActiveStyleSheetAsset, ActiveStyleSheetSelectors, DEFAULT_STYLE_SHEET_ASSET_PATH,
+        StyleAssetEventCursor, StyleSheet, StyleSheetRonLoader, animate_style_transitions,
+        ensure_active_stylesheet_asset_handle, mark_style_dirty,
+        register_builtin_style_type_aliases, set_active_stylesheet_asset_path, sync_style_targets,
+        sync_stylesheet_asset_events, sync_ui_interaction_markers,
     },
     synthesize::{SynthesizedUiViews, UiSynthesisStats, synthesize_ui},
+    templates::expand_builtin_control_templates,
     widget_actions::{handle_tooltip_hovers, handle_widget_actions, tick_toasts},
 };
 
@@ -36,12 +40,24 @@ pub struct BevyXilemPlugin;
 
 impl Plugin for BevyXilemPlugin {
     fn build(&self, app: &mut App) {
+        if !app.is_plugin_added::<TaskPoolPlugin>() {
+            app.add_plugins(TaskPoolPlugin::default());
+        }
+        if !app.is_plugin_added::<AssetPlugin>() {
+            app.add_plugins(AssetPlugin::default());
+        }
+
         app.add_plugins((TimePlugin, TweeningPlugin))
+            .init_asset::<StyleSheet>()
+            .init_asset_loader::<StyleSheetRonLoader>()
             .init_resource::<UiProjectorRegistry>()
             .init_resource::<SynthesizedUiViews>()
             .init_resource::<UiSynthesisStats>()
             .init_resource::<UiEventQueue>()
             .init_resource::<StyleSheet>()
+            .init_resource::<ActiveStyleSheetAsset>()
+            .init_resource::<ActiveStyleSheetSelectors>()
+            .init_resource::<StyleAssetEventCursor>()
             .init_resource::<XilemFontBridge>()
             .init_resource::<AppI18n>()
             .init_resource::<OverlayStack>()
@@ -70,6 +86,7 @@ impl Plugin for BevyXilemPlugin {
             .add_systems(
                 Update,
                 (
+                    expand_builtin_control_templates,
                     ensure_overlay_root,
                     reparent_overlay_entities,
                     ensure_overlay_defaults,
@@ -78,6 +95,8 @@ impl Plugin for BevyXilemPlugin {
                     handle_tooltip_hovers,
                     tick_toasts,
                     sync_overlay_stack_lifecycle,
+                    ensure_active_stylesheet_asset_handle,
+                    sync_stylesheet_asset_events,
                     mark_style_dirty,
                     sync_style_targets,
                 )
@@ -98,6 +117,9 @@ impl Plugin for BevyXilemPlugin {
         );
 
         app.add_systems(Last, paint_masonry_ui);
+
+        set_active_stylesheet_asset_path(app.world_mut(), DEFAULT_STYLE_SHEET_ASSET_PATH);
+        register_builtin_style_type_aliases(app.world_mut());
 
         let mut registry = app.world_mut().resource_mut::<UiProjectorRegistry>();
         register_builtin_projectors(&mut registry);

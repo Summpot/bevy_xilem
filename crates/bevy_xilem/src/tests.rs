@@ -1,5 +1,8 @@
 use std::{
-    sync::{Arc, Once},
+    sync::{
+        Arc, Once,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::Duration,
 };
 
@@ -1713,4 +1716,128 @@ fn pointer_hits_bubble_to_parent_until_consumed() {
     assert_eq!(bubbled[1].entity, parent);
     assert_eq!(bubbled[1].action.current_target, parent);
     assert!(bubbled[1].action.consumed);
+}
+
+#[test]
+fn projector_registry_last_registered_component_projector_wins() {
+    #[derive(Component, Debug, Clone, Copy)]
+    struct OverrideProbe;
+
+    static LAST_PROJECTOR: AtomicUsize = AtomicUsize::new(0);
+
+    fn project_first(_: &OverrideProbe, _ctx: ProjectionCtx<'_>) -> UiView {
+        LAST_PROJECTOR.store(1, Ordering::SeqCst);
+        Arc::new(crate::xilem::view::label("first"))
+    }
+
+    fn project_second(_: &OverrideProbe, _ctx: ProjectionCtx<'_>) -> UiView {
+        LAST_PROJECTOR.store(2, Ordering::SeqCst);
+        Arc::new(crate::xilem::view::label("second"))
+    }
+
+    let mut world = World::new();
+    let entity = world.spawn((OverrideProbe,)).id();
+
+    let mut registry = UiProjectorRegistry::default();
+    registry
+        .register_component::<OverrideProbe>(project_first)
+        .register_component::<OverrideProbe>(project_second);
+
+    LAST_PROJECTOR.store(0, Ordering::SeqCst);
+    let projected = registry.project_node(&world, entity, entity.to_bits(), Vec::new());
+    assert!(projected.is_some());
+    assert_eq!(LAST_PROJECTOR.load(Ordering::SeqCst), 2);
+}
+
+#[test]
+fn stylesheet_ron_parser_supports_selectors_and_colors() {
+    let ron = r##"(
+  rules: [
+    (
+      selector: Class("demo.button"),
+      setter: (
+        layout: (padding: 10.0, corner_radius: 6.0),
+                colors: (bg: Hex("#112233"), text: Hex("#f0f0f0")),
+      ),
+    ),
+    (
+      selector: And([Class("demo.button"), PseudoClass(Hovered)]),
+      setter: (
+                colors: (hover_bg: Hex("#112233ff")),
+      ),
+    ),
+  ],
+)"##;
+
+    let sheet =
+        crate::styling::parse_stylesheet_ron_for_tests(ron).expect("stylesheet ron should parse");
+    assert_eq!(sheet.rules.len(), 2);
+
+    assert!(matches!(
+        &sheet.rules[0].selector,
+        crate::Selector::Class(name) if name == "demo.button"
+    ));
+    assert!(sheet.rules[0].setter.layout.padding.is_some());
+    assert!(sheet.rules[0].setter.colors.bg.is_some());
+
+    assert!(matches!(&sheet.rules[1].selector, crate::Selector::And(parts) if !parts.is_empty()));
+}
+
+#[test]
+fn template_expansion_and_widget_actions_update_checkbox_state() {
+    let mut world = World::new();
+    world.insert_resource(UiEventQueue::default());
+
+    let checkbox = world
+        .spawn((crate::UiCheckbox::new("Receive updates", false),))
+        .id();
+
+    crate::expand_builtin_control_templates(&mut world);
+
+    let indicator = crate::find_template_part::<crate::PartCheckboxIndicator>(&world, checkbox)
+        .expect("checkbox indicator part should be expanded");
+    let label = crate::find_template_part::<crate::PartCheckboxLabel>(&world, checkbox)
+        .expect("checkbox label part should be expanded");
+
+    assert_eq!(
+        world
+            .get::<crate::UiLabel>(indicator)
+            .expect("indicator label should exist")
+            .text,
+        "☐"
+    );
+    assert_eq!(
+        world
+            .get::<crate::UiLabel>(label)
+            .expect("label part should have text")
+            .text,
+        "Receive updates"
+    );
+
+    world
+        .resource::<UiEventQueue>()
+        .push_typed(checkbox, crate::WidgetUiAction::ToggleCheckbox { checkbox });
+    crate::handle_widget_actions(&mut world);
+    crate::expand_builtin_control_templates(&mut world);
+
+    assert!(
+        world
+            .get::<crate::UiCheckbox>(checkbox)
+            .expect("checkbox should exist")
+            .checked
+    );
+    assert_eq!(
+        world
+            .resource_mut::<UiEventQueue>()
+            .drain_actions::<crate::UiCheckboxChanged>()
+            .len(),
+        1
+    );
+    assert_eq!(
+        world
+            .get::<crate::UiLabel>(indicator)
+            .expect("indicator label should exist")
+            .text,
+        "☑"
+    );
 }

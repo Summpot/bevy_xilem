@@ -37,6 +37,9 @@ xilem_masonry = { path = "third_party/xilem/xilem_masonry" }
 vello = "0.7"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+bevy_reflect = { version = "0.18", default-features = false }
+serde = { version = "1", features = ["derive"] }
+ron = "0.10"
 
 [patch.crates-io]
 bevy = { path = "third_party/bevy" }

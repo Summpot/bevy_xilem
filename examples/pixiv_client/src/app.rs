@@ -2292,6 +2292,7 @@ fn build_app() -> App {
         TextPlugin::default(),
         BevyXilemPlugin,
     ))
+    .load_style_sheet("themes/default_theme.ron")
     .insert_resource(AppI18n::new(parse_locale("en-US")))
     .register_i18n_bundle(
         "en-US",

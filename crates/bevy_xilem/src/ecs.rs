@@ -60,6 +60,171 @@ impl UiButton {
     }
 }
 
+/// Built-in checkbox control with ECS-native state.
+#[derive(Component, Debug, Clone, PartialEq, Eq)]
+pub struct UiCheckbox {
+    pub label: String,
+    pub checked: bool,
+}
+
+impl UiCheckbox {
+    #[must_use]
+    pub fn new(label: impl Into<String>, checked: bool) -> Self {
+        Self {
+            label: label.into(),
+            checked,
+        }
+    }
+}
+
+/// Emitted when [`UiCheckbox`] state changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiCheckboxChanged {
+    pub checkbox: Entity,
+    pub checked: bool,
+}
+
+/// Built-in slider control with ECS-native value.
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub struct UiSlider {
+    pub min: f64,
+    pub max: f64,
+    pub value: f64,
+    /// Default step used by built-in increment/decrement actions.
+    pub step: f64,
+}
+
+impl UiSlider {
+    #[must_use]
+    pub fn new(min: f64, max: f64, value: f64) -> Self {
+        let min = min.min(max);
+        let max = max.max(min);
+        let value = value.clamp(min, max);
+        let span = (max - min).abs();
+        let step = (span / 20.0).max(0.01);
+        Self {
+            min,
+            max,
+            value,
+            step,
+        }
+    }
+
+    #[must_use]
+    pub fn with_step(mut self, step: f64) -> Self {
+        self.step = step.abs().max(f64::EPSILON);
+        self
+    }
+}
+
+/// Emitted when [`UiSlider`] value changes.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct UiSliderChanged {
+    pub slider: Entity,
+    pub value: f64,
+}
+
+/// Built-in switch/toggle control.
+#[derive(Component, Debug, Clone, PartialEq, Eq)]
+pub struct UiSwitch {
+    pub on: bool,
+    pub label: Option<String>,
+}
+
+impl UiSwitch {
+    #[must_use]
+    pub fn new(on: bool) -> Self {
+        Self { on, label: None }
+    }
+
+    #[must_use]
+    pub fn with_label(mut self, label: impl Into<String>) -> Self {
+        self.label = Some(label.into());
+        self
+    }
+}
+
+/// Emitted when [`UiSwitch`] state changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiSwitchChanged {
+    pub switch: Entity,
+    pub on: bool,
+}
+
+/// Built-in text input control with ECS-owned content.
+#[derive(Component, Debug, Clone, PartialEq, Eq)]
+pub struct UiTextInput {
+    pub value: String,
+    pub placeholder: String,
+}
+
+impl UiTextInput {
+    #[must_use]
+    pub fn new(value: impl Into<String>) -> Self {
+        Self {
+            value: value.into(),
+            placeholder: String::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn with_placeholder(mut self, placeholder: impl Into<String>) -> Self {
+        self.placeholder = placeholder.into();
+        self
+    }
+}
+
+/// Emitted when [`UiTextInput`] value changes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UiTextInputChanged {
+    pub input: Entity,
+    pub value: String,
+}
+
+// ---- Template Part markers (public extension points) ----
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartCheckboxIndicator;
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartCheckboxLabel;
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartSliderDecrease;
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartSliderTrack;
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartSliderThumb;
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartSliderIncrease;
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartSwitchTrack;
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartSwitchThumb;
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartTextInputField;
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartDialogTitle;
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartDialogBody;
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartDialogDismiss;
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartComboBoxDisplay;
+
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PartComboBoxChevron;
+
 /// Modal dialog entity projected in the overlay layer.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct UiDialog {

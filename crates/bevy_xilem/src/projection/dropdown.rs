@@ -1,5 +1,8 @@
 use crate::{
-    ecs::{AnchoredTo, OverlayAnchorRect, OverlayComputedPosition, UiComboBox, UiDropdownMenu},
+    ecs::{
+        AnchoredTo, OverlayAnchorRect, OverlayComputedPosition, PartComboBoxChevron,
+        PartComboBoxDisplay, UiComboBox, UiDropdownMenu,
+    },
     overlay::OverlayUiAction,
     styling::{
         apply_direct_widget_style, apply_label_style, apply_widget_style, resolve_style,
@@ -7,6 +10,7 @@ use crate::{
     },
     views::{ecs_button, ecs_button_with_child, opaque_hitbox_for_entity},
 };
+use bevy_ecs::hierarchy::Children;
 use masonry::layout::{Dim, Length};
 use std::sync::Arc;
 use xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
@@ -352,11 +356,36 @@ pub(crate) fn project_combo_box(combo_box: &UiComboBox, ctx: ProjectionCtx<'_>) 
             )
         });
 
-    let arrow = if combo_box.is_open { "▴" } else { "▾" };
-    let button_label = format!("{selected_label}  {arrow}");
+    let child_entities = ctx
+        .world
+        .get::<Children>(ctx.entity)
+        .map(|children| children.iter().copied().collect::<Vec<_>>())
+        .unwrap_or_default();
+
+    let display_text = child_entities
+        .iter()
+        .find_map(|entity| {
+            ctx.world
+                .get::<PartComboBoxDisplay>(*entity)
+                .and_then(|_| ctx.world.get::<crate::UiLabel>(*entity))
+                .map(|label| label.text.clone())
+        })
+        .unwrap_or_else(|| selected_label.clone());
+
+    let chevron_text = child_entities
+        .iter()
+        .find_map(|entity| {
+            ctx.world
+                .get::<PartComboBoxChevron>(*entity)
+                .and_then(|_| ctx.world.get::<crate::UiLabel>(*entity))
+                .map(|label| label.text.clone())
+        })
+        .unwrap_or_else(|| if combo_box.is_open { "▴" } else { "▾" }.to_string());
+
+    let button_text = format!("{display_text} {chevron_text}");
 
     Arc::new(apply_direct_widget_style(
-        ecs_button(ctx.entity, OverlayUiAction::ToggleCombo, button_label),
+        ecs_button(ctx.entity, OverlayUiAction::ToggleCombo, button_text),
         &style,
     ))
 }
