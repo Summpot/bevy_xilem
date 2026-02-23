@@ -1,11 +1,11 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
 use crate::{
-    ProjectionCtx, StyleClass, UiLabel, UiView, controls::UiControlTemplate,
+    ProjectionCtx, StyleClass, UiLabel, UiView, components::UiComponentTemplate,
     templates::ensure_template_part,
 };
 
-/// Built-in text input control with ECS-owned content.
+/// Built-in text input UI component with ECS-owned content.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct UiTextInput {
     pub value: String,
@@ -38,7 +38,7 @@ pub struct UiTextInputChanged {
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PartTextInputField;
 
-impl UiControlTemplate for UiTextInput {
+impl UiComponentTemplate for UiTextInput {
     fn expand(world: &mut World, entity: Entity) {
         let placeholder = world
             .get::<UiTextInput>(entity)

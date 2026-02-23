@@ -547,8 +547,8 @@ fn update_status(world: &mut World, _label_entity: Entity, text: String) {
     }
 }
 
-bevy_xilem::impl_ui_control_template!(ShowcaseRoot, project_showcase_root);
-bevy_xilem::impl_ui_control_template!(StatusDisplay, project_status_display);
+bevy_xilem::impl_ui_component_template!(ShowcaseRoot, project_showcase_root);
+bevy_xilem::impl_ui_component_template!(StatusDisplay, project_status_display);
 
 // ---------------------------------------------------------------------------
 // App builder + main
@@ -560,8 +560,8 @@ fn build_showcase_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(ShowcaseState::default())
-        .register_ui_control::<ShowcaseRoot>()
-        .register_ui_control::<StatusDisplay>()
+        .register_ui_component::<ShowcaseRoot>()
+        .register_ui_component::<StatusDisplay>()
         .add_systems(Startup, (setup_showcase_styles, setup_showcase))
         .add_systems(PreUpdate, drain_showcase_events);
     app

@@ -1,11 +1,11 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
 use crate::{
-    ProjectionCtx, StyleClass, UiLabel, UiView, controls::UiControlTemplate,
+    ProjectionCtx, StyleClass, UiLabel, UiView, components::UiComponentTemplate,
     templates::ensure_template_part,
 };
 
-/// Built-in checkbox control with ECS-native state.
+/// Built-in checkbox UI component with ECS-native state.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct UiCheckbox {
     pub label: String,
@@ -35,7 +35,7 @@ pub struct PartCheckboxIndicator;
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PartCheckboxLabel;
 
-impl UiControlTemplate for UiCheckbox {
+impl UiComponentTemplate for UiCheckbox {
     fn expand(world: &mut World, entity: Entity) {
         let checkbox = world.get::<UiCheckbox>(entity).cloned();
         let Some(checkbox) = checkbox else {

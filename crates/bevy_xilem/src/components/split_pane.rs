@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
 
-use crate::{ProjectionCtx, UiView, controls::UiControlTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// The split axis for a [`UiSplitPane`].
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -39,7 +39,7 @@ impl UiSplitPane {
     }
 }
 
-impl UiControlTemplate for UiSplitPane {
+impl UiComponentTemplate for UiSplitPane {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_split_pane(component, ctx)
     }

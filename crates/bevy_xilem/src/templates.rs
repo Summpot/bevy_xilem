@@ -5,7 +5,7 @@ use bevy_ecs::{
 };
 
 use crate::{
-    controls::expand_all_ui_control_templates,
+    components::expand_all_ui_component_templates,
     ecs::{UiCheckbox, UiComboBox, UiDialog, UiScrollView, UiSlider, UiSwitch, UiTextInput},
 };
 
@@ -42,16 +42,16 @@ where
     spawn_template_part(world, parent, (P::default(), make_bundle()))
 }
 
-/// Compatibility helper: expand built-in logical controls into ECS child template parts.
+/// Compatibility helper: expand built-in logical UI components into ECS child template parts.
 ///
-/// New code should prefer trait-driven registration (`register_ui_control::<T>()`),
+/// New code should prefer trait-driven registration (`register_ui_component::<T>()`),
 /// which installs `Added<T>` expansion systems automatically.
-pub fn expand_builtin_control_templates(world: &mut World) {
-    expand_all_ui_control_templates::<UiCheckbox>(world);
-    expand_all_ui_control_templates::<UiSlider>(world);
-    expand_all_ui_control_templates::<UiSwitch>(world);
-    expand_all_ui_control_templates::<UiTextInput>(world);
-    expand_all_ui_control_templates::<UiDialog>(world);
-    expand_all_ui_control_templates::<UiComboBox>(world);
-    expand_all_ui_control_templates::<UiScrollView>(world);
+pub fn expand_builtin_ui_component_templates(world: &mut World) {
+    expand_all_ui_component_templates::<UiCheckbox>(world);
+    expand_all_ui_component_templates::<UiSlider>(world);
+    expand_all_ui_component_templates::<UiSwitch>(world);
+    expand_all_ui_component_templates::<UiTextInput>(world);
+    expand_all_ui_component_templates::<UiDialog>(world);
+    expand_all_ui_component_templates::<UiComboBox>(world);
+    expand_all_ui_component_templates::<UiScrollView>(world);
 }

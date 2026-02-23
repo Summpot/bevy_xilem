@@ -130,7 +130,7 @@ Example shape:
 Naming suggestions:
 
 - namespace by feature: `todo.*`, `calc.*`, `chess.*`
-- split container/control/text classes:
+- split container/UI-component/text classes:
   - `*.root`
   - `*.button`
   - `*.button.label`
@@ -160,7 +160,7 @@ This keeps structure and style concerns separated.
 
 ## 7. Interaction and Pseudo States
 
-Interaction events are emitted by ECS-backed controls (notably the custom ECS button widget path):
+Interaction events are emitted by ECS-backed UI components (notably the custom ECS button widget path):
 
 - `PointerEntered`
 - `PointerLeft`
@@ -229,11 +229,11 @@ For UI interaction micro-animations:
 
 ## 9. Practical Example Checklist
 
-To make a control animate on interaction:
+To make a UI component animate on interaction:
 
 1. define base and hover/pressed colors in `ColorStyle`
 2. set `transition: Some(StyleTransition { duration: ... })`
-3. ensure control path emits interaction events (`Hovered`/`Pressed` updates) so entities become `StyleDirty`
+3. ensure UI component path emits interaction events (`Hovered`/`Pressed` updates) so entities become `StyleDirty`
 4. apply style with projector helpers
 
 ---
@@ -244,9 +244,9 @@ To make a control animate on interaction:
   - `resolve_style_for_classes(...)` does not bind pseudo state by itself.
   - Use `resolve_style_for_entity_classes(...)` when pseudo-state-dependent classes are needed.
 - **Interaction event source matters**
-  - if a control path does not emit `UiInteractionEvent`, pseudo-state-based transitions will not trigger.
+  - if a UI component path does not emit `UiInteractionEvent`, pseudo-state-based transitions will not trigger.
 - **Wrapper styling vs. inner widget styling**
-  - some controls may have internal defaults (such as borders) that require styling the interactive path itself.
+  - some UI components may have internal defaults (such as borders) that require styling the interactive path itself.
 - **Keep design/docs in sync**
   - if style behavior changes, update both implementation and `DESIGN.md`/docs in one change.
 

@@ -1,9 +1,9 @@
 //! View helpers exported by `bevy_xilem`.
 //!
 //! This module exposes two naming groups:
-//! - ECS-adapted controls (`button`, `button_with_child`, `checkbox`, `slider`, `switch`,
+//! - ECS-adapted UI components (`button`, `button_with_child`, `checkbox`, `slider`, `switch`,
 //!   `text_button`, `text_input`)
-//! - Raw Xilem controls with `xilem_` prefix (`xilem_button`, `xilem_checkbox`, ...)
+//! - Raw Xilem widgets with `xilem_` prefix (`xilem_button`, `xilem_checkbox`, ...)
 //!
 //! # Example
 //!
@@ -21,7 +21,7 @@
 //! let _raw_xilem = xilem_button::<(), (), _, _>(label("Raw xilem button"), |_| ());
 //! ```
 mod ecs_button_view;
-mod ecs_control_views;
+mod ecs_component_views;
 mod ecs_drag_thumb_view;
 mod entity_scope_view;
 mod opaque_hitbox_view;
@@ -29,13 +29,13 @@ mod scroll_portal_view;
 
 pub use ecs_button_view::ecs_button as button;
 pub use ecs_button_view::{EcsButtonView, ecs_button};
-pub use ecs_control_views::ecs_button_with_child as button_with_child;
-pub use ecs_control_views::ecs_checkbox as checkbox;
-pub use ecs_control_views::ecs_slider as slider;
-pub use ecs_control_views::ecs_switch as switch;
-pub use ecs_control_views::ecs_text_button as text_button;
-pub use ecs_control_views::ecs_text_input as text_input;
-pub use ecs_control_views::{
+pub use ecs_component_views::ecs_button_with_child as button_with_child;
+pub use ecs_component_views::ecs_checkbox as checkbox;
+pub use ecs_component_views::ecs_slider as slider;
+pub use ecs_component_views::ecs_switch as switch;
+pub use ecs_component_views::ecs_text_button as text_button;
+pub use ecs_component_views::ecs_text_input as text_input;
+pub use ecs_component_views::{
     ecs_button_with_child, ecs_checkbox, ecs_slider, ecs_switch, ecs_text_button, ecs_text_input,
 };
 pub use ecs_drag_thumb_view::{EcsDragThumbView, ecs_drag_thumb};

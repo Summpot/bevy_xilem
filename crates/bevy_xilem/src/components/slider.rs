@@ -1,11 +1,11 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
 use crate::{
-    ProjectionCtx, StyleClass, UiLabel, UiView, controls::UiControlTemplate,
+    ProjectionCtx, StyleClass, UiLabel, UiView, components::UiComponentTemplate,
     templates::ensure_template_part,
 };
 
-/// Built-in slider control with ECS-native value.
+/// Built-in slider UI component with ECS-native value.
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct UiSlider {
     pub min: f64,
@@ -57,7 +57,7 @@ pub struct PartSliderThumb;
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PartSliderIncrease;
 
-impl UiControlTemplate for UiSlider {
+impl UiComponentTemplate for UiSlider {
     fn expand(world: &mut World, entity: Entity) {
         let value = world.get::<UiSlider>(entity).map(|slider| slider.value);
         let Some(value) = value else {

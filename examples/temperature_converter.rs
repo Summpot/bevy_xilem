@@ -342,10 +342,10 @@ fn drain_temperature_events(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_control_template!(TemperatureRootView, project_temperature_root);
-bevy_xilem::impl_ui_control_template!(TemperatureTitle, project_temperature_title);
-bevy_xilem::impl_ui_control_template!(TemperatureInputRow, project_temperature_input_row);
-bevy_xilem::impl_ui_control_template!(TemperatureHint, project_temperature_hint);
+bevy_xilem::impl_ui_component_template!(TemperatureRootView, project_temperature_root);
+bevy_xilem::impl_ui_component_template!(TemperatureTitle, project_temperature_title);
+bevy_xilem::impl_ui_component_template!(TemperatureInputRow, project_temperature_input_row);
+bevy_xilem::impl_ui_component_template!(TemperatureHint, project_temperature_hint);
 
 fn build_bevy_temperature_app() -> App {
     init_logging();
@@ -353,10 +353,10 @@ fn build_bevy_temperature_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(TemperatureState::default())
-        .register_ui_control::<TemperatureRootView>()
-        .register_ui_control::<TemperatureTitle>()
-        .register_ui_control::<TemperatureInputRow>()
-        .register_ui_control::<TemperatureHint>()
+        .register_ui_component::<TemperatureRootView>()
+        .register_ui_component::<TemperatureTitle>()
+        .register_ui_component::<TemperatureInputRow>()
+        .register_ui_component::<TemperatureHint>()
         .add_systems(Startup, (setup_temperature_styles, setup_temperature_world));
 
     app.add_systems(PreUpdate, drain_temperature_events);

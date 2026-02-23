@@ -1,6 +1,6 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
-use crate::{ProjectionCtx, UiView, controls::UiControlTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// Radio button group component with multiple exclusive options.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
@@ -34,7 +34,7 @@ pub struct UiRadioGroupChanged {
     pub selected: usize,
 }
 
-impl UiControlTemplate for UiRadioGroup {
+impl UiComponentTemplate for UiRadioGroup {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_radio_group(component, ctx)
     }

@@ -635,11 +635,11 @@ fn drain_calc_events(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_control_template!(CalcRoot, project_calc_root);
-bevy_xilem::impl_ui_control_template!(CalcDisplayPanel, project_calc_display);
-bevy_xilem::impl_ui_control_template!(CalcKeypad, project_calc_keypad);
-bevy_xilem::impl_ui_control_template!(CalcButtonRow, project_calc_row);
-bevy_xilem::impl_ui_control_template!(CalcButtonSpec, project_calc_button_component);
+bevy_xilem::impl_ui_component_template!(CalcRoot, project_calc_root);
+bevy_xilem::impl_ui_component_template!(CalcDisplayPanel, project_calc_display);
+bevy_xilem::impl_ui_component_template!(CalcKeypad, project_calc_keypad);
+bevy_xilem::impl_ui_component_template!(CalcButtonRow, project_calc_row);
+bevy_xilem::impl_ui_component_template!(CalcButtonSpec, project_calc_button_component);
 
 fn build_bevy_calculator_app() -> App {
     init_logging();
@@ -647,11 +647,11 @@ fn build_bevy_calculator_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(CalculatorEngine::default())
-        .register_ui_control::<CalcRoot>()
-        .register_ui_control::<CalcDisplayPanel>()
-        .register_ui_control::<CalcKeypad>()
-        .register_ui_control::<CalcButtonRow>()
-        .register_ui_control::<CalcButtonSpec>()
+        .register_ui_component::<CalcRoot>()
+        .register_ui_component::<CalcDisplayPanel>()
+        .register_ui_component::<CalcKeypad>()
+        .register_ui_component::<CalcButtonRow>()
+        .register_ui_component::<CalcButtonSpec>()
         .add_systems(Startup, (setup_calculator_styles, setup_calculator_world));
 
     app.add_systems(PreUpdate, drain_calc_events);

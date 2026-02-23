@@ -618,13 +618,13 @@ fn drain_todo_events_and_mutate_world(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_control_template!(TodoRootView, project_todo_root);
-bevy_xilem::impl_ui_control_template!(TodoHeader, project_todo_header);
-bevy_xilem::impl_ui_control_template!(TodoInputArea, project_todo_input_area);
-bevy_xilem::impl_ui_control_template!(TodoListContainer, project_todo_list_container);
-bevy_xilem::impl_ui_control_template!(TodoItem, project_todo_item);
-bevy_xilem::impl_ui_control_template!(TodoFilterBar, project_filter_bar);
-bevy_xilem::impl_ui_control_template!(FilterToggle, project_filter_toggle);
+bevy_xilem::impl_ui_component_template!(TodoRootView, project_todo_root);
+bevy_xilem::impl_ui_component_template!(TodoHeader, project_todo_header);
+bevy_xilem::impl_ui_component_template!(TodoInputArea, project_todo_input_area);
+bevy_xilem::impl_ui_component_template!(TodoListContainer, project_todo_list_container);
+bevy_xilem::impl_ui_component_template!(TodoItem, project_todo_item);
+bevy_xilem::impl_ui_component_template!(TodoFilterBar, project_filter_bar);
+bevy_xilem::impl_ui_component_template!(FilterToggle, project_filter_toggle);
 
 fn build_bevy_todo_app() -> App {
     init_logging();
@@ -633,13 +633,13 @@ fn build_bevy_todo_app() -> App {
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(ActiveFilter(FilterType::All))
         .insert_resource(DraftTodo("My Next Task".to_string()))
-        .register_ui_control::<TodoRootView>()
-        .register_ui_control::<TodoHeader>()
-        .register_ui_control::<TodoInputArea>()
-        .register_ui_control::<TodoListContainer>()
-        .register_ui_control::<TodoItem>()
-        .register_ui_control::<TodoFilterBar>()
-        .register_ui_control::<FilterToggle>()
+        .register_ui_component::<TodoRootView>()
+        .register_ui_component::<TodoHeader>()
+        .register_ui_component::<TodoInputArea>()
+        .register_ui_component::<TodoListContainer>()
+        .register_ui_component::<TodoItem>()
+        .register_ui_component::<TodoFilterBar>()
+        .register_ui_component::<FilterToggle>()
         .add_systems(Startup, (setup_todo_styles, setup_todo_world));
 
     app.add_systems(PreUpdate, drain_todo_events_and_mutate_world);

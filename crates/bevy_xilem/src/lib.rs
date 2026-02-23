@@ -1,7 +1,7 @@
 //! Bevy + Xilem/Masonry integration with ECS-driven UI projection.
 //!
 //! `bevy_xilem` lets you:
-//! - register ECS UI controls through [`UiControlTemplate`],
+//! - register ECS UI components through [`UiComponentTemplate`],
 //! - collect typed UI actions through [`UiEventQueue`],
 //! - synthesize and rebuild a retained Masonry tree every frame.
 //!
@@ -11,7 +11,7 @@
 //! use std::sync::Arc;
 //!
 //! use bevy_xilem::{
-//!     AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiControlTemplate, UiEventQueue, UiRoot,
+//!     AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiComponentTemplate, UiEventQueue, UiRoot,
 //!     UiView,
 //!     bevy_app::{App, PreUpdate, Startup},
 //!     bevy_ecs::prelude::*,
@@ -26,7 +26,7 @@
 //!     Clicked,
 //! }
 //!
-//! impl UiControlTemplate for Root {
+//! impl UiComponentTemplate for Root {
 //!     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
 //!         Arc::new(text_button(ctx.entity, Action::Clicked, "Click"))
 //!     }
@@ -42,14 +42,14 @@
 //!
 //! let mut app = App::new();
 //! app.add_plugins(BevyXilemPlugin)
-//!     .register_ui_control::<Root>()
+//!     .register_ui_component::<Root>()
 //!     .add_systems(Startup, setup)
 //!     .add_systems(PreUpdate, drain);
 //! ```
 #![forbid(unsafe_code)]
 
 pub mod app_ext;
-pub mod controls;
+pub mod components;
 pub mod ecs;
 pub mod events;
 pub mod fonts;
@@ -80,7 +80,7 @@ pub use xilem;
 pub use xilem_masonry;
 
 pub use app_ext::*;
-pub use controls::*;
+pub use components::*;
 pub use ecs::*;
 pub use events::*;
 pub use fonts::*;
@@ -112,7 +112,7 @@ pub mod prelude {
         SyncAssetSource, SyncTextSource, SynthesizedUiViews, TargetColorStyle, TextStyle,
         ToastKind, TypedUiEvent, UiAnyView, UiButton, UiCheckbox, UiCheckboxChanged, UiColorPicker,
         UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiComboOption,
-        UiControlTemplate, UiDatePicker, UiDatePickerChanged, UiDatePickerPanel, UiDialog,
+        UiComponentTemplate, UiDatePicker, UiDatePickerChanged, UiDatePickerPanel, UiDialog,
         UiDropdownMenu, UiDropdownPlacement, UiEvent, UiEventQueue, UiFlexColumn, UiFlexRow,
         UiGroupBox, UiInteractionEvent, UiLabel, UiMenuBar, UiMenuBarItem, UiMenuItem,
         UiMenuItemPanel, UiMenuItemSelected, UiOverlayRoot, UiPointerEvent, UiPointerHitEvent,
@@ -124,18 +124,18 @@ pub mod prelude {
         checkbox, collect_bevy_font_assets, dismiss_overlays_on_click, ecs_button,
         ecs_button_with_child, ecs_checkbox, ecs_slider, ecs_switch, ecs_text_button,
         ecs_text_input, emit_ui_action, ensure_overlay_root, ensure_overlay_root_entity,
-        ensure_template_part, expand_builtin_control_templates, find_template_part,
+        ensure_template_part, expand_builtin_ui_component_templates, find_template_part,
         gather_ui_roots, handle_global_overlay_clicks, handle_overlay_actions,
         handle_tooltip_hovers, handle_widget_actions, inject_bevy_input_into_masonry,
         mark_style_dirty, rebuild_masonry_runtime, register_builtin_projectors,
-        register_builtin_style_type_aliases, register_builtin_ui_controls, resolve_localized_text,
-        resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes, run_app,
-        run_app_with_window_options, slider, spawn_in_overlay_root, switch,
-        sync_dropdown_positions, sync_fonts_to_xilem, sync_overlay_positions,
-        sync_overlay_stack_lifecycle, synthesize_roots, synthesize_roots_with_stats, synthesize_ui,
-        synthesize_world, text_button, text_input, tick_toasts, xilem_button,
-        xilem_button_any_pointer, xilem_checkbox, xilem_slider, xilem_switch, xilem_text_button,
-        xilem_text_input,
+        register_builtin_style_type_aliases, register_builtin_ui_components,
+        resolve_localized_text, resolve_style, resolve_style_for_classes,
+        resolve_style_for_entity_classes, run_app, run_app_with_window_options, slider,
+        spawn_in_overlay_root, switch, sync_dropdown_positions, sync_fonts_to_xilem,
+        sync_overlay_positions, sync_overlay_stack_lifecycle, synthesize_roots,
+        synthesize_roots_with_stats, synthesize_ui, synthesize_world, text_button, text_input,
+        tick_toasts, xilem_button, xilem_button_any_pointer, xilem_checkbox, xilem_slider,
+        xilem_switch, xilem_text_button, xilem_text_input,
     };
 
     pub use crate::{

@@ -1,11 +1,11 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
-use crate::{ProjectionCtx, UiView, controls::UiControlTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// Tab bar component that shows labeled tabs and manages active content.
 ///
 /// Place tab content entities as ECS children; the active tab index
-/// controls which child is displayed.
+/// determines which child is displayed.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct UiTabBar {
     /// Labels shown on each tab header.
@@ -37,7 +37,7 @@ pub struct UiTabChanged {
     pub active: usize,
 }
 
-impl UiControlTemplate for UiTabBar {
+impl UiComponentTemplate for UiTabBar {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_tab_bar(component, ctx)
     }

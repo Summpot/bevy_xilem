@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
 
-use crate::{ProjectionCtx, UiView, controls::UiControlTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// An animated loading spinner (indefinite progress indicator).
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
@@ -28,7 +28,7 @@ impl Default for UiSpinner {
     }
 }
 
-impl UiControlTemplate for UiSpinner {
+impl UiComponentTemplate for UiSpinner {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_spinner(component, ctx)
     }

@@ -1,6 +1,6 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
-use crate::{ProjectionCtx, UiView, controls::UiControlTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// An inline color picker that opens an overlay panel for color selection.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,13 +40,13 @@ pub struct UiColorPickerChanged {
     pub b: u8,
 }
 
-impl UiControlTemplate for UiColorPicker {
+impl UiComponentTemplate for UiColorPicker {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_color_picker(component, ctx)
     }
 }
 
-impl UiControlTemplate for UiColorPickerPanel {
+impl UiComponentTemplate for UiColorPickerPanel {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_color_picker_panel(component, ctx)
     }

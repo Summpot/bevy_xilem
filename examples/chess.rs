@@ -424,7 +424,7 @@ fn tick_once(
 struct ChessRootView;
 
 #[derive(Component, Debug, Clone, Copy)]
-struct ChessControlsPanel;
+struct ChessUiComponentsPanel;
 
 #[derive(Component, Debug, Clone, Copy)]
 struct ChessBoardPanel;
@@ -500,14 +500,14 @@ fn build_chess_board_view(world: &World, ui: &ChessUiResource, action_entity: En
     ))
 }
 
-fn build_chess_controls_view(
+fn build_chess_ui_components_view(
     world: &World,
     game_res: &ChessGameResource,
     ui: &ChessUiResource,
     flow: &ChessFlowResource,
     action_entity: Entity,
 ) -> UiView {
-    let controls_style = resolve_style_for_classes(world, ["chess.controls"]);
+    let ui_components_style = resolve_style_for_classes(world, ["chess.ui-components"]);
     let status_style = resolve_style_for_classes(world, ["chess.status"]);
     let clock_style = resolve_style_for_classes(world, ["chess.clock"]);
     let time_per_move_style = resolve_style_for_classes(world, ["chess.time-per-move"]);
@@ -585,7 +585,7 @@ fn build_chess_controls_view(
             ),
         ))
         .cross_axis_alignment(CrossAxisAlignment::Start),
-        &controls_style,
+        &ui_components_style,
     ))
 }
 
@@ -603,11 +603,11 @@ fn project_chess_root(_: &ChessRootView, ctx: ProjectionCtx<'_>) -> UiView {
     ))
 }
 
-fn project_chess_controls_panel(_: &ChessControlsPanel, ctx: ProjectionCtx<'_>) -> UiView {
+fn project_chess_ui_components_panel(_: &ChessUiComponentsPanel, ctx: ProjectionCtx<'_>) -> UiView {
     let game_res = ctx.world.resource::<ChessGameResource>();
     let ui = ctx.world.resource::<ChessUiResource>();
     let flow = ctx.world.resource::<ChessFlowResource>();
-    build_chess_controls_view(ctx.world, &game_res, &ui, &flow, ctx.entity)
+    build_chess_ui_components_view(ctx.world, &game_res, &ui, &flow, ctx.entity)
 }
 
 fn project_chess_board_panel(_: &ChessBoardPanel, ctx: ProjectionCtx<'_>) -> UiView {
@@ -624,7 +624,7 @@ fn setup_chess_world(mut commands: Commands) {
         ))
         .id();
 
-    commands.spawn((ChessControlsPanel, ChildOf(root)));
+    commands.spawn((ChessUiComponentsPanel, ChildOf(root)));
     commands.spawn((ChessBoardPanel, ChildOf(root)));
 }
 
@@ -646,7 +646,7 @@ fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
     );
 
     style_sheet.set_class(
-        "chess.controls",
+        "chess.ui-components",
         StyleSetter {
             layout: LayoutStyle {
                 gap: Some(6.0),
@@ -865,9 +865,12 @@ fn drain_events_and_tick(world: &mut World) {
     });
 }
 
-bevy_xilem::impl_ui_control_template!(ChessRootView, project_chess_root);
-bevy_xilem::impl_ui_control_template!(ChessControlsPanel, project_chess_controls_panel);
-bevy_xilem::impl_ui_control_template!(ChessBoardPanel, project_chess_board_panel);
+bevy_xilem::impl_ui_component_template!(ChessRootView, project_chess_root);
+bevy_xilem::impl_ui_component_template!(
+    ChessUiComponentsPanel,
+    project_chess_ui_components_panel,
+);
+bevy_xilem::impl_ui_component_template!(ChessBoardPanel, project_chess_board_panel);
 
 fn build_bevy_chess_app() -> App {
     init_logging();
@@ -880,9 +883,9 @@ fn build_bevy_chess_app() -> App {
         .insert_resource(ChessGameResource::new(game))
         .insert_resource(ui)
         .insert_resource(ChessFlowResource::default())
-        .register_ui_control::<ChessRootView>()
-        .register_ui_control::<ChessControlsPanel>()
-        .register_ui_control::<ChessBoardPanel>()
+        .register_ui_component::<ChessRootView>()
+        .register_ui_component::<ChessUiComponentsPanel>()
+        .register_ui_component::<ChessBoardPanel>()
         .add_systems(Startup, (setup_chess_styles, setup_chess_world));
 
     app.add_systems(PreUpdate, drain_events_and_tick);

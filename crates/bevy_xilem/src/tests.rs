@@ -80,7 +80,7 @@ fn plugin_wires_synthesis_and_runtime() {
 }
 
 #[test]
-fn plugin_auto_registers_builtin_controls_without_manual_setup() {
+fn plugin_auto_registers_builtin_ui_components_without_manual_setup() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
@@ -1916,7 +1916,7 @@ fn template_expansion_and_widget_actions_update_checkbox_state() {
         .spawn((crate::UiCheckbox::new("Receive updates", false),))
         .id();
 
-    crate::expand_builtin_control_templates(&mut world);
+    crate::expand_builtin_ui_component_templates(&mut world);
 
     let indicator = crate::find_template_part::<crate::PartCheckboxIndicator>(&world, checkbox)
         .expect("checkbox indicator part should be expanded");
@@ -1942,7 +1942,7 @@ fn template_expansion_and_widget_actions_update_checkbox_state() {
         .resource::<UiEventQueue>()
         .push_typed(checkbox, crate::WidgetUiAction::ToggleCheckbox { checkbox });
     crate::handle_widget_actions(&mut world);
-    crate::expand_builtin_control_templates(&mut world);
+    crate::expand_builtin_ui_component_templates(&mut world);
 
     assert!(
         world
@@ -1967,14 +1967,14 @@ fn template_expansion_and_widget_actions_update_checkbox_state() {
 }
 
 #[test]
-fn third_party_ui_control_can_register_via_trait_api() {
+fn third_party_ui_component_can_register_via_trait_api() {
     #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
     struct UiKnob;
 
     #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
     struct PartKnobIndicator;
 
-    impl crate::UiControlTemplate for UiKnob {
+    impl crate::UiComponentTemplate for UiKnob {
         fn expand(world: &mut World, entity: Entity) {
             let _ = crate::ensure_template_part::<PartKnobIndicator, _>(world, entity, || {
                 (
@@ -1991,7 +1991,7 @@ fn third_party_ui_control_can_register_via_trait_api() {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
-        .register_ui_control::<UiKnob>();
+        .register_ui_component::<UiKnob>();
 
     let knob = app.world_mut().spawn((UiRoot, UiKnob)).id();
     app.update();
@@ -2011,7 +2011,7 @@ fn scroll_view_template_expands_required_parts() {
     let mut world = World::new();
 
     let scroll_view = world.spawn((crate::UiScrollView::default(),)).id();
-    crate::expand_builtin_control_templates(&mut world);
+    crate::expand_builtin_ui_component_templates(&mut world);
 
     assert!(crate::find_template_part::<crate::PartScrollViewport>(&world, scroll_view).is_some());
     assert!(
@@ -2044,7 +2044,7 @@ fn drag_scroll_thumb_action_updates_scroll_view_offset() {
         },))
         .id();
 
-    crate::expand_builtin_control_templates(&mut world);
+    crate::expand_builtin_ui_component_templates(&mut world);
 
     let thumb = crate::find_template_part::<crate::PartScrollThumbVertical>(&world, scroll_view)
         .expect("vertical thumb part should exist");

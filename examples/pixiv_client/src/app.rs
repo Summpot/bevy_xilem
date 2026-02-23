@@ -177,7 +177,7 @@ impl Default for ViewportMetrics {
 }
 
 #[derive(Resource, Debug, Clone, Copy)]
-struct PixivControls {
+struct PixivUiComponents {
     toggle_sidebar: Entity,
     locale_combo: Entity,
     home_tab: Entity,
@@ -546,7 +546,7 @@ fn open_in_system_browser(url: &str) -> Result<()> {
     ))
 }
 
-fn spawn_control_entity(commands: &mut Commands, classes: &[&str]) -> Entity {
+fn spawn_ui_component_entity(commands: &mut Commands, classes: &[&str]) -> Entity {
     commands
         .spawn((StyleClass(
             classes.iter().map(|class| (*class).to_string()).collect(),
@@ -632,42 +632,57 @@ fn setup(mut commands: Commands) {
     commands.insert_resource(PixivApiClient::default());
     commands.insert_resource(Assets::<BevyImage>::default());
 
-    let controls = PixivControls {
-        toggle_sidebar: spawn_control_entity(
+    let ui_components = PixivUiComponents {
+        toggle_sidebar: spawn_ui_component_entity(
             &mut commands,
             &["pixiv.button", "pixiv.button.sidebar"],
         ),
-        locale_combo: spawn_control_entity(
+        locale_combo: spawn_ui_component_entity(
             &mut commands,
             &["pixiv.button", "pixiv.button.sidebar"],
         ),
-        home_tab: spawn_control_entity(&mut commands, &["pixiv.button", "pixiv.button.subtle"]),
-        rankings_tab: spawn_control_entity(&mut commands, &["pixiv.button", "pixiv.button.subtle"]),
-        search_tab: spawn_control_entity(&mut commands, &["pixiv.button", "pixiv.button.subtle"]),
-        open_browser_login: spawn_control_entity(
+        home_tab: spawn_ui_component_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.subtle"],
+        ),
+        rankings_tab: spawn_ui_component_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.subtle"],
+        ),
+        search_tab: spawn_ui_component_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.subtle"],
+        ),
+        open_browser_login: spawn_ui_component_entity(
             &mut commands,
             &["pixiv.button", "pixiv.button.primary"],
         ),
-        exchange_auth_code: spawn_control_entity(
+        exchange_auth_code: spawn_ui_component_entity(
             &mut commands,
             &["pixiv.button", "pixiv.button.primary"],
         ),
-        refresh_token: spawn_control_entity(
+        refresh_token: spawn_ui_component_entity(
             &mut commands,
             &["pixiv.button", "pixiv.button.primary"],
         ),
-        search_submit: spawn_control_entity(
+        search_submit: spawn_ui_component_entity(
             &mut commands,
             &["pixiv.button", "pixiv.button.primary"],
         ),
-        copy_response: spawn_control_entity(
+        copy_response: spawn_ui_component_entity(
             &mut commands,
             &["pixiv.button", "pixiv.button.primary"],
         ),
-        clear_response: spawn_control_entity(&mut commands, &["pixiv.button", "pixiv.button.warn"]),
-        close_overlay: spawn_control_entity(&mut commands, &["pixiv.button", "pixiv.button.warn"]),
+        clear_response: spawn_ui_component_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.warn"],
+        ),
+        close_overlay: spawn_ui_component_entity(
+            &mut commands,
+            &["pixiv.button", "pixiv.button.warn"],
+        ),
     };
-    commands.insert_resource(controls);
+    commands.insert_resource(ui_components);
 
     let root = commands
         .spawn((
@@ -685,7 +700,7 @@ fn setup(mut commands: Commands) {
         ))
         .id();
 
-    commands.entity(controls.locale_combo).insert((
+    commands.entity(ui_components.locale_combo).insert((
         UiComboBox::new(vec![
             UiComboOption::new("en-US", "English"),
             UiComboOption::new("zh-CN", "简体中文"),
@@ -992,7 +1007,7 @@ fn project_root(_: &PixivRoot, ctx: ProjectionCtx<'_>) -> UiView {
 fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let ui = ctx.world.resource::<UiState>();
-    let controls = *ctx.world.resource::<PixivControls>();
+    let ui_components = *ctx.world.resource::<PixivUiComponents>();
     let mut sidebar_children = ctx.children.into_iter();
     let locale_combo_view = sidebar_children.next().unwrap_or_else(empty_ui);
 
@@ -1000,7 +1015,7 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
     items.push(
         action_button(
             ctx.world,
-            controls.toggle_sidebar,
+            ui_components.toggle_sidebar,
             AppAction::ToggleSidebar,
             if ui.sidebar_collapsed {
                 format!("{} ▶", tr(ctx.world, "pixiv.sidebar.expand", "Expand"))
@@ -1017,7 +1032,7 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
         items.push(
             action_button(
                 ctx.world,
-                controls.home_tab,
+                ui_components.home_tab,
                 AppAction::SetTab(NavTab::Home),
                 if ui.active_tab == NavTab::Home {
                     format!("● {}", tr(ctx.world, "pixiv.sidebar.home", "Home"))
@@ -1030,7 +1045,7 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
         items.push(
             action_button(
                 ctx.world,
-                controls.rankings_tab,
+                ui_components.rankings_tab,
                 AppAction::SetTab(NavTab::Rankings),
                 if ui.active_tab == NavTab::Rankings {
                     format!("● {}", tr(ctx.world, "pixiv.sidebar.rankings", "Rankings"))
@@ -1043,7 +1058,7 @@ fn project_sidebar(_: &PixivSidebar, ctx: ProjectionCtx<'_>) -> UiView {
         items.push(
             action_button(
                 ctx.world,
-                controls.search_tab,
+                ui_components.search_tab,
                 AppAction::SetTab(NavTab::Search),
                 if ui.active_tab == NavTab::Search {
                     format!("● {}", tr(ctx.world, "pixiv.sidebar.search", "Search"))
@@ -1085,7 +1100,7 @@ fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let input_style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
     let auth = ctx.world.resource::<AuthState>();
-    let controls = *ctx.world.resource::<PixivControls>();
+    let ui_components = *ctx.world.resource::<PixivUiComponents>();
     let auth_endpoint = auth
         .idp_urls
         .as_ref()
@@ -1131,7 +1146,7 @@ fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
         .into_any_flex(),
         action_button(
             ctx.world,
-            controls.open_browser_login,
+            ui_components.open_browser_login,
             AppAction::OpenBrowserLogin,
             tr(
                 ctx.world,
@@ -1142,7 +1157,7 @@ fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
         .into_any_flex(),
         action_button(
             ctx.world,
-            controls.exchange_auth_code,
+            ui_components.exchange_auth_code,
             AppAction::ExchangeAuthCode,
             tr(ctx.world, "pixiv.auth.login_auth_code", "Login (auth_code)"),
         )
@@ -1164,7 +1179,7 @@ fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
         .into_any_flex(),
         action_button(
             ctx.world,
-            controls.refresh_token,
+            ui_components.refresh_token,
             AppAction::RefreshToken,
             tr(ctx.world, "pixiv.auth.refresh_token", "Refresh Token"),
         )
@@ -1180,7 +1195,7 @@ fn project_auth_panel(_: &PixivAuthPanel, ctx: ProjectionCtx<'_>) -> UiView {
 }
 
 fn project_response_panel(_: &PixivResponsePanel, ctx: ProjectionCtx<'_>) -> UiView {
-    let controls = *ctx.world.resource::<PixivControls>();
+    let ui_components = *ctx.world.resource::<PixivUiComponents>();
     let panel = ctx.world.resource::<ResponsePanelState>();
 
     if panel.content.trim().is_empty() {
@@ -1201,14 +1216,14 @@ fn project_response_panel(_: &PixivResponsePanel, ctx: ProjectionCtx<'_>) -> UiV
             flex_row((
                 action_button(
                     ctx.world,
-                    controls.copy_response,
+                    ui_components.copy_response,
                     AppAction::CopyResponseBody,
                     tr(ctx.world, "pixiv.response.copy", "Copy Response Body"),
                 )
                 .into_any_flex(),
                 action_button(
                     ctx.world,
-                    controls.clear_response,
+                    ui_components.clear_response,
                     AppAction::ClearResponseBody,
                     tr(ctx.world, "pixiv.response.clear", "Clear"),
                 )
@@ -1236,7 +1251,7 @@ fn project_search_panel(_: &PixivSearchPanel, ctx: ProjectionCtx<'_>) -> UiView 
         return empty_ui();
     }
 
-    let controls = *ctx.world.resource::<PixivControls>();
+    let ui_components = *ctx.world.resource::<PixivUiComponents>();
     let input_style = resolve_style_for_classes(ctx.world, ["pixiv.root"]);
 
     Arc::new(
@@ -1253,7 +1268,7 @@ fn project_search_panel(_: &PixivSearchPanel, ctx: ProjectionCtx<'_>) -> UiView 
             .flex(1.0),
             action_button(
                 ctx.world,
-                controls.search_submit,
+                ui_components.search_submit,
                 AppAction::SubmitSearch,
                 tr(ctx.world, "pixiv.search.submit", "Search"),
             )
@@ -1411,7 +1426,7 @@ fn project_detail_overlay(_: &PixivDetailOverlay, ctx: ProjectionCtx<'_>) -> UiV
         return empty_ui();
     };
     let style = resolve_style(ctx.world, ctx.entity);
-    let controls = *ctx.world.resource::<PixivControls>();
+    let ui_components = *ctx.world.resource::<PixivUiComponents>();
     let visual = ctx
         .world
         .get::<IllustVisual>(entity)
@@ -1434,7 +1449,7 @@ fn project_detail_overlay(_: &PixivDetailOverlay, ctx: ProjectionCtx<'_>) -> UiV
         flex_col((
             action_button(
                 ctx.world,
-                controls.close_overlay,
+                ui_components.close_overlay,
                 AppAction::CloseIllust,
                 tr(ctx.world, "pixiv.overlay.close", "Close"),
             )
@@ -1781,10 +1796,10 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
     let combo_events = world
         .resource_mut::<UiEventQueue>()
         .drain_actions::<UiComboBoxChanged>();
-    let controls = *world.resource::<PixivControls>();
+    let ui_components = *world.resource::<PixivUiComponents>();
 
     for event in combo_events {
-        if event.action.combo != controls.locale_combo {
+        if event.action.combo != ui_components.locale_combo {
             continue;
         }
 
@@ -2284,17 +2299,17 @@ fn apply_image_results(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_control_template!(PixivRoot, project_root);
-bevy_xilem::impl_ui_control_template!(PixivSidebar, project_sidebar);
-bevy_xilem::impl_ui_control_template!(PixivMainColumn, project_main_column);
-bevy_xilem::impl_ui_control_template!(PixivAuthPanel, project_auth_panel);
-bevy_xilem::impl_ui_control_template!(PixivResponsePanel, project_response_panel);
-bevy_xilem::impl_ui_control_template!(PixivSearchPanel, project_search_panel);
-bevy_xilem::impl_ui_control_template!(PixivHomeFeed, project_home_feed);
-bevy_xilem::impl_ui_control_template!(PixivIllustCard, project_illust_card);
-bevy_xilem::impl_ui_control_template!(PixivDetailOverlay, project_detail_overlay);
-bevy_xilem::impl_ui_control_template!(PixivOverlayTags, project_overlay_tags);
-bevy_xilem::impl_ui_control_template!(OverlayTag, project_overlay_tag);
+bevy_xilem::impl_ui_component_template!(PixivRoot, project_root);
+bevy_xilem::impl_ui_component_template!(PixivSidebar, project_sidebar);
+bevy_xilem::impl_ui_component_template!(PixivMainColumn, project_main_column);
+bevy_xilem::impl_ui_component_template!(PixivAuthPanel, project_auth_panel);
+bevy_xilem::impl_ui_component_template!(PixivResponsePanel, project_response_panel);
+bevy_xilem::impl_ui_component_template!(PixivSearchPanel, project_search_panel);
+bevy_xilem::impl_ui_component_template!(PixivHomeFeed, project_home_feed);
+bevy_xilem::impl_ui_component_template!(PixivIllustCard, project_illust_card);
+bevy_xilem::impl_ui_component_template!(PixivDetailOverlay, project_detail_overlay);
+bevy_xilem::impl_ui_component_template!(PixivOverlayTags, project_overlay_tags);
+bevy_xilem::impl_ui_component_template!(OverlayTag, project_overlay_tag);
 
 fn build_app() -> App {
     ensure_task_pool_initialized();
@@ -2347,17 +2362,17 @@ fn build_app() -> App {
             "sans-serif",
         ],
     )
-    .register_ui_control::<PixivRoot>()
-    .register_ui_control::<PixivSidebar>()
-    .register_ui_control::<PixivMainColumn>()
-    .register_ui_control::<PixivAuthPanel>()
-    .register_ui_control::<PixivResponsePanel>()
-    .register_ui_control::<PixivSearchPanel>()
-    .register_ui_control::<PixivHomeFeed>()
-    .register_ui_control::<PixivIllustCard>()
-    .register_ui_control::<PixivDetailOverlay>()
-    .register_ui_control::<PixivOverlayTags>()
-    .register_ui_control::<OverlayTag>()
+    .register_ui_component::<PixivRoot>()
+    .register_ui_component::<PixivSidebar>()
+    .register_ui_component::<PixivMainColumn>()
+    .register_ui_component::<PixivAuthPanel>()
+    .register_ui_component::<PixivResponsePanel>()
+    .register_ui_component::<PixivSearchPanel>()
+    .register_ui_component::<PixivHomeFeed>()
+    .register_ui_component::<PixivIllustCard>()
+    .register_ui_component::<PixivDetailOverlay>()
+    .register_ui_component::<PixivOverlayTags>()
+    .register_ui_component::<OverlayTag>()
     .add_systems(Startup, (setup_styles, setup))
     .add_systems(PreUpdate, drain_ui_actions_and_dispatch)
     .add_systems(
@@ -2420,10 +2435,14 @@ mod tests {
         schedule.run(&mut world);
 
         let tree = *world.resource::<PixivUiTree>();
-        let controls = *world.resource::<PixivControls>();
+        let ui_components = *world.resource::<PixivUiComponents>();
         assert!(world.get::<PixivHomeFeed>(tree.home_feed).is_some());
         assert!(world.get::<PixivOverlayTags>(tree.overlay_tags).is_some());
-        assert!(world.get::<UiComboBox>(controls.locale_combo).is_some());
+        assert!(
+            world
+                .get::<UiComboBox>(ui_components.locale_combo)
+                .is_some()
+        );
     }
 
     #[test]

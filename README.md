@@ -12,7 +12,7 @@ You describe UI from ECS components (via projectors), handle user interactions t
 - ECS-driven UI projection (`Component -> UiView`)
 - Typed UI action queue (`UiEventQueue`) for interaction handling
 - Explicit Masonry/Vello paint pass in `Last` (render + present without Bevy render plugins)
-- Ergonomic ECS control helpers (`button`, `checkbox`, `slider`, `text_input`, ...)
+- Ergonomic ECS UI component helpers (`button`, `checkbox`, `slider`, `text_input`, ...)
 - Built-in synchronous i18n/l10n via `AppI18n` + `LocalizeText`
 - Bevy-native run helpers (`run_app*`) that configure the primary window and auto-enable Bevy's native window plugins (`AccessibilityPlugin` + `InputPlugin` + `WindowPlugin` + `WinitPlugin`) before `App::run()`
 
@@ -37,7 +37,7 @@ If you are using this repository workspace layout, keep path dependencies from t
 use std::sync::Arc;
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiControlTemplate, UiEventQueue, UiRoot,
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiComponentTemplate, UiEventQueue, UiRoot,
     UiView,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::prelude::*,
@@ -56,7 +56,7 @@ enum CounterEvent {
     Increment,
 }
 
-impl UiControlTemplate for CounterRoot {
+impl UiComponentTemplate for CounterRoot {
     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         Arc::new(text_button(ctx.entity, CounterEvent::Increment, "Increment"))
     }
@@ -85,7 +85,7 @@ fn build_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(Counter::default())
-        .register_ui_control::<CounterRoot>()
+        .register_ui_component::<CounterRoot>()
         .add_systems(Startup, setup)
         .add_systems(PreUpdate, drain_events);
     app
@@ -185,7 +185,7 @@ fn accent_action_button(
 }
 ```
 
-Use it in projectors just like built-in controls:
+Use it in projectors just like built-in UI components:
 
 ```rust,no_run
 # use std::sync::Arc;
@@ -207,10 +207,10 @@ fn project_toolbar(ctx: ProjectionCtx<'_>) -> UiView {
 
 ## API naming conventions
 
-`bevy_xilem` exports two control groups:
+`bevy_xilem` exports two UI component groups:
 
 - **ECS action adapters** (recommended): `button`, `checkbox`, `slider`, `switch`, `text_button`, `text_input`
-- **Original xilem controls** with `xilem_` prefix: `xilem_button`, `xilem_checkbox`, ...
+- **Original xilem widgets** with `xilem_` prefix: `xilem_button`, `xilem_checkbox`, ...
 
 Legacy `ecs_*` names are still available for compatibility.
 
@@ -218,7 +218,7 @@ Legacy `ecs_*` names are still available for compatibility.
 
 ## Event handling model
 
-1. Controls emit typed actions into `UiEventQueue`
+1. UI components emit typed actions into `UiEventQueue`
 2. A Bevy system drains typed actions in `PreUpdate`
 3. Your app mutates ECS state/resources
 4. `bevy_xilem` synthesizes and rebuilds UI in `PostUpdate`
@@ -239,10 +239,10 @@ This keeps interaction handling explicit and ECS-friendly.
 - `game_2048`
 - `i18n_showcase`
 
-Run an example from repository root:
+Run an example workspace crate from repository root:
 
 ```bash
-cargo run --example todo_list
+cargo run -p example_todo_list
 ```
 
 ---

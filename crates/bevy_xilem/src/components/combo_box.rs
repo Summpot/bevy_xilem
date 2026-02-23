@@ -1,7 +1,7 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
 use crate::{
-    OverlayPlacement, ProjectionCtx, StyleClass, UiLabel, UiView, controls::UiControlTemplate,
+    OverlayPlacement, ProjectionCtx, StyleClass, UiLabel, UiView, components::UiComponentTemplate,
     templates::ensure_template_part,
 };
 
@@ -33,7 +33,7 @@ impl UiComboOption {
 /// Backward-compatible alias for overlay placement in combo APIs.
 pub type UiDropdownPlacement = OverlayPlacement;
 
-/// Combo-box anchor control.
+/// Combo-box anchor UI component.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct UiComboBox {
     pub options: Vec<UiComboOption>,
@@ -121,7 +121,7 @@ pub struct PartComboBoxDisplay;
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PartComboBoxChevron;
 
-impl UiControlTemplate for UiComboBox {
+impl UiComponentTemplate for UiComboBox {
     fn expand(world: &mut World, entity: Entity) {
         let combo = world.get::<UiComboBox>(entity).cloned();
         let Some(combo) = combo else {
@@ -161,7 +161,7 @@ impl UiControlTemplate for UiComboBox {
     }
 }
 
-impl UiControlTemplate for UiDropdownMenu {
+impl UiComponentTemplate for UiDropdownMenu {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::dropdown::project_dropdown_menu(component, ctx)
     }

@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
 
-use crate::{ProjectionCtx, UiView, controls::UiControlTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A titled group box that visually groups related content.
 ///
@@ -20,7 +20,7 @@ impl UiGroupBox {
     }
 }
 
-impl UiControlTemplate for UiGroupBox {
+impl UiComponentTemplate for UiGroupBox {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_group_box(component, ctx)
     }

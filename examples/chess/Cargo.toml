@@ -1,0 +1,15 @@
+[package]
+name = "example_chess"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "example_chess"
+path = "main.rs"
+
+[dependencies]
+bevy_xilem = { path = "../../crates/bevy_xilem" }
+bevy_ecs.workspace = true
+num-traits.workspace = true
+tracing-subscriber.workspace = true

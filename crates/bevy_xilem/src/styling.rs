@@ -103,7 +103,7 @@ pub enum AlignItems {
     Stretch,
 }
 
-/// Text alignment for label-like controls.
+/// Text alignment for label-like UI components.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
 pub enum TextAlign {
     #[default]
@@ -1556,7 +1556,7 @@ pub fn resolve_style_for_classes<'a>(
 
 /// Resolve style from class names while applying pseudo-state from a specific entity.
 ///
-/// This is useful when a control's visual style is class-driven, but hover/pressed
+/// This is useful when a UI component's visual style is class-driven, but hover/pressed
 /// state is tracked on an ECS entity via [`Hovered`] / [`Pressed`].
 #[must_use]
 pub fn resolve_style_for_entity_classes<'a>(
@@ -1644,7 +1644,7 @@ where
 
 /// Apply style directly on the target widget.
 ///
-/// This should be preferred for interactive controls to ensure visual bounds
+/// This should be preferred for interactive UI components to ensure visual bounds
 /// and hit-testing bounds remain identical.
 pub fn apply_direct_widget_style<V>(view: V, style: &ResolvedStyle) -> impl WidgetView<(), ()>
 where

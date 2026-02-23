@@ -155,12 +155,12 @@ pub(crate) fn project_slider(slider: &UiSlider, ctx: ProjectionCtx<'_>) -> UiVie
     Arc::new(apply_widget_style(content, &style))
 }
 
-pub(crate) fn project_switch(switch_control: &UiSwitch, ctx: ProjectionCtx<'_>) -> UiView {
+pub(crate) fn project_switch(switch_component: &UiSwitch, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let parts = child_entity_views(&ctx);
 
     let track = first_part_view::<PartSwitchTrack>(&ctx, &parts)
-        .unwrap_or_else(|| Arc::new(label(if switch_control.on { "On" } else { "Off" })));
+        .unwrap_or_else(|| Arc::new(label(if switch_component.on { "On" } else { "Off" })));
     let thumb =
         first_part_view::<PartSwitchThumb>(&ctx, &parts).unwrap_or_else(|| Arc::new(label("●")));
 

@@ -1,7 +1,7 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
 use crate::{
-    ProjectionCtx, StyleClass, UiLabel, UiView, controls::UiControlTemplate,
+    ProjectionCtx, StyleClass, UiLabel, UiView, components::UiComponentTemplate,
     templates::ensure_template_part,
 };
 
@@ -52,7 +52,7 @@ pub struct PartDialogBody;
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PartDialogDismiss;
 
-impl UiControlTemplate for UiDialog {
+impl UiComponentTemplate for UiDialog {
     fn expand(world: &mut World, entity: Entity) {
         let dialog = world.get::<UiDialog>(entity).cloned();
         let Some(dialog) = dialog else {

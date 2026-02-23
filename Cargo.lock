@@ -1957,6 +1957,157 @@ dependencies = [
 ]
 
 [[package]]
+name = "example_calculator"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_xilem",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "example_chess"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_xilem",
+ "num-traits",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "example_chess_engine"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_xilem",
+ "num-traits",
+]
+
+[[package]]
+name = "example_cjk_text_example"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_xilem",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "example_download_with_progress"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_xilem",
+ "reqwest",
+ "tokio",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "example_game_2048"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_xilem",
+ "masonry",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "example_i18n_showcase"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_embedded_assets",
+ "bevy_xilem",
+ "tracing",
+ "tracing-subscriber",
+ "unic-langid",
+]
+
+[[package]]
+name = "example_overlay_hit_routing"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_xilem",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "example_pixiv_client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "arboard",
+ "base64",
+ "bevy_asset",
+ "bevy_ecs",
+ "bevy_embedded_assets",
+ "bevy_image",
+ "bevy_text",
+ "bevy_xilem",
+ "chrono",
+ "crossbeam-channel",
+ "image",
+ "md5",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "unic-langid",
+ "vello",
+ "webbrowser",
+]
+
+[[package]]
+name = "example_temperature_converter"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_xilem",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "example_theme_gallery"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_xilem",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "example_timer"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_xilem",
+ "tokio",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "example_todo_list"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_xilem",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "example_widget_showcase"
+version = "0.1.0"
+dependencies = [
+ "bevy_ecs",
+ "bevy_xilem",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "exr"
 version = "1.74.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3951,32 +4102,6 @@ dependencies = [
  "atomic-waker",
  "fastrand",
  "futures-io",
-]
-
-[[package]]
-name = "pixiv_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "arboard",
- "base64",
- "bevy_asset",
- "bevy_ecs",
- "bevy_embedded_assets",
- "bevy_image",
- "bevy_text",
- "bevy_xilem",
- "chrono",
- "crossbeam-channel",
- "image",
- "md5",
- "reqwest",
- "serde",
- "serde_json",
- "sha2",
- "unic-langid",
- "vello",
- "webbrowser",
 ]
 
 [[package]]

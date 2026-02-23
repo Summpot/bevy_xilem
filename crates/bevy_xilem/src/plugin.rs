@@ -9,7 +9,7 @@ use bevy_window::{CursorLeft, CursorMoved, WindowResized, WindowScaleFactorChang
 
 use crate::{
     OverlayStack,
-    controls::register_builtin_ui_controls,
+    components::register_builtin_ui_components,
     events::UiEventQueue,
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
     i18n::AppI18n,
@@ -40,7 +40,7 @@ use crate::{
 #[derive(Default)]
 pub struct BevyXilemPlugin;
 
-/// Registers all built-in ECS UI controls.
+/// Registers all built-in ECS UI components.
 ///
 /// This plugin is automatically added by [`BevyXilemPlugin`], so users get
 /// plug-and-play built-ins without manual registration in app setup code.
@@ -49,7 +49,7 @@ pub struct BevyXilemBuiltinsPlugin;
 
 impl Plugin for BevyXilemBuiltinsPlugin {
     fn build(&self, app: &mut App) {
-        register_builtin_ui_controls(app);
+        register_builtin_ui_components(app);
     }
 }
 

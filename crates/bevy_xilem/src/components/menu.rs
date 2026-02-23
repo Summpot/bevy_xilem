@@ -1,6 +1,6 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
-use crate::{ProjectionCtx, UiView, controls::UiControlTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A single item in a menu (inside a dropdown).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,19 +61,19 @@ pub struct UiMenuItemSelected {
     pub value: String,
 }
 
-impl UiControlTemplate for UiMenuBar {
+impl UiComponentTemplate for UiMenuBar {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_menu_bar(component, ctx)
     }
 }
 
-impl UiControlTemplate for UiMenuBarItem {
+impl UiComponentTemplate for UiMenuBarItem {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_menu_bar_item(component, ctx)
     }
 }
 
-impl UiControlTemplate for UiMenuItemPanel {
+impl UiComponentTemplate for UiMenuItemPanel {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_menu_item_panel(component, ctx)
     }

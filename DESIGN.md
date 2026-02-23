@@ -110,12 +110,12 @@ with no per-button channel sender/closure wiring by end users.
 
 `bevy_xilem` exposes `AppBevyXilemExt` so users can register projectors directly on Bevy apps:
 
-- `.register_ui_control::<T: UiControlTemplate>()`
+- `.register_ui_component::<T: UiComponentTemplate>()`
 
 Architectural strictness policy:
 
-- End-user apps/examples must define ECS controls through `UiControlTemplate`.
-- Example/application registration uses `register_ui_control::<T>()` only.
+- End-user apps/examples must define ECS UI components through `UiComponentTemplate`.
+- Example/application registration uses `register_ui_component::<T>()` only.
 - Legacy low-level projector registration APIs remain hidden compatibility surfaces
   for framework/internal scenarios and tests.
 
@@ -128,7 +128,7 @@ Architectural strictness policy:
 - Typed draining is non-destructive: events with other payload types are preserved for
   later consumers.
 - `emit_ui_action(entity, action)` provides a public adapter entry-point for callback-heavy
-  Xilem controls while still routing through the same ECS queue path.
+  Xilem widgets while still routing through the same ECS queue path.
 
 ### 5.5) ECS styling engine (CSS-like cascade)
 
@@ -165,7 +165,7 @@ Projection wiring guarantees these are not metadata-only:
 
 - Flex containers map `justify_content`/`align_items` to Masonry
   `MainAxisAlignment`/`CrossAxisAlignment`.
-- Text-bearing controls map `text_align` to Parley text alignment.
+- Text-bearing UI components map `text_align` to Parley text alignment.
 - Styled widgets apply `layout.scale` via transform wrappers and transitions.
 
 Style resolution helpers (`resolve_style`, `resolve_style_for_classes`) and application helpers
@@ -189,7 +189,7 @@ Label text wrapping policy:
 
 - `apply_label_style` applies `LineBreaking::WordWrap` by default.
 - This prevents overflow/tofu-like clipping in constrained containers (such as modal body text)
-  while keeping font/color sizing controlled by resolved style.
+  while keeping font/color sizing governed by resolved style.
 
 Style surface details:
 
@@ -198,12 +198,12 @@ Style surface details:
   on the target surface, allowing overlay/dialog/dropdown surfaces to express depth without
   coupling shadows to backdrop layers.
 - Fluent elevation presets are encoded in the embedded theme via `BoxShadow` tokens,
-  including subtle control elevation and deeper flyout/dialog elevation.
+  including subtle UI component elevation and deeper flyout/dialog elevation.
 
 Hit-testing invariant:
 
-- Layout-affecting style properties for controls (notably padding/border/background) are applied
-  on the target control widget itself (instead of only through a purely visual outer wrapper).
+- Layout-affecting style properties for UI components (notably padding/border/background) are applied
+  on the target UI component widget itself (instead of only through a purely visual outer wrapper).
 - This ensures Masonry's layout and pointer hit-testing use the same structural box model as what
   users see on screen.
 - Floating overlay surfaces (`UiDialog`, `UiDropdownMenu`) are wrapped in a dedicated
@@ -251,7 +251,7 @@ Universal placement model:
 Built-in floating widgets:
 
 - `UiDialog` (modal panel; optional visual dimming is rendered by `UiOverlayRoot`)
-- `UiComboBox` (anchor control)
+- `UiComboBox` (anchor UI component)
 - `UiDropdownMenu` (floating list in overlay layer)
 - `AnchoredTo(Entity)` + `OverlayAnchorRect` for anchor tracking
 - `OverlayState` for behavior and dismissal policy.
@@ -369,20 +369,20 @@ two-stage sync pipeline to register custom font bytes into Masonry's font databa
 Locale/font policy is therefore owned by application setup via i18n bundle registration,
 while the styling engine remains locale-agnostic data.
 
-### 6) ECS control adapter coverage
+### 6) ECS UI component adapter coverage
 
-### 6.1) Component-centric control encapsulation (`UiControlTemplate`)
+### 6.1) Component-centric UI component encapsulation (`UiComponentTemplate`)
 
-Built-in logical controls are organized under:
+Built-in logical UI components are organized under:
 
-- `crates/bevy_xilem/src/controls/*.rs`
+- `crates/bevy_xilem/src/components/*.rs`
 
-Each control module owns its logical component shape, template-part policy,
+Each UI component module owns its logical component shape, template-part policy,
 and the trait contract used for registration.
 
 The unifying trait is:
 
-- `UiControlTemplate`
+- `UiComponentTemplate`
 
 Trait responsibilities:
 
@@ -399,13 +399,13 @@ Logical tree vs template parts:
 
 `AppBevyXilemExt` exposes:
 
-- `.register_ui_control::<T: UiControlTemplate>()`
+- `.register_ui_component::<T: UiComponentTemplate>()`
 
-Built-in controls are registered centrally by `BevyXilemPlugin` through
+Built-in UI components are registered centrally by `BevyXilemPlugin` through
 `BevyXilemBuiltinsPlugin`, so applications/examples do not need to manually
-call `.register_ui_control::<...>()` for built-ins.
-`register_ui_control::<T>()` remains the extension path for third-party/custom
-control templates.
+call `.register_ui_component::<...>()` for built-ins.
+`register_ui_component::<T>()` remains the extension path for third-party/custom
+UI component templates.
 
 One call performs:
 
@@ -413,8 +413,8 @@ One call performs:
 - `Added<T>` expansion system hookup,
 - selector type alias registration.
 
-Duplicate registration of the same control type is deduplicated by
-`RegisteredUiControlTypes`.
+Duplicate registration of the same UI component type is deduplicated by
+`RegisteredUiComponentTypes`.
 
 ### 6.3) Base vs active stylesheet tiers
 
@@ -425,8 +425,8 @@ Runtime styling distinguishes two explicit tiers:
 
 Effective cascade order keeps active rules overriding base rules by selector.
 
-`bevy_xilem` scanned `xilem_masonry::view::*` controls and currently provides ECS adapters
-for controls that naturally produce user actions:
+`bevy_xilem` scanned `xilem_masonry::view::*` widgets and currently provides ECS adapters
+for UI components that naturally produce user actions:
 
 - `ecs_button` / `ecs_button_with_child` / `ecs_text_button`
 - `ecs_checkbox`
@@ -434,10 +434,10 @@ for controls that naturally produce user actions:
 - `ecs_switch`
 - `ecs_text_input`
 
-Non-interactive display/layout controls (`label`, `flex`, `grid`, `prose`, `progress_bar`,
+Non-interactive display/layout widgets (`label`, `flex`, `grid`, `prose`, `progress_bar`,
 `sized_box`, etc.) are reused directly since they do not require event adaptation.
 
-Additional ECS-native logical controls and typed events:
+Additional ECS-native logical UI components and typed events:
 
 - `UiCheckbox` / `UiCheckboxChanged`
 - `UiSlider` / `UiSliderChanged`
@@ -445,9 +445,9 @@ Additional ECS-native logical controls and typed events:
 - `UiTextInput` / `UiTextInputChanged`
 - `UiScrollView` / `UiScrollViewChanged`
 
-### 6.4) Portal-based `UiScrollView` control
+### 6.4) Portal-based `UiScrollView` UI component
 
-`UiScrollView` is implemented as a logical ECS control projected through a Masonry portal view,
+`UiScrollView` is implemented as a logical ECS UI component projected through a Masonry portal view,
 with explicit scroll state and optional external scrollbar parts.
 
 Logical state includes:
@@ -474,13 +474,13 @@ composition in the projector layer.
 
 Template-part expansion model:
 
-- Built-in controls can be expanded into child entities tagged with marker components
+- Built-in UI components can be expanded into child entities tagged with marker components
   (`PartDialogTitle`, `PartDialogDismiss`, `PartComboBoxDisplay`,
   `PartCheckboxIndicator`, `PartSliderTrack`, `PartScrollViewport`,
   `PartScrollBarVertical`, `PartScrollBarHorizontal`,
   `PartScrollThumbVertical`, `PartScrollThumbHorizontal`, etc.).
-- `register_ui_control::<T>()` installs `Added<T>` expansion hooks by default.
-- `expand_builtin_control_templates` remains as a compatibility helper.
+- `register_ui_component::<T>()` installs `Added<T>` expansion hooks by default.
+- `expand_builtin_ui_component_templates` remains as a compatibility helper.
 - Projectors assemble visuals using `ctx.children` and marker lookups.
 - Public helper APIs for user-defined template systems:
   `spawn_template_part`, `ensure_template_part`, `find_template_part`.
@@ -583,8 +583,8 @@ Transition execution details:
 - `resolve_style` reads `ComputedStyle` + `CurrentColorStyle` so projectors render in-between values,
   producing smooth CSS-like transitions instead of color snapping.
 
-It registers core non-control projectors and installs
-`BevyXilemBuiltinsPlugin`, which centrally registers built-in controls.
+It registers core non-UI-component projectors and installs
+`BevyXilemBuiltinsPlugin`, which centrally registers built-in UI components.
 
 ## Bevy-native run helpers
 
@@ -613,15 +613,15 @@ Built-in `UiButton` projector maps to `ecs_button(...)` with action `BuiltinUiAc
 ## Public API export strategy
 
 To minimize dependency friction, `bevy_xilem` re-exports commonly needed Bevy/Xilem crates and
-provides a dual control-view naming scheme:
+provides a dual UI-component-view naming scheme:
 
 - Runtime-adjacent integration crates used by examples/apps (for example `bevy_tasks` task pools
   and `rfd` native dialogs) are also re-exported, so downstream apps can stay version-aligned with
   `bevy_xilem`.
 
-- ECS event-adapted controls are exported with ergonomic names (`button`, `checkbox`, `slider`,
+- ECS event-adapted UI components are exported with ergonomic names (`button`, `checkbox`, `slider`,
   `switch`, `text_button`, `text_input`, ...).
-- Original `xilem_masonry::view` controls are re-exported with `xilem_` prefixes
+- Original `xilem_masonry::view` widgets are re-exported with `xilem_` prefixes
   (`xilem_button`, `xilem_checkbox`, ...).
 - Legacy `ecs_*` exports remain available for compatibility.
 
@@ -634,8 +634,8 @@ Examples were rewritten to demonstrate this architecture with:
 - typed action handling via `UiEventQueue` (ECS queue path only)
 - stylesheet-driven styling (class rules + cascade) instead of hardcoded projector styles
 - pseudo-class interaction styling and transition-capable style resolution
-- control registration through `UiControlTemplate` + `register_ui_control::<T>()`
-- crate-like example layout (`examples/<name>/main.rs`, `ui.rs`, `systems.rs`)
+- UI component registration through `UiComponentTemplate` + `register_ui_component::<T>()`
+- workspace example crates (`examples/<name>/Cargo.toml` + `main.rs`, `ui.rs`, `systems.rs`)
 - `widget_showcase` demonstration of `UiScrollView` (overflow content + wheel/drag updates)
 - virtualized task scrolling in `todo_list` using `xilem_masonry::view::virtual_scroll`
 - no `xilem::Xilem::new_simple` usage

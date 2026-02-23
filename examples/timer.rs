@@ -88,7 +88,7 @@ struct TimerProgressRow;
 struct TimerDurationRow;
 
 #[derive(Component, Debug, Clone, Copy)]
-struct TimerControlsRow;
+struct TimerUiComponentsRow;
 
 fn clamp01(v: f64) -> f64 {
     v.clamp(0.0, 1.0)
@@ -342,7 +342,7 @@ fn project_timer_duration_row(_: &TimerDurationRow, ctx: ProjectionCtx<'_>) -> U
     ))
 }
 
-fn project_timer_controls_row(_: &TimerControlsRow, ctx: ProjectionCtx<'_>) -> UiView {
+fn project_timer_ui_components_row(_: &TimerUiComponentsRow, ctx: ProjectionCtx<'_>) -> UiView {
     let row_style = resolve_style_for_classes(ctx.world, ["timer.row"]);
     let pause_button_style =
         resolve_style_for_entity_classes(ctx.world, ctx.entity, ["timer.pause-button"]);
@@ -380,7 +380,7 @@ fn setup_timer_world(mut commands: Commands) {
     commands.spawn((TimerElapsedRow, ChildOf(root)));
     commands.spawn((TimerProgressRow, ChildOf(root)));
     commands.spawn((TimerDurationRow, ChildOf(root)));
-    commands.spawn((TimerControlsRow, ChildOf(root)));
+    commands.spawn((TimerUiComponentsRow, ChildOf(root)));
 }
 
 fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
@@ -530,13 +530,16 @@ fn drain_timer_events_and_tick(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_control_template!(TimerRootView, project_timer_root);
-bevy_xilem::impl_ui_control_template!(TimerTitle, project_timer_title);
-bevy_xilem::impl_ui_control_template!(TimerDialView, project_timer_dial);
-bevy_xilem::impl_ui_control_template!(TimerElapsedRow, project_timer_elapsed_row);
-bevy_xilem::impl_ui_control_template!(TimerProgressRow, project_timer_progress_row);
-bevy_xilem::impl_ui_control_template!(TimerDurationRow, project_timer_duration_row);
-bevy_xilem::impl_ui_control_template!(TimerControlsRow, project_timer_controls_row);
+bevy_xilem::impl_ui_component_template!(TimerRootView, project_timer_root);
+bevy_xilem::impl_ui_component_template!(TimerTitle, project_timer_title);
+bevy_xilem::impl_ui_component_template!(TimerDialView, project_timer_dial);
+bevy_xilem::impl_ui_component_template!(TimerElapsedRow, project_timer_elapsed_row);
+bevy_xilem::impl_ui_component_template!(TimerProgressRow, project_timer_progress_row);
+bevy_xilem::impl_ui_component_template!(TimerDurationRow, project_timer_duration_row);
+bevy_xilem::impl_ui_component_template!(
+    TimerUiComponentsRow,
+    project_timer_ui_components_row,
+);
 
 fn build_bevy_timer_app() -> App {
     init_logging();
@@ -544,13 +547,13 @@ fn build_bevy_timer_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(TimerState::default())
-        .register_ui_control::<TimerRootView>()
-        .register_ui_control::<TimerTitle>()
-        .register_ui_control::<TimerDialView>()
-        .register_ui_control::<TimerElapsedRow>()
-        .register_ui_control::<TimerProgressRow>()
-        .register_ui_control::<TimerDurationRow>()
-        .register_ui_control::<TimerControlsRow>()
+        .register_ui_component::<TimerRootView>()
+        .register_ui_component::<TimerTitle>()
+        .register_ui_component::<TimerDialView>()
+        .register_ui_component::<TimerElapsedRow>()
+        .register_ui_component::<TimerProgressRow>()
+        .register_ui_component::<TimerDurationRow>()
+        .register_ui_component::<TimerUiComponentsRow>()
         .add_systems(Startup, (setup_timer_styles, setup_timer_world));
 
     app.add_systems(PreUpdate, drain_timer_events_and_tick);

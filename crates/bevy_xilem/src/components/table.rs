@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
 
-use crate::{ProjectionCtx, UiView, controls::UiControlTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A simple data table with column headers and rows.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
@@ -27,7 +27,7 @@ impl UiTable {
     }
 }
 
-impl UiControlTemplate for UiTable {
+impl UiComponentTemplate for UiTable {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_table(component, ctx)
     }

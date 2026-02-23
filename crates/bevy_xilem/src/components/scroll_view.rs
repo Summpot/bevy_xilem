@@ -2,7 +2,7 @@ use bevy_ecs::{entity::Entity, prelude::*};
 use bevy_math::Vec2;
 
 use crate::{
-    ProjectionCtx, StyleClass, UiLabel, UiView, controls::UiControlTemplate,
+    ProjectionCtx, StyleClass, UiLabel, UiView, components::UiComponentTemplate,
     templates::ensure_template_part,
 };
 
@@ -106,7 +106,7 @@ pub struct PartScrollThumbVertical;
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PartScrollThumbHorizontal;
 
-impl UiControlTemplate for UiScrollView {
+impl UiComponentTemplate for UiScrollView {
     fn expand(world: &mut World, entity: Entity) {
         let _viewport = ensure_template_part::<PartScrollViewport, _>(world, entity, || {
             (

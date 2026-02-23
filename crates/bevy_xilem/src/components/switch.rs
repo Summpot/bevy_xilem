@@ -1,11 +1,11 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
 use crate::{
-    ProjectionCtx, StyleClass, UiLabel, UiView, controls::UiControlTemplate,
+    ProjectionCtx, StyleClass, UiLabel, UiView, components::UiComponentTemplate,
     templates::ensure_template_part,
 };
 
-/// Built-in switch/toggle control.
+/// Built-in switch/toggle UI component.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
 pub struct UiSwitch {
     pub on: bool,
@@ -38,7 +38,7 @@ pub struct PartSwitchTrack;
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PartSwitchThumb;
 
-impl UiControlTemplate for UiSwitch {
+impl UiComponentTemplate for UiSwitch {
     fn expand(world: &mut World, entity: Entity) {
         let switch = world.get::<UiSwitch>(entity).cloned();
         let Some(switch) = switch else {

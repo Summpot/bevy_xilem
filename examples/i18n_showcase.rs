@@ -616,10 +616,10 @@ fn drain_i18n_events(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_control_template!(LocaleBadge, project_locale_badge);
-bevy_xilem::impl_ui_control_template!(ShowcaseStatus, project_showcase_status);
-bevy_xilem::impl_ui_control_template!(ShowcaseEdgeButton, project_showcase_edge_button);
-bevy_xilem::impl_ui_control_template!(
+bevy_xilem::impl_ui_component_template!(LocaleBadge, project_locale_badge);
+bevy_xilem::impl_ui_component_template!(ShowcaseStatus, project_showcase_status);
+bevy_xilem::impl_ui_component_template!(ShowcaseEdgeButton, project_showcase_edge_button);
+bevy_xilem::impl_ui_component_template!(
     ShowcaseOpenDialogButton,
     project_showcase_open_dialog_button
 );
@@ -662,10 +662,10 @@ fn build_i18n_app() -> App {
         SyncTextSource::FilePath("assets/locales/ja-JP/main.ftl"),
         ja_cjk_fallback_font_stack(),
     )
-    .register_ui_control::<LocaleBadge>()
-    .register_ui_control::<ShowcaseStatus>()
-    .register_ui_control::<ShowcaseEdgeButton>()
-    .register_ui_control::<ShowcaseOpenDialogButton>()
+    .register_ui_component::<LocaleBadge>()
+    .register_ui_component::<ShowcaseStatus>()
+    .register_ui_component::<ShowcaseEdgeButton>()
+    .register_ui_component::<ShowcaseOpenDialogButton>()
     .add_systems(Startup, (setup_i18n_styles, setup_i18n_world))
     .add_systems(PreUpdate, drain_i18n_events);
 

@@ -1,6 +1,6 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
-use crate::{ProjectionCtx, UiView, controls::UiControlTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// A node in a tree view hierarchy.
 ///
@@ -37,7 +37,7 @@ pub struct UiTreeNodeToggled {
     pub is_expanded: bool,
 }
 
-impl UiControlTemplate for UiTreeNode {
+impl UiComponentTemplate for UiTreeNode {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_tree_node(component, ctx)
     }

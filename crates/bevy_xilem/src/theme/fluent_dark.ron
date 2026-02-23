@@ -38,7 +38,7 @@
     "text-md": Float(16.0),
     "text-lg": Float(22.0),
     "duration-fast": Float(0.10),
-    "shadow-control": BoxShadow((
+    "shadow-ui-component": BoxShadow((
       color: Rgba(0.0, 0.0, 0.0, 0.26),
       offset_x: 0.0,
       offset_y: 1.0,
@@ -111,7 +111,7 @@
         text: (
           text_align: Center,
         ),
-        box_shadow: Var("shadow-control"),
+        box_shadow: Var("shadow-ui-component"),
         transition: Var("duration-fast"),
       ),
     ),
@@ -307,7 +307,7 @@
         text: (
           text_align: Start,
         ),
-        box_shadow: Var("shadow-control"),
+        box_shadow: Var("shadow-ui-component"),
         transition: Var("duration-fast"),
       ),
     ),
@@ -733,7 +733,7 @@
           size: Var("text-sm"),
           text_align: Center,
         ),
-        box_shadow: Var("shadow-control"),
+        box_shadow: Var("shadow-ui-component"),
         transition: Var("duration-fast"),
       ),
     ),

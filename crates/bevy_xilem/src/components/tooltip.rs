@@ -1,6 +1,6 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
-use crate::{ProjectionCtx, UiView, controls::UiControlTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// Causes a floating tooltip to appear when the entity is hovered.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
@@ -25,7 +25,7 @@ pub struct UiTooltip {
     pub anchor: Entity,
 }
 
-impl UiControlTemplate for UiTooltip {
+impl UiComponentTemplate for UiTooltip {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_tooltip(component, ctx)
     }

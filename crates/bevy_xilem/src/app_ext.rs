@@ -9,7 +9,9 @@ use unic_langid::LanguageIdentifier;
 use crate::{
     ActiveStyleSheetAsset, AppI18n, MasonryRuntime, ProjectionCtx, StyleSheet, StyleTypeRegistry,
     UiEventQueue, UiProjector, UiProjectorRegistry, UiView, XilemFontBridge,
-    controls::{RegisteredUiControlTypes, UiControlTemplate, expand_added_ui_control_templates},
+    components::{
+        RegisteredUiComponentTypes, UiComponentTemplate, expand_added_ui_component_templates,
+    },
     set_active_stylesheet_asset_path,
 };
 
@@ -57,7 +59,7 @@ fn flush_pending_font_registrations(app: &mut App) {
 /// use std::sync::Arc;
 ///
 /// use bevy_xilem::{
-///     AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiControlTemplate, UiRoot, UiView,
+///     AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, UiComponentTemplate, UiRoot, UiView,
 ///     bevy_app::{App, Startup},
 ///     bevy_ecs::prelude::*,
 ///     text_button,
@@ -71,7 +73,7 @@ fn flush_pending_font_registrations(app: &mut App) {
 ///     Clicked,
 /// }
 ///
-/// impl UiControlTemplate for Root {
+/// impl UiComponentTemplate for Root {
 ///     fn project(_: &Self, ctx: ProjectionCtx<'_>) -> UiView {
 ///         Arc::new(text_button(ctx.entity, Action::Clicked, "Click"))
 ///     }
@@ -83,7 +85,7 @@ fn flush_pending_font_registrations(app: &mut App) {
 ///
 /// let mut app = App::new();
 /// app.add_plugins(BevyXilemPlugin)
-///     .register_ui_control::<Root>()
+///     .register_ui_component::<Root>()
 ///     .add_systems(Startup, setup);
 /// ```
 pub trait AppBevyXilemExt {
@@ -92,23 +94,23 @@ pub trait AppBevyXilemExt {
     /// Last registered projector has precedence during projection.
     ///
     /// Legacy low-level API kept for compatibility; prefer
-    /// [`Self::register_ui_control`] for application code.
+    /// [`Self::register_ui_component`] for application code.
     #[doc(hidden)]
     fn register_projector<C: Component>(
         &mut self,
         projector: fn(&C, ProjectionCtx<'_>) -> UiView,
     ) -> &mut Self;
 
-    /// Register an ECS-native UI control template.
+    /// Register an ECS-native UI component template.
     ///
     /// This single call wires projector registration, one-time expansion for `Added<T>`,
     /// and selector type aliases.
-    fn register_ui_control<T: UiControlTemplate>(&mut self) -> &mut Self;
+    fn register_ui_component<T: UiComponentTemplate>(&mut self) -> &mut Self;
 
     /// Register a raw projector implementation.
     ///
     /// Legacy low-level API kept for compatibility; prefer
-    /// [`Self::register_ui_control`] for application code.
+    /// [`Self::register_ui_component`] for application code.
     #[doc(hidden)]
     fn register_raw_projector<P: UiProjector>(&mut self, projector: P) -> &mut Self;
 
@@ -162,11 +164,11 @@ impl AppBevyXilemExt for App {
         self
     }
 
-    fn register_ui_control<T: UiControlTemplate>(&mut self) -> &mut Self {
-        self.init_resource::<RegisteredUiControlTypes>();
+    fn register_ui_component<T: UiComponentTemplate>(&mut self) -> &mut Self {
+        self.init_resource::<RegisteredUiComponentTypes>();
         if !self
             .world_mut()
-            .resource_mut::<RegisteredUiControlTypes>()
+            .resource_mut::<RegisteredUiComponentTypes>()
             .insert::<T>()
         {
             return self;
@@ -180,7 +182,7 @@ impl AppBevyXilemExt for App {
         self.init_resource::<StyleTypeRegistry>();
         T::register_style_types(&mut self.world_mut().resource_mut::<StyleTypeRegistry>());
 
-        self.add_systems(Update, expand_added_ui_control_templates::<T>);
+        self.add_systems(Update, expand_added_ui_component_templates::<T>);
 
         self
     }

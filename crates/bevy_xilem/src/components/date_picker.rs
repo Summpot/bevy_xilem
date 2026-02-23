@@ -1,6 +1,6 @@
 use bevy_ecs::{entity::Entity, prelude::*};
 
-use crate::{ProjectionCtx, UiView, controls::UiControlTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// An inline date picker that opens a calendar overlay panel.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,13 +43,13 @@ pub struct UiDatePickerChanged {
     pub day: u32,
 }
 
-impl UiControlTemplate for UiDatePicker {
+impl UiComponentTemplate for UiDatePicker {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_date_picker(component, ctx)
     }
 }
 
-impl UiControlTemplate for UiDatePickerPanel {
+impl UiComponentTemplate for UiDatePickerPanel {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_date_picker_panel(component, ctx)
     }

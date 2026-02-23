@@ -1211,16 +1211,16 @@ fn drain_gallery_events(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_control_template!(GalleryRoot, project_gallery_root);
-bevy_xilem::impl_ui_control_template!(GalleryHeader, project_gallery_header);
-bevy_xilem::impl_ui_control_template!(GalleryButtonRow, project_gallery_button_row);
-bevy_xilem::impl_ui_control_template!(GalleryButton, project_gallery_button);
-bevy_xilem::impl_ui_control_template!(ActionBadge, project_action_badge);
-bevy_xilem::impl_ui_control_template!(NestedShell, project_nested_shell);
-bevy_xilem::impl_ui_control_template!(NestedStack, project_nested_stack);
-bevy_xilem::impl_ui_control_template!(NestedTitle, project_nested_title);
-bevy_xilem::impl_ui_control_template!(NestedNote, project_nested_note);
-bevy_xilem::impl_ui_control_template!(BottomEdgeDemo, project_bottom_edge_demo);
+bevy_xilem::impl_ui_component_template!(GalleryRoot, project_gallery_root);
+bevy_xilem::impl_ui_component_template!(GalleryHeader, project_gallery_header);
+bevy_xilem::impl_ui_component_template!(GalleryButtonRow, project_gallery_button_row);
+bevy_xilem::impl_ui_component_template!(GalleryButton, project_gallery_button);
+bevy_xilem::impl_ui_component_template!(ActionBadge, project_action_badge);
+bevy_xilem::impl_ui_component_template!(NestedShell, project_nested_shell);
+bevy_xilem::impl_ui_component_template!(NestedStack, project_nested_stack);
+bevy_xilem::impl_ui_component_template!(NestedTitle, project_nested_title);
+bevy_xilem::impl_ui_component_template!(NestedNote, project_nested_note);
+bevy_xilem::impl_ui_component_template!(BottomEdgeDemo, project_bottom_edge_demo);
 
 fn build_theme_gallery_app() -> App {
     init_logging();
@@ -1231,16 +1231,16 @@ fn build_theme_gallery_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(GalleryState::default())
-        .register_ui_control::<GalleryRoot>()
-        .register_ui_control::<GalleryHeader>()
-        .register_ui_control::<GalleryButtonRow>()
-        .register_ui_control::<GalleryButton>()
-        .register_ui_control::<ActionBadge>()
-        .register_ui_control::<NestedShell>()
-        .register_ui_control::<NestedStack>()
-        .register_ui_control::<NestedTitle>()
-        .register_ui_control::<NestedNote>()
-        .register_ui_control::<BottomEdgeDemo>()
+        .register_ui_component::<GalleryRoot>()
+        .register_ui_component::<GalleryHeader>()
+        .register_ui_component::<GalleryButtonRow>()
+        .register_ui_component::<GalleryButton>()
+        .register_ui_component::<ActionBadge>()
+        .register_ui_component::<NestedShell>()
+        .register_ui_component::<NestedStack>()
+        .register_ui_component::<NestedTitle>()
+        .register_ui_component::<NestedNote>()
+        .register_ui_component::<BottomEdgeDemo>()
         .add_systems(Startup, (setup_gallery_styles, setup_gallery_world))
         .add_systems(PreUpdate, drain_gallery_events);
     app

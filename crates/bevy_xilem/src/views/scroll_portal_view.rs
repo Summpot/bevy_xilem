@@ -4,7 +4,7 @@ use masonry::{kurbo::Point, widgets};
 use xilem_core::{Arg, MessageCtx, MessageResult, Mut, View, ViewArgument, ViewMarker};
 use xilem_masonry::{Pod, ViewCtx, WidgetView};
 
-/// Portal view with explicit viewport-position control.
+/// Portal view with explicit viewport-position configuration.
 #[must_use]
 pub fn scroll_portal<Child, State, Action>(
     child: Child,

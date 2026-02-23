@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
 
-use crate::{ProjectionCtx, UiView, controls::UiControlTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// Visual severity / colour of a [`UiToast`] notification.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -47,7 +47,7 @@ impl UiToast {
     }
 }
 
-impl UiControlTemplate for UiToast {
+impl UiComponentTemplate for UiToast {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_toast(component, ctx)
     }

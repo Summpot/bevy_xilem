@@ -17,7 +17,7 @@ use crate::ecs::{
     UiTreeNode,
 };
 
-/// Register non-control foundational projectors.
+/// Register non-UI-component foundational projectors.
 pub fn register_core_projectors(registry: &mut UiProjectorRegistry) {
     registry
         .register_component::<UiFlexColumn>(layout::project_flex_column)
@@ -28,8 +28,8 @@ pub fn register_core_projectors(registry: &mut UiProjectorRegistry) {
 
 /// Register built-in projectors for built-in ECS demo components.
 ///
-/// Compatibility helper: controls are now expected to be registered through
-/// `AppBevyXilemExt::register_ui_control::<T>()`.
+/// Compatibility helper: UI components are now expected to be registered through
+/// `AppBevyXilemExt::register_ui_component::<T>()`.
 pub fn register_builtin_projectors(registry: &mut UiProjectorRegistry) {
     register_core_projectors(registry);
 

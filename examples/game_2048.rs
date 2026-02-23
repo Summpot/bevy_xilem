@@ -65,8 +65,8 @@ impl Default for GameViewport {
 struct GameLayoutMetrics {
     tile_size: f64,
     side_panel_width: f64,
-    control_button_width: f64,
-    control_button_height: f64,
+    ui_component_button_width: f64,
+    ui_component_button_height: f64,
 }
 
 impl GameLayoutMetrics {
@@ -79,14 +79,14 @@ impl GameLayoutMetrics {
         let tile_from_height = board_height_budget / 4.4;
         let tile_size = tile_from_width.min(tile_from_height).clamp(44.0, 92.0);
 
-        let control_button_width = (side_panel_width * 0.86).clamp(120.0, 228.0);
-        let control_button_height = (tile_size * 0.64).clamp(42.0, 58.0);
+        let ui_component_button_width = (side_panel_width * 0.86).clamp(120.0, 228.0);
+        let ui_component_button_height = (tile_size * 0.64).clamp(42.0, 58.0);
 
         Self {
             tile_size,
             side_panel_width,
-            control_button_width,
-            control_button_height,
+            ui_component_button_width,
+            ui_component_button_height,
         }
     }
 }
@@ -515,16 +515,16 @@ struct TileCell {
 }
 
 #[derive(Component, Debug, Clone, Copy)]
-struct ControlsPad;
+struct UiComponentsPad;
 
 #[derive(Component, Debug, Clone, Copy)]
 struct SidePanel;
 
 #[derive(Component, Debug, Clone, Copy)]
-struct ControlsRow;
+struct UiComponentsRow;
 
 #[derive(Component, Debug, Clone, Copy)]
-struct ControlButton {
+struct UiComponentButton {
     action: GameEvent,
     label: &'static str,
 }
@@ -909,7 +909,7 @@ fn project_tile_cell(tile: &TileCell, ctx: ProjectionCtx<'_>) -> UiView {
     )
 }
 
-fn project_controls_pad(_: &ControlsPad, ctx: ProjectionCtx<'_>) -> UiView {
+fn project_ui_components_pad(_: &UiComponentsPad, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let rows = ctx
         .children
@@ -925,7 +925,7 @@ fn project_controls_pad(_: &ControlsPad, ctx: ProjectionCtx<'_>) -> UiView {
     ))
 }
 
-fn project_controls_row(_: &ControlsRow, ctx: ProjectionCtx<'_>) -> UiView {
+fn project_ui_components_row(_: &UiComponentsRow, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let buttons = ctx
         .children
@@ -939,7 +939,7 @@ fn project_controls_row(_: &ControlsRow, ctx: ProjectionCtx<'_>) -> UiView {
     ))
 }
 
-fn project_control_button(button_info: &ControlButton, ctx: ProjectionCtx<'_>) -> UiView {
+fn project_ui_component_button(button_info: &UiComponentButton, ctx: ProjectionCtx<'_>) -> UiView {
     let viewport = *ctx.world.resource::<GameViewport>();
     let metrics = GameLayoutMetrics::from_viewport(viewport);
     let style = resolve_style(ctx.world, ctx.entity);
@@ -960,8 +960,8 @@ fn project_control_button(button_info: &ControlButton, ctx: ProjectionCtx<'_>) -
                 .background_color(style.colors.bg.unwrap_or(Color::TRANSPARENT))
                 .color(text_color),
         )
-        .fixed_width(Length::px(metrics.control_button_width))
-        .fixed_height(Length::px(metrics.control_button_height)),
+        .fixed_width(Length::px(metrics.ui_component_button_width))
+        .fixed_height(Length::px(metrics.ui_component_button_height)),
     )
 }
 
@@ -969,14 +969,16 @@ fn project_hint_line(_: &HintLine, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     Arc::new(apply_widget_style(
         apply_label_style(
-            label("Controls: Arrow keys / WASD / on-screen buttons. Press Z to undo one move."),
+            label(
+                "UI Components: Arrow keys / WASD / on-screen buttons. Press Z to undo one move.",
+            ),
             &style,
         ),
         &style,
     ))
 }
 
-fn spawn_control_button(
+fn spawn_ui_component_button(
     commands: &mut Commands,
     parent: Entity,
     label_text: &'static str,
@@ -984,12 +986,12 @@ fn spawn_control_button(
     variant_class: &'static str,
 ) {
     commands.spawn((
-        ControlButton {
+        UiComponentButton {
             action,
             label: label_text,
         },
         StyleClass(vec![
-            "g2048.control.button".to_string(),
+            "g2048.ui-component.button".to_string(),
             variant_class.to_string(),
         ]),
         ChildOf(parent),
@@ -1077,78 +1079,78 @@ fn setup_game_world(mut commands: Commands) {
         ChildOf(side_panel),
     ));
 
-    let controls = commands
+    let ui_components = commands
         .spawn((
-            ControlsPad,
-            StyleClass(vec!["g2048.controls".to_string()]),
+            UiComponentsPad,
+            StyleClass(vec!["g2048.ui-components".to_string()]),
             ChildOf(side_panel),
         ))
         .id();
 
     let row_top = commands
         .spawn((
-            ControlsRow,
-            StyleClass(vec!["g2048.control-row".to_string()]),
-            ChildOf(controls),
+            UiComponentsRow,
+            StyleClass(vec!["g2048.ui-component-row".to_string()]),
+            ChildOf(ui_components),
         ))
         .id();
-    spawn_control_button(
+    spawn_ui_component_button(
         &mut commands,
         row_top,
         "↑ Up",
         GameEvent::Move(MoveDirection::Up),
-        "g2048.control.button.primary",
+        "g2048.ui-component.button.primary",
     );
 
     let row_middle = commands
         .spawn((
-            ControlsRow,
-            StyleClass(vec!["g2048.control-row".to_string()]),
-            ChildOf(controls),
+            UiComponentsRow,
+            StyleClass(vec!["g2048.ui-component-row".to_string()]),
+            ChildOf(ui_components),
         ))
         .id();
-    spawn_control_button(
+    spawn_ui_component_button(
         &mut commands,
         row_middle,
         "← Left",
         GameEvent::Move(MoveDirection::Left),
-        "g2048.control.button.primary",
+        "g2048.ui-component.button.primary",
     );
-    spawn_control_button(
+    spawn_ui_component_button(
         &mut commands,
         row_middle,
         "↓ Down",
         GameEvent::Move(MoveDirection::Down),
-        "g2048.control.button.primary",
+        "g2048.ui-component.button.primary",
     );
-    spawn_control_button(
+    spawn_ui_component_button(
         &mut commands,
         row_middle,
         "→ Right",
         GameEvent::Move(MoveDirection::Right),
-        "g2048.control.button.primary",
+        "g2048.ui-component.button.primary",
     );
 
     let row_bottom = commands
         .spawn((
-            ControlsRow,
-            StyleClass(vec!["g2048.control-row".to_string()]),
-            ChildOf(controls),
+            UiComponentsRow,
+            StyleClass(vec!["g2048.ui-component-row".to_string()]),
+            ChildOf(ui_components),
         ))
         .id();
-    spawn_control_button(
+    spawn_ui_component_button(
         &mut commands,
         row_bottom,
         "↶ Undo",
         GameEvent::Undo,
-        "g2048.control.button.secondary",
+        "g2048.ui-component.button.secondary",
     );
-    spawn_control_button(
+    spawn_ui_component_button(
         &mut commands,
         row_bottom,
         "↺ New Game",
         GameEvent::Restart,
-        "g2048.control.button.danger",
+        "g2048.ui-component.button.danger",
     );
 
     commands.spawn((
@@ -1596,7 +1598,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     );
 
     style_sheet.set_class(
-        "g2048.controls",
+        "g2048.ui-components",
         StyleSetter {
             layout: LayoutStyle {
                 gap: Some(8.0),
@@ -1607,7 +1609,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     );
 
     style_sheet.set_class(
-        "g2048.control-row",
+        "g2048.ui-component-row",
         StyleSetter {
             layout: LayoutStyle {
                 gap: Some(8.0),
@@ -1618,7 +1620,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     );
 
     style_sheet.set_class(
-        "g2048.control.button",
+        "g2048.ui-component.button",
         StyleSetter {
             layout: LayoutStyle {
                 padding: Some(8.0),
@@ -1636,7 +1638,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     );
 
     style_sheet.set_class(
-        "g2048.control.button.primary",
+        "g2048.ui-component.button.primary",
         StyleSetter {
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0x35, 0x53, 0x85)),
@@ -1649,7 +1651,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     );
 
     style_sheet.set_class(
-        "g2048.control.button.secondary",
+        "g2048.ui-component.button.secondary",
         StyleSetter {
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0x4A, 0x4F, 0x5C)),
@@ -1662,7 +1664,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
     );
 
     style_sheet.set_class(
-        "g2048.control.button.danger",
+        "g2048.ui-component.button.danger",
         StyleSetter {
             colors: ColorStyle {
                 bg: Some(Color::from_rgb8(0x7A, 0x2F, 0x3A)),
@@ -1676,7 +1678,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
 
     style_sheet.add_rule(StyleRule::new(
         Selector::and(vec![
-            Selector::class("g2048.control.button.primary"),
+            Selector::class("g2048.ui-component.button.primary"),
             Selector::pseudo(PseudoClass::Hovered),
         ]),
         StyleSetter {
@@ -1691,7 +1693,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
 
     style_sheet.add_rule(StyleRule::new(
         Selector::and(vec![
-            Selector::class("g2048.control.button.primary"),
+            Selector::class("g2048.ui-component.button.primary"),
             Selector::pseudo(PseudoClass::Pressed),
         ]),
         StyleSetter {
@@ -1706,7 +1708,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
 
     style_sheet.add_rule(StyleRule::new(
         Selector::and(vec![
-            Selector::class("g2048.control.button.secondary"),
+            Selector::class("g2048.ui-component.button.secondary"),
             Selector::pseudo(PseudoClass::Hovered),
         ]),
         StyleSetter {
@@ -1721,7 +1723,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
 
     style_sheet.add_rule(StyleRule::new(
         Selector::and(vec![
-            Selector::class("g2048.control.button.secondary"),
+            Selector::class("g2048.ui-component.button.secondary"),
             Selector::pseudo(PseudoClass::Pressed),
         ]),
         StyleSetter {
@@ -1736,7 +1738,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
 
     style_sheet.add_rule(StyleRule::new(
         Selector::and(vec![
-            Selector::class("g2048.control.button.danger"),
+            Selector::class("g2048.ui-component.button.danger"),
             Selector::pseudo(PseudoClass::Hovered),
         ]),
         StyleSetter {
@@ -1751,7 +1753,7 @@ fn setup_game_styles(mut style_sheet: ResMut<StyleSheet>) {
 
     style_sheet.add_rule(StyleRule::new(
         Selector::and(vec![
-            Selector::class("g2048.control.button.danger"),
+            Selector::class("g2048.ui-component.button.danger"),
             Selector::pseudo(PseudoClass::Pressed),
         ]),
         StyleSetter {
@@ -1875,20 +1877,20 @@ fn apply_keyboard_game_input(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_control_template!(GameRoot, project_game_root);
-bevy_xilem::impl_ui_control_template!(HeaderBlock, project_header_block);
-bevy_xilem::impl_ui_control_template!(ScoreStrip, project_score_strip);
-bevy_xilem::impl_ui_control_template!(ScoreCard, project_score_card);
-bevy_xilem::impl_ui_control_template!(StatusLine, project_status_line);
-bevy_xilem::impl_ui_control_template!(GameFlowRow, project_game_flow_row);
-bevy_xilem::impl_ui_control_template!(BoardContainer, project_board_container);
-bevy_xilem::impl_ui_control_template!(BoardRow, project_board_row);
-bevy_xilem::impl_ui_control_template!(TileCell, project_tile_cell);
-bevy_xilem::impl_ui_control_template!(SidePanel, project_side_panel);
-bevy_xilem::impl_ui_control_template!(ControlsPad, project_controls_pad);
-bevy_xilem::impl_ui_control_template!(ControlsRow, project_controls_row);
-bevy_xilem::impl_ui_control_template!(ControlButton, project_control_button);
-bevy_xilem::impl_ui_control_template!(HintLine, project_hint_line);
+bevy_xilem::impl_ui_component_template!(GameRoot, project_game_root);
+bevy_xilem::impl_ui_component_template!(HeaderBlock, project_header_block);
+bevy_xilem::impl_ui_component_template!(ScoreStrip, project_score_strip);
+bevy_xilem::impl_ui_component_template!(ScoreCard, project_score_card);
+bevy_xilem::impl_ui_component_template!(StatusLine, project_status_line);
+bevy_xilem::impl_ui_component_template!(GameFlowRow, project_game_flow_row);
+bevy_xilem::impl_ui_component_template!(BoardContainer, project_board_container);
+bevy_xilem::impl_ui_component_template!(BoardRow, project_board_row);
+bevy_xilem::impl_ui_component_template!(TileCell, project_tile_cell);
+bevy_xilem::impl_ui_component_template!(SidePanel, project_side_panel);
+bevy_xilem::impl_ui_component_template!(UiComponentsPad, project_ui_components_pad);
+bevy_xilem::impl_ui_component_template!(UiComponentsRow, project_ui_components_row);
+bevy_xilem::impl_ui_component_template!(UiComponentButton, project_ui_component_button);
+bevy_xilem::impl_ui_component_template!(HintLine, project_hint_line);
 
 fn build_2048_app() -> App {
     init_logging();
@@ -1898,20 +1900,20 @@ fn build_2048_app() -> App {
         .insert_resource(ButtonInput::<KeyCode>::default())
         .insert_resource(GameViewport::default())
         .insert_resource(Game2048State::default())
-        .register_ui_control::<GameRoot>()
-        .register_ui_control::<HeaderBlock>()
-        .register_ui_control::<ScoreStrip>()
-        .register_ui_control::<ScoreCard>()
-        .register_ui_control::<StatusLine>()
-        .register_ui_control::<GameFlowRow>()
-        .register_ui_control::<BoardContainer>()
-        .register_ui_control::<BoardRow>()
-        .register_ui_control::<TileCell>()
-        .register_ui_control::<SidePanel>()
-        .register_ui_control::<ControlsPad>()
-        .register_ui_control::<ControlsRow>()
-        .register_ui_control::<ControlButton>()
-        .register_ui_control::<HintLine>()
+        .register_ui_component::<GameRoot>()
+        .register_ui_component::<HeaderBlock>()
+        .register_ui_component::<ScoreStrip>()
+        .register_ui_component::<ScoreCard>()
+        .register_ui_component::<StatusLine>()
+        .register_ui_component::<GameFlowRow>()
+        .register_ui_component::<BoardContainer>()
+        .register_ui_component::<BoardRow>()
+        .register_ui_component::<TileCell>()
+        .register_ui_component::<SidePanel>()
+        .register_ui_component::<UiComponentsPad>()
+        .register_ui_component::<UiComponentsRow>()
+        .register_ui_component::<UiComponentButton>()
+        .register_ui_component::<HintLine>()
         .add_systems(Startup, (setup_game_styles, setup_game_world))
         .add_systems(PreUpdate, track_game_viewport)
         .add_systems(
@@ -2082,8 +2084,8 @@ mod tests {
 
         assert!(small.tile_size < large.tile_size);
         assert!(small.side_panel_width <= large.side_panel_width);
-        assert!(small.control_button_width <= large.control_button_width);
-        assert!(small.control_button_height <= large.control_button_height);
+        assert!(small.ui_component_button_width <= large.ui_component_button_width);
+        assert!(small.ui_component_button_height <= large.ui_component_button_height);
         assert!(small.tile_size >= 44.0);
     }
 }

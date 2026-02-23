@@ -696,12 +696,15 @@ fn drain_download_events(world: &mut World) {
     }
 }
 
-bevy_xilem::impl_ui_control_template!(DownloadRootView, project_download_root);
-bevy_xilem::impl_ui_control_template!(DownloadTitle, project_download_title);
-bevy_xilem::impl_ui_control_template!(DownloadUrlRow, project_download_url_row);
-bevy_xilem::impl_ui_control_template!(DownloadActionRow, project_download_action_row);
-bevy_xilem::impl_ui_control_template!(DownloadDialogModeRow, project_download_dialog_mode_row);
-bevy_xilem::impl_ui_control_template!(DownloadProgressPanel, project_download_progress_panel);
+bevy_xilem::impl_ui_component_template!(DownloadRootView, project_download_root);
+bevy_xilem::impl_ui_component_template!(DownloadTitle, project_download_title);
+bevy_xilem::impl_ui_component_template!(DownloadUrlRow, project_download_url_row);
+bevy_xilem::impl_ui_component_template!(DownloadActionRow, project_download_action_row);
+bevy_xilem::impl_ui_component_template!(
+    DownloadDialogModeRow,
+    project_download_dialog_mode_row,
+);
+bevy_xilem::impl_ui_component_template!(DownloadProgressPanel, project_download_progress_panel);
 
 fn build_download_app() -> App {
     init_logging();
@@ -709,12 +712,12 @@ fn build_download_app() -> App {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
         .insert_resource(DownloadState::default())
-        .register_ui_control::<DownloadRootView>()
-        .register_ui_control::<DownloadTitle>()
-        .register_ui_control::<DownloadUrlRow>()
-        .register_ui_control::<DownloadActionRow>()
-        .register_ui_control::<DownloadDialogModeRow>()
-        .register_ui_control::<DownloadProgressPanel>()
+        .register_ui_component::<DownloadRootView>()
+        .register_ui_component::<DownloadTitle>()
+        .register_ui_component::<DownloadUrlRow>()
+        .register_ui_component::<DownloadActionRow>()
+        .register_ui_component::<DownloadDialogModeRow>()
+        .register_ui_component::<DownloadProgressPanel>()
         .add_systems(Startup, (setup_download_styles, setup_download_world))
         .add_systems(PreUpdate, drain_download_events);
 

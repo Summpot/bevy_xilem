@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
 
-use crate::{ProjectionCtx, UiView, controls::UiControlTemplate};
+use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
 
 /// Built-in button component.
 #[derive(Component, Debug, Clone, PartialEq, Eq)]
@@ -17,7 +17,7 @@ impl UiButton {
     }
 }
 
-impl UiControlTemplate for UiButton {
+impl UiComponentTemplate for UiButton {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::elements::project_button(component, ctx)
     }

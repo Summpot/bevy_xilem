@@ -1,8 +1,12 @@
 [package]
+name = "example_pixiv_client"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
 name = "pixiv_client"
-version = "0.1.0"
-edition = "2024"
-license = "MIT OR Apache-2.0"
+path = "src/lib.rs"
 
 [dependencies]
 anyhow = "1"
@@ -10,7 +14,7 @@ arboard = "3"
 base64 = "0.22"
 bevy_asset = { version = "0.18", default-features = false }
 bevy_embedded_assets.workspace = true
-bevy_ecs = { version = "0.18", default-features = false, features = ["std"] }
+bevy_ecs.workspace = true
 bevy_image = { version = "0.18", default-features = false }
 bevy_text = { version = "0.18", default-features = false }
 bevy_xilem = { path = "../../crates/bevy_xilem" }
