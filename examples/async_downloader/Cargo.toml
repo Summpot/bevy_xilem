@@ -1,5 +1,5 @@
 [package]
-name = "example_calculator"
+name = "example_async_downloader"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,5 +7,7 @@ license.workspace = true
 [dependencies]
 bevy_xilem = { path = "../../crates/bevy_xilem" }
 bevy_ecs.workspace = true
+reqwest.workspace = true
+tokio.workspace = true
 shared_utils = { path = "../shared_utils" }
 tracing-subscriber.workspace = true

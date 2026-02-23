@@ -230,19 +230,20 @@ This keeps interaction handling explicit and ECS-friendly.
 
 ## Included examples
 
+- `ui_showcase` (components + theming + localization/CJK in one app)
+- `chess_game` (UI + embedded engine module)
+- `async_downloader`
 - `calculator`
-- `temperature_converter`
 - `timer`
 - `todo_list`
-- `chess`
-- `theme_gallery`
 - `game_2048`
-- `i18n_showcase`
+- `overlay_hit_routing`
+- `pixiv_client`
 
 Run an example workspace crate from repository root:
 
 ```bash
-cargo run -p example_todo_list
+cargo run -p example_ui_showcase
 ```
 
 ---

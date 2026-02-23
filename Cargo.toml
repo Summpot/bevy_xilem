@@ -2,20 +2,16 @@
 resolver = "2"
 members = [
 	"crates/bevy_xilem",
+	"examples/async_downloader",
 	"examples/calculator",
-	"examples/chess",
-	"examples/chess_engine",
-	"examples/cjk_text_example",
-	"examples/download_with_progress",
+	"examples/chess_game",
 	"examples/game_2048",
-	"examples/i18n_showcase",
 	"examples/overlay_hit_routing",
 	"examples/pixiv_client",
-	"examples/temperature_converter",
-	"examples/theme_gallery",
+	"examples/shared_utils",
 	"examples/timer",
 	"examples/todo_list",
-	"examples/widget_showcase",
+	"examples/ui_showcase",
 ]
 exclude = ["third_party/xilem"]
 

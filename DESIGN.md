@@ -635,8 +635,10 @@ Examples were rewritten to demonstrate this architecture with:
 - stylesheet-driven styling (class rules + cascade) instead of hardcoded projector styles
 - pseudo-class interaction styling and transition-capable style resolution
 - UI component registration through `UiComponentTemplate` + `register_ui_component::<T>()`
-- workspace example crates (`examples/<name>/Cargo.toml` + `main.rs`, `ui.rs`, `systems.rs`)
-- `widget_showcase` demonstration of `UiScrollView` (overflow content + wheel/drag updates)
+- workspace example crates (`examples/<name>/Cargo.toml` + `src/main.rs`)
+- `ui_showcase` demonstration of `UiScrollView`, theming transitions, and i18n/CJK fallback stacks
+- consolidated scenario demos: `chess_game` (UI + engine module), `async_downloader`, `todo_list`,
+  `overlay_hit_routing`, `calculator`, `timer`, plus larger app validations (`game_2048`, `pixiv_client`)
 - virtualized task scrolling in `todo_list` using `xilem_masonry::view::virtual_scroll`
 - no `xilem::Xilem::new_simple` usage
 - no `xilem::Xilem::new` event-loop ownership
