@@ -12,14 +12,15 @@ pub use core::*;
 use crate::ecs::{
     UiButton, UiCheckbox, UiColorPicker, UiColorPickerPanel, UiComboBox, UiDatePicker,
     UiDatePickerPanel, UiDialog, UiDropdownMenu, UiFlexColumn, UiFlexRow, UiGroupBox, UiLabel,
-    UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiOverlayRoot, UiRadioGroup, UiScrollView, UiSlider,
-    UiSpinner, UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput, UiToast, UiTooltip,
+    UiMenuBar, UiMenuBarItem, UiMenuItemPanel, UiOverlayRoot, UiRadioGroup, UiRoot, UiScrollView,
+    UiSlider, UiSpinner, UiSplitPane, UiSwitch, UiTabBar, UiTable, UiTextInput, UiToast, UiTooltip,
     UiTreeNode,
 };
 
 /// Register non-UI-component foundational projectors.
 pub fn register_core_projectors(registry: &mut UiProjectorRegistry) {
     registry
+        .register_component::<UiRoot>(layout::project_ui_root)
         .register_component::<UiFlexColumn>(layout::project_flex_column)
         .register_component::<UiFlexRow>(layout::project_flex_row)
         .register_component::<UiLabel>(elements::project_label)

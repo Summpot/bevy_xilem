@@ -540,11 +540,18 @@ pub fn reparent_overlay_entities(world: &mut World) {
             .get::<ChildOf>(entity)
             .is_some_and(|child_of| child_of.parent() == overlay_root);
         if already_parented {
+            if world.get::<OverlayState>(entity).is_some() {
+                push_overlay_to_stack(world, entity);
+            }
             continue;
         }
 
         if world.get_entity(entity).is_ok() {
             world.entity_mut(entity).insert(ChildOf(overlay_root));
+
+            if world.get::<OverlayState>(entity).is_some() {
+                push_overlay_to_stack(world, entity);
+            }
         }
     }
 }
@@ -1006,6 +1013,19 @@ fn parse_entity_from_ecs_button(widget: WidgetRef<'_, dyn Widget>) -> Option<Ent
     let debug = widget.get_debug_text()?;
     let bits = debug.strip_prefix("entity=")?.parse::<u64>().ok()?;
     Entity::try_from_bits(bits)
+}
+
+fn parse_entity_bits_from_debug(debug: &str) -> Option<u64> {
+    if let Some(bits) = debug.strip_prefix("opaque_hitbox_entity=") {
+        return bits.parse::<u64>().ok();
+    }
+    if let Some(bits) = debug.strip_prefix("entity_scope=") {
+        return bits.parse::<u64>().ok();
+    }
+    if let Some(bits) = debug.strip_prefix("entity=") {
+        return bits.parse::<u64>().ok();
+    }
+    None
 }
 
 fn collect_entity_hit_boxes(widget: WidgetRef<'_, dyn Widget>, out: &mut Vec<EntityHitBox>) {
@@ -1653,41 +1673,162 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         return;
     };
 
-    let Some(top_overlay_widget_id) = ({
+    let (top_overlay_widget_ids, preferred_overlay_widget_id) = {
         let Some(runtime) = world.get_non_send_resource::<MasonryRuntime>() else {
             return;
         };
 
-        runtime
+        let all = runtime.find_widget_ids_for_entity_bits(top_overlay_entity.to_bits());
+        let preferred = runtime
             .find_widget_id_for_entity_bits(top_overlay_entity.to_bits(), true)
-            .or_else(|| runtime.find_widget_id_for_entity_bits(top_overlay_entity.to_bits(), false))
-    }) else {
-        return;
+            .or_else(|| {
+                runtime.find_widget_id_for_entity_bits(top_overlay_entity.to_bits(), false)
+            });
+
+        (all, preferred)
     };
 
     let anchor_entity = world
         .get::<OverlayState>(top_overlay_entity)
         .and_then(|state| state.anchor);
 
-    let anchor_widget_id = anchor_entity.and_then(|anchor| {
-        world
-            .get_non_send_resource::<MasonryRuntime>()
-            .and_then(|runtime| {
-                runtime
-                    .find_widget_id_for_entity_bits(anchor.to_bits(), true)
-                    .or_else(|| runtime.find_widget_id_for_entity_bits(anchor.to_bits(), false))
-            })
-    });
+    let (anchor_widget_ids, anchor_widget_id) = anchor_entity
+        .and_then(|anchor| {
+            world
+                .get_non_send_resource::<MasonryRuntime>()
+                .map(|runtime| {
+                    let all = runtime.find_widget_ids_for_entity_bits(anchor.to_bits());
+                    let preferred = runtime
+                        .find_widget_id_for_entity_bits(anchor.to_bits(), true)
+                        .or_else(|| {
+                            runtime.find_widget_id_for_entity_bits(anchor.to_bits(), false)
+                        });
+                    (all, preferred)
+                })
+        })
+        .unwrap_or_default();
 
-    let hit_path = {
+    let (hit_path, top_hit_widget_id, top_hit_entity) = {
         let Some(mut runtime) = world.get_non_send_resource_mut::<MasonryRuntime>() else {
             return;
         };
+
+        let pointer = (cursor_pos.x as f64, cursor_pos.y as f64).into();
         let _ = runtime.render_root.redraw();
-        runtime.get_hit_path((cursor_pos.x as f64, cursor_pos.y as f64).into())
+        let hit_path = runtime.get_hit_path(pointer);
+        let (top_hit_widget_id, top_hit_entity) = runtime
+            .render_root
+            .get_layer_root(0)
+            .find_widget_under_pointer(pointer)
+            .map(|widget| {
+                let entity = widget
+                    .get_debug_text()
+                    .and_then(|debug| parse_entity_bits_from_debug(&debug))
+                    .and_then(Entity::try_from_bits);
+                (Some(widget.id()), entity)
+            })
+            .unwrap_or((None, None));
+
+        (hit_path, top_hit_widget_id, top_hit_entity)
     };
 
-    let clicked_inside_overlay = hit_path.contains(&top_overlay_widget_id);
+    let hit_entities = world
+        .get_non_send_resource::<MasonryRuntime>()
+        .map(|runtime| {
+            hit_path
+                .iter()
+                .filter_map(|widget_id| {
+                    runtime
+                        .render_root
+                        .get_widget(*widget_id)
+                        .and_then(|widget| widget.get_debug_text())
+                        .and_then(|debug| parse_entity_bits_from_debug(&debug))
+                        .and_then(Entity::try_from_bits)
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    let clicked_inside_overlay_by_hit_path = if let Some(preferred_widget_id) =
+        preferred_overlay_widget_id
+    {
+        top_hit_widget_id == Some(preferred_widget_id) || hit_path.contains(&preferred_widget_id)
+    } else {
+        top_hit_widget_id.is_some_and(|widget_id| top_overlay_widget_ids.contains(&widget_id))
+            || hit_path
+                .iter()
+                .any(|widget_id| top_overlay_widget_ids.contains(widget_id))
+    };
+
+    let positioned_overlay_rect = world
+        .get::<OverlayComputedPosition>(top_overlay_entity)
+        .copied()
+        .filter(|position| position.is_positioned);
+
+    let cursor_inside_overlay_rect = positioned_overlay_rect.is_some_and(|position| {
+        position.is_positioned
+            && cursor_pos.x as f64 >= position.x
+            && cursor_pos.x as f64 <= position.x + position.width
+            && cursor_pos.y as f64 >= position.y
+            && cursor_pos.y as f64 <= position.y + position.height
+    });
+
+    let clicked_anchor_by_widget = top_hit_widget_id
+        .is_some_and(|widget_id| anchor_widget_ids.contains(&widget_id))
+        || anchor_widget_id.is_some_and(|widget_id| hit_path.contains(&widget_id));
+
+    let clicked_anchor_by_top_hit =
+        anchor_entity.is_some_and(|anchor| top_hit_entity == Some(anchor));
+
+    let clicked_anchor_by_rect = anchor_widget_id
+        .and_then(|widget_id| {
+            world
+                .get_non_send_resource::<MasonryRuntime>()
+                .and_then(|runtime| runtime.get_widget_bounding_box(widget_id))
+        })
+        .is_some_and(|bounds| {
+            let cursor_x = cursor_pos.x as f64;
+            let cursor_y = cursor_pos.y as f64;
+
+            cursor_x >= bounds.x0
+                && cursor_x <= bounds.x1
+                && cursor_y >= bounds.y0
+                && cursor_y <= bounds.y1
+        });
+
+    let clicked_anchor =
+        (clicked_anchor_by_top_hit || clicked_anchor_by_widget || clicked_anchor_by_rect)
+            && !clicked_inside_overlay_by_hit_path;
+
+    if clicked_anchor {
+        if world.get::<UiDropdownMenu>(top_overlay_entity).is_some() {
+            close_dropdown(world, top_overlay_entity);
+        } else {
+            despawn_entity_tree(world, top_overlay_entity);
+            remove_overlay_from_stack(world, top_overlay_entity);
+        }
+
+        if let Some(mut routing) = world.get_resource_mut::<OverlayPointerRoutingState>() {
+            routing.suppress_click(window_entity, MouseButton::Left);
+            tracing::debug!(
+                "Closed overlay {:?} by clicking anchor and consumed pointer",
+                top_overlay_entity
+            );
+        }
+
+        sync_overlay_stack_lifecycle(world);
+        return;
+    }
+
+    let clicked_other_entity = hit_entities
+        .iter()
+        .any(|entity| *entity != top_overlay_entity);
+
+    let clicked_inside_overlay_by_rect = !clicked_other_entity && cursor_inside_overlay_rect;
+
+    let clicked_inside_overlay =
+        clicked_inside_overlay_by_hit_path || clicked_inside_overlay_by_rect;
+
     if clicked_inside_overlay {
         return;
     }
@@ -1707,10 +1848,10 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
             let (masonry_sf, subtree) = world
                 .get_non_send_resource::<MasonryRuntime>()
                 .map(|r| {
-                    (
-                        r.masonry_scale_factors(),
-                        r.get_overlay_subtree_info(top_overlay_widget_id),
-                    )
+                    let subtree = preferred_overlay_widget_id
+                        .map(|widget_id| r.get_overlay_subtree_info(widget_id))
+                        .unwrap_or_default();
+                    (r.masonry_scale_factors(), subtree)
                 })
                 .unwrap_or(((f64::NAN, f64::NAN), vec![]));
             (sf, cp, masonry_sf, subtree)
@@ -1720,8 +1861,10 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         let masonry_logical_y = cursor_pos.y as f64 / masonry_global_sf.max(f64::EPSILON);
         tracing::debug!(
             overlay_entity = ?top_overlay_entity,
-            expected_widget_id = ?top_overlay_widget_id,
+            expected_widget_id = ?preferred_overlay_widget_id,
+            overlay_widget_ids = ?top_overlay_widget_ids,
             hit_path = ?hit_path,
+            hit_entities = ?hit_entities,
             physical_cursor_x = cursor_pos.x,
             physical_cursor_y = cursor_pos.y,
             masonry_logical_cursor_x = masonry_logical_x,
@@ -1742,27 +1885,6 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         );
     }
 
-    let clicked_anchor_by_widget =
-        anchor_widget_id.is_some_and(|widget_id| hit_path.contains(&widget_id));
-
-    let clicked_anchor_by_rect = anchor_widget_id
-        .and_then(|widget_id| {
-            world
-                .get_non_send_resource::<MasonryRuntime>()
-                .and_then(|runtime| runtime.get_widget_bounding_box(widget_id))
-        })
-        .is_some_and(|bounds| {
-            let cursor_x = cursor_pos.x as f64;
-            let cursor_y = cursor_pos.y as f64;
-
-            cursor_x >= bounds.x0
-                && cursor_x <= bounds.x1
-                && cursor_y >= bounds.y0
-                && cursor_y <= bounds.y1
-        });
-
-    let clicked_anchor = clicked_anchor_by_widget || clicked_anchor_by_rect;
-
     if world.get::<UiDropdownMenu>(top_overlay_entity).is_some() {
         close_dropdown(world, top_overlay_entity);
     } else {
@@ -1770,20 +1892,10 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         remove_overlay_from_stack(world, top_overlay_entity);
     }
 
-    if clicked_anchor
-        && let Some(mut routing) = world.get_resource_mut::<OverlayPointerRoutingState>()
-    {
-        routing.suppress_click(window_entity, MouseButton::Left);
-        tracing::debug!(
-            "Closed overlay {:?} by clicking anchor and consumed pointer",
-            top_overlay_entity
-        );
-    } else {
-        tracing::debug!(
-            "Closed overlay {:?} from outside click and allowed pointer propagation",
-            top_overlay_entity
-        );
-    }
+    tracing::debug!(
+        "Closed overlay {:?} from outside click and allowed pointer propagation",
+        top_overlay_entity
+    );
 
     sync_overlay_stack_lifecycle(world);
 }

@@ -966,6 +966,64 @@ fn reparent_overlay_entities_moves_dialog_to_overlay_root() {
 }
 
 #[test]
+fn reparent_overlay_entities_moves_toast_and_tooltip_to_overlay_root_and_tracks_stack() {
+    let mut world = World::new();
+    world.insert_resource(crate::OverlayStack::default());
+
+    let app_root = world.spawn((UiRoot,)).id();
+    let anchor = world.spawn((ChildOf(app_root),)).id();
+
+    let toast = world
+        .spawn((
+            crate::UiToast::new("Saved"),
+            crate::OverlayState {
+                is_modal: false,
+                anchor: None,
+            },
+            ChildOf(app_root),
+        ))
+        .id();
+
+    let tooltip = world
+        .spawn((
+            crate::UiTooltip {
+                text: "Helpful tip".to_string(),
+                anchor,
+            },
+            crate::OverlayState {
+                is_modal: false,
+                anchor: Some(anchor),
+            },
+            ChildOf(app_root),
+        ))
+        .id();
+
+    reparent_overlay_entities(&mut world);
+
+    let mut overlays = world.query_filtered::<Entity, With<crate::UiOverlayRoot>>();
+    let overlay_root = overlays
+        .iter(&world)
+        .next()
+        .expect("overlay root should exist");
+
+    let toast_parent = world
+        .get::<bevy_ecs::hierarchy::ChildOf>(toast)
+        .expect("toast should be parented")
+        .parent();
+    let tooltip_parent = world
+        .get::<bevy_ecs::hierarchy::ChildOf>(tooltip)
+        .expect("tooltip should be parented")
+        .parent();
+
+    assert_eq!(toast_parent, overlay_root);
+    assert_eq!(tooltip_parent, overlay_root);
+
+    let stack = world.resource::<crate::OverlayStack>();
+    assert!(stack.active_overlays.contains(&toast));
+    assert!(stack.active_overlays.contains(&tooltip));
+}
+
+#[test]
 fn ensure_overlay_defaults_assigns_dialog_dropdown_and_toast_configs() {
     let mut world = World::new();
     let combo = world
@@ -1504,6 +1562,14 @@ fn handle_global_overlay_clicks_closes_when_clicking_anchor_and_suppresses_point
             ChildOf(root),
         ))
         .id();
+
+    {
+        let mut combo_state = app
+            .world_mut()
+            .get_mut::<crate::UiComboBox>(combo)
+            .expect("combo should exist");
+        combo_state.selected = usize::MAX;
+    }
 
     app.update();
 

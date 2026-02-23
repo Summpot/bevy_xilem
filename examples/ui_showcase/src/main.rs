@@ -4,11 +4,12 @@ use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_xilem::{
     AppBevyXilemExt, AppI18n, BevyXilemPlugin, BuiltinUiAction, ColorStyle, HasTooltip,
     LayoutStyle, LocalizeText, ProjectionCtx, StyleClass, StyleSetter, StyleSheet, StyleTransition,
-    SyncAssetSource, SyncTextSource, TextStyle, ToastKind, UiButton, UiColorPicker,
-    UiColorPickerChanged, UiComboBox, UiComboBoxChanged, UiComboOption, UiDatePicker,
-    UiDatePickerChanged, UiEventQueue, UiFlexColumn, UiFlexRow, UiGroupBox, UiLabel, UiMenuBar,
-    UiMenuBarItem, UiMenuItem, UiMenuItemSelected, UiRadioGroup, UiRadioGroupChanged, UiRoot,
-    UiScrollView, UiScrollViewChanged, UiSpinner, UiSplitPane, UiTabBar, UiTabChanged, UiTable,
+    SyncAssetSource, SyncTextSource, TextStyle, ToastKind, UiButton, UiCheckbox, UiCheckboxChanged,
+    UiColorPicker, UiColorPickerChanged, UiComboBox, UiComboBoxChanged, UiComboOption,
+    UiDatePicker, UiDatePickerChanged, UiDialog, UiEventQueue, UiFlexColumn, UiFlexRow, UiGroupBox,
+    UiLabel, UiMenuBar, UiMenuBarItem, UiMenuItem, UiMenuItemSelected, UiRadioGroup,
+    UiRadioGroupChanged, UiRoot, UiScrollView, UiScrollViewChanged, UiSlider, UiSliderChanged,
+    UiSpinner, UiSplitPane, UiTabBar, UiTabChanged, UiTable, UiTextInput, UiTextInputChanged,
     UiToast, UiTreeNode, UiTreeNodeToggled, UiView, apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_asset::AssetPlugin,
@@ -69,6 +70,8 @@ impl Default for ShowcaseState {
 struct ShowcaseRuntime {
     root: Entity,
     status_label: Entity,
+    components_combo: Entity,
+    dialog_demo_btn: Entity,
     theme_mode_combo: Entity,
     locale_combo: Entity,
     toast_info_btn: Entity,
@@ -218,7 +221,7 @@ fn setup_showcase(mut commands: Commands) {
 
     let components_page = commands
         .spawn((
-            UiScrollView::new(Vec2::new(760.0, 520.0), Vec2::new(760.0, 2300.0))
+            UiScrollView::new(Vec2::new(760.0, 520.0), Vec2::new(760.0, 3000.0))
                 .with_vertical_scrollbar(true)
                 .with_horizontal_scrollbar(false),
             StyleClass(vec!["showcase.page.scroll".to_string()]),
@@ -281,6 +284,48 @@ fn setup_showcase(mut commands: Commands) {
     commands.spawn((UiTreeNode::new("bevy_app"), ChildOf(child2)));
     commands.spawn((UiTreeNode::new("xilem_ui"), ChildOf(child2)));
     commands.spawn((UiTreeNode::new("readme.md"), ChildOf(root_node)));
+
+    let forms_section = commands
+        .spawn((UiGroupBox::new("Form Inputs"), ChildOf(components_col)))
+        .id();
+    let forms_col = commands.spawn((UiFlexColumn, ChildOf(forms_section))).id();
+    commands.spawn((
+        UiCheckbox::new("Enable desktop notifications", false),
+        ChildOf(forms_col),
+    ));
+    commands.spawn((
+        UiSlider::new(0.0, 100.0, 42.0).with_step(5.0),
+        ChildOf(forms_col),
+    ));
+    commands.spawn((
+        UiTextInput::new("".to_string()).with_placeholder("Type to edit this field"),
+        ChildOf(forms_col),
+    ));
+    let components_combo = commands
+        .spawn((
+            UiComboBox::new(vec![
+                UiComboOption::new("rust", "Rust"),
+                UiComboOption::new("go", "Go"),
+                UiComboOption::new("zig", "Zig"),
+            ])
+            .with_placeholder("Pick a language"),
+            ChildOf(forms_col),
+        ))
+        .id();
+
+    let dialog_section = commands
+        .spawn((
+            UiGroupBox::new("Dialog (Modal Overlay)"),
+            ChildOf(components_col),
+        ))
+        .id();
+    commands.spawn((
+        UiLabel::new("Click to open a modal dialog. Dismiss via button or outside click."),
+        ChildOf(dialog_section),
+    ));
+    let dialog_demo_btn = commands
+        .spawn((UiButton::new("Open Dialog"), ChildOf(dialog_section)))
+        .id();
 
     let table_section = commands
         .spawn((
@@ -602,6 +647,8 @@ fn setup_showcase(mut commands: Commands) {
     commands.insert_resource(ShowcaseRuntime {
         root,
         status_label,
+        components_combo,
+        dialog_demo_btn,
         theme_mode_combo,
         locale_combo,
         toast_info_btn,
@@ -1000,7 +1047,36 @@ fn drain_showcase_events(world: &mut World) {
                 rt.status_label,
                 "Theme demo: Outline pressed".to_string(),
             );
+        } else if event.entity == rt.dialog_demo_btn {
+            spawn_in_overlay_root(
+                world,
+                (UiDialog::new(
+                    "Modal Dialog Demo",
+                    "This UiDialog is rendered in the overlay layer.\n\nTry dismissing it via the close button or by clicking outside.",
+                ),),
+            );
+            update_status(
+                world,
+                rt.status_label,
+                "Dialog demo: opened modal overlay".to_string(),
+            );
         }
+    }
+
+    let checkbox_events = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<UiCheckboxChanged>();
+    for event in checkbox_events {
+        let msg = format!(
+            "Checkbox {:?}: {}",
+            event.action.checkbox,
+            if event.action.checked {
+                "checked"
+            } else {
+                "unchecked"
+            }
+        );
+        update_status(world, rt.status_label, msg);
     }
 
     let radio_events = world
@@ -1073,11 +1149,45 @@ fn drain_showcase_events(world: &mut World) {
         update_status(world, rt.status_label, msg);
     }
 
+    let slider_events = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<UiSliderChanged>();
+    for event in slider_events {
+        let msg = format!(
+            "Slider {:?}: value={:.2}",
+            event.action.slider, event.action.value
+        );
+        update_status(world, rt.status_label, msg);
+    }
+
+    let text_input_events = world
+        .resource_mut::<UiEventQueue>()
+        .drain_actions::<UiTextInputChanged>();
+    for event in text_input_events {
+        let msg = format!(
+            "TextInput {:?}: \"{}\"",
+            event.action.input, event.action.value
+        );
+        update_status(world, rt.status_label, msg);
+    }
+
     let combo_events = world
         .resource_mut::<UiEventQueue>()
         .drain_actions::<UiComboBoxChanged>();
 
     for event in combo_events {
+        if event.action.combo == rt.components_combo {
+            update_status(
+                world,
+                rt.status_label,
+                format!(
+                    "Components Combo: selected {} ({})",
+                    event.action.selected, event.action.value
+                ),
+            );
+            continue;
+        }
+
         if event.action.combo == rt.theme_mode_combo {
             if let Some(theme) = ThemeMode::from_combo_value(event.action.value.as_str()) {
                 world.resource_mut::<ShowcaseState>().theme = theme;

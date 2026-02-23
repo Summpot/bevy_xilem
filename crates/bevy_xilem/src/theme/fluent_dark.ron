@@ -1,6 +1,6 @@
 (
   tokens: {
-    "surface-bg": Color(Hex("#1B1B1B")),
+    "surface-bg": Color(Hex("#1F1F1F")),
     "surface-panel": Color(Hex("#242424")),
     "surface-elevated": Color(Hex("#1F1F1F")),
     "surface-subtle": Color(Hex("#272727")),
@@ -55,6 +55,10 @@
     (
       selector: Type("UiRoot"),
       setter: (
+        layout: (
+          justify_content: Start,
+          align_items: Stretch,
+        ),
         colors: (
           bg: Var("surface-bg"),
         ),

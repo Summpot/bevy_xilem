@@ -134,6 +134,8 @@ The runtime supports a data-driven style pipeline with four phases:
 
 Runtime styling distinguishes two explicit tiers: `BaseStyleSheet` (embedded Fluent baseline) and `ActiveStyleSheet` (user asset). Active rules cascade over baseline rules by priority.
 
+Baseline Fluent theme includes a global `Type("UiRoot")` preflight rule for app-surface background, and the `UiRoot` projector stretches to full viewport so root background styling consistently covers the entire window.
+
 ### 6.3 Hit-testing invariants
 
 Layout-affecting styles (padding/border/background) are applied directly to the target UI component widget itself, ensuring Masonry's hit-testing matches the structural box model users see, specifically on bounded overlays/dialogs vs global backgrounds.
@@ -152,7 +154,9 @@ Layout-affecting styles (padding/border/background) are applied directly to the 
 
 ### 7.2 Layered Dismissal and Blocking Flow
 
-`handle_global_overlay_clicks` dynamically evaluates pointer location against the top-most overlay using `RenderRoot::get_hit_path(physical_pos)`. Clicks outside the opaque overlay root cause dismissals without disrupting interactive siblings. Optional `UiOverlayRoot` dimly rendering full-view backgrounds without structurally wrapping modal UI boundaries.
+`handle_global_overlay_clicks` dynamically evaluates pointer location against the top-most overlay using `RenderRoot::get_hit_path(physical_pos)` and all widget IDs bound to that overlay entity, with an `OverlayComputedPosition` rectangle fallback. This avoids false outside-click dismissal when interacting with deeply nested portal/menu content (e.g., combo-box options).
+
+Clicks outside the opaque overlay root cause dismissals without disrupting interactive siblings. Optional `UiOverlayRoot` dimly rendering full-view backgrounds without structurally wrapping modal UI boundaries.
 
 ## 8. Assets and Internationalization
 
