@@ -26,11 +26,14 @@ use crate::{
         ResolvedStyle, apply_direct_widget_style, apply_flex_alignment, apply_label_style,
         apply_widget_style, resolve_style, resolve_style_for_classes,
     },
-    views::{ecs_button, ecs_button_with_child, ecs_drag_thumb, scroll_portal},
+    views::{
+        ecs_button, ecs_button_with_child, ecs_drag_thumb, opaque_hitbox_for_entity, scroll_portal,
+    },
     widget_actions::WidgetUiAction,
 };
 
 use super::core::{ProjectionCtx, UiView};
+use super::utils::hide_style_without_collapsing_layout;
 
 // ---------------------------------------------------------------------------
 // Private helpers
@@ -691,10 +694,12 @@ pub(crate) fn project_menu_item_panel(_: &UiMenuItemPanel, ctx: ProjectionCtx<'_
 // ---------------------------------------------------------------------------
 
 pub(crate) fn project_tooltip(tooltip: &UiTooltip, ctx: ProjectionCtx<'_>) -> UiView {
-    let pos = match overlay_position(ctx.world, ctx.entity) {
-        Some(p) => p,
-        None => return hidden_placeholder(),
-    };
+    let computed_pos = ctx
+        .world
+        .get::<OverlayComputedPosition>(ctx.entity)
+        .copied()
+        .unwrap_or_default();
+    let pos = (computed_pos.x, computed_pos.y);
 
     let mut style = default_panel_style(ctx.world, "overlay.tooltip");
     if style.colors.bg.is_none() {
@@ -710,10 +715,14 @@ pub(crate) fn project_tooltip(tooltip: &UiTooltip, ctx: ProjectionCtx<'_>) -> Ui
         style.layout.corner_radius = 4.0;
     }
 
+    if !computed_pos.is_positioned {
+        hide_style_without_collapsing_layout(&mut style);
+    }
+
     let text_lbl = apply_label_style(label(tooltip.text.clone()), &style);
     let panel = apply_widget_style(text_lbl, &style);
 
-    Arc::new(transformed(panel).translate(pos))
+    Arc::new(transformed(opaque_hitbox_for_entity(ctx.entity, panel)).translate(pos))
 }
 
 // ---------------------------------------------------------------------------
@@ -937,6 +946,7 @@ pub(crate) fn project_split_pane(pane: &UiSplitPane, ctx: ProjectionCtx<'_>) -> 
 
 pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
     let mut style = resolve_style(ctx.world, ctx.entity);
+    let mut dismiss_style = style.clone();
 
     // Apply kind-based background color if not overridden
     if style.colors.bg.is_none() {
@@ -957,17 +967,34 @@ pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
         style.layout.corner_radius = 6.0;
     }
 
-    let msg = apply_label_style(label(toast.message.clone()), &style);
-    let dismiss = ecs_button(ctx.entity, OverlayUiAction::DismissToast, "✕".to_string());
+    let computed_pos = ctx
+        .world
+        .get::<OverlayComputedPosition>(ctx.entity)
+        .copied()
+        .unwrap_or_default();
+    let pos = (computed_pos.x, computed_pos.y);
 
-    Arc::new(apply_widget_style(
+    if !computed_pos.is_positioned {
+        hide_style_without_collapsing_layout(&mut style);
+        hide_style_without_collapsing_layout(&mut dismiss_style);
+    }
+
+    let msg = apply_label_style(label(toast.message.clone()), &style);
+    let dismiss = apply_direct_widget_style(
+        ecs_button(ctx.entity, OverlayUiAction::DismissToast, "✕".to_string()),
+        &dismiss_style,
+    );
+
+    let panel = apply_widget_style(
         apply_flex_alignment(
             flex_row(vec![msg.flex(1.0).into_any_flex(), dismiss.into_any_flex()]),
             &style,
         )
         .gap(Length::px(8.0)),
         &style,
-    ))
+    );
+
+    Arc::new(transformed(opaque_hitbox_for_entity(ctx.entity, panel)).translate(pos))
 }
 
 // ---------------------------------------------------------------------------

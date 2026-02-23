@@ -16,13 +16,15 @@ use bevy_window::{PrimaryWindow, Window};
 use masonry::core::{Widget, WidgetRef};
 
 use crate::{
-    AnchoredTo, AppI18n, OverlayAnchorRect, OverlayComputedPosition, OverlayConfig,
+    AnchoredTo, AppI18n, AutoDismiss, OverlayAnchorRect, OverlayComputedPosition, OverlayConfig,
     OverlayPlacement, OverlayStack, OverlayState, StopUiPointerPropagation, UiColorPicker,
     UiColorPickerChanged, UiColorPickerPanel, UiComboBox, UiComboBoxChanged, UiDatePicker,
     UiDatePickerChanged, UiDatePickerPanel, UiDialog, UiDropdownMenu, UiEventQueue,
     UiInteractionEvent, UiMenuBarItem, UiMenuItemPanel, UiMenuItemSelected, UiOverlayRoot,
-    UiPointerEvent, UiPointerHitEvent, UiRoot, UiTooltip, events::UiEvent, runtime::MasonryRuntime,
-    styling::resolve_style_for_classes,
+    UiPointerEvent, UiPointerHitEvent, UiRoot, UiToast, UiTooltip,
+    events::UiEvent,
+    runtime::MasonryRuntime,
+    styling::{resolve_style, resolve_style_for_classes},
 };
 
 const OVERLAY_ANCHOR_GAP: f64 = 4.0;
@@ -464,6 +466,45 @@ pub fn ensure_overlay_defaults(world: &mut World) {
         }
     }
 
+    let toasts = {
+        let mut query = world.query::<(Entity, &UiToast)>();
+        query
+            .iter(world)
+            .map(|(entity, toast)| (entity, toast.duration_secs))
+            .collect::<Vec<_>>()
+    };
+
+    for (toast_entity, duration_secs) in toasts {
+        if world.get::<OverlayConfig>(toast_entity).is_none() {
+            world.entity_mut(toast_entity).insert(OverlayConfig {
+                placement: OverlayPlacement::Bottom,
+                anchor: None,
+                auto_flip: false,
+            });
+        }
+        if world.get::<OverlayState>(toast_entity).is_none() {
+            world.entity_mut(toast_entity).insert(OverlayState {
+                is_modal: false,
+                anchor: None,
+            });
+        }
+        if world.get::<OverlayComputedPosition>(toast_entity).is_none() {
+            world
+                .entity_mut(toast_entity)
+                .insert(OverlayComputedPosition::default());
+        }
+
+        if duration_secs > 0.0 {
+            if world.get::<AutoDismiss>(toast_entity).is_none() {
+                world
+                    .entity_mut(toast_entity)
+                    .insert(AutoDismiss::from_seconds(duration_secs));
+            }
+        } else if world.get::<AutoDismiss>(toast_entity).is_some() {
+            world.entity_mut(toast_entity).remove::<AutoDismiss>();
+        }
+    }
+
     sync_overlay_stack_lifecycle(world);
 }
 
@@ -480,6 +521,7 @@ pub fn reparent_overlay_entities(world: &mut World) {
                 With<UiMenuItemPanel>,
                 With<UiColorPickerPanel>,
                 With<UiDatePickerPanel>,
+                With<UiToast>,
                 With<UiTooltip>,
             )>,
             Without<UiOverlayRoot>,
@@ -1246,8 +1288,36 @@ fn overlay_size_for_entity(
         return (280.0, 300.0);
     }
 
-    if world.get::<UiTooltip>(entity).is_some() {
-        return (200.0, 40.0);
+    if let Some(toast) = world.get::<UiToast>(entity) {
+        let mut style = resolve_style(world, entity);
+        if style.layout.padding <= 0.0 {
+            style.layout.padding = 10.0;
+        }
+        if style.text.size <= 0.0 {
+            style.text.size = 16.0;
+        }
+
+        let text_width = estimate_text_width_px(&toast.message, style.text.size);
+        let width = (text_width + style.layout.padding * 2.0 + 52.0).clamp(180.0, 560.0);
+        let line_height = (style.text.size as f64 * 1.35).max(20.0);
+        let height = (line_height + style.layout.padding * 2.0).max(44.0);
+        return (width, height);
+    }
+
+    if let Some(tooltip) = world.get::<UiTooltip>(entity) {
+        let mut style = resolve_style_for_classes(world, ["overlay.tooltip"]);
+        if style.layout.padding <= 0.0 {
+            style.layout.padding = 6.0;
+        }
+        if style.text.size <= 0.0 {
+            style.text.size = 14.0;
+        }
+
+        let text_width = estimate_text_width_px(&tooltip.text, style.text.size);
+        let width = (text_width + style.layout.padding * 2.0).clamp(96.0, 360.0);
+        let line_height = (style.text.size as f64 * 1.35).max(18.0);
+        let height = (line_height + style.layout.padding * 2.0).max(28.0);
+        return (width, height);
     }
 
     (240.0, 120.0)

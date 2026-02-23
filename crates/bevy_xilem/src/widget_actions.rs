@@ -1,14 +1,19 @@
+use std::collections::HashSet;
+
 use bevy_ecs::{entity::Entity, hierarchy::ChildOf, message::MessageReader, prelude::*};
 use bevy_input::mouse::{MouseScrollUnit, MouseWheel};
+use bevy_math::Vec2;
 use bevy_time::Time;
 use bevy_window::{PrimaryWindow, Window};
+use masonry::core::{Widget, WidgetRef};
 
 use crate::{
-    AnchoredTo, HasTooltip, Hovered, MasonryRuntime, OverlayAnchorRect, OverlayComputedPosition,
-    OverlayConfig, OverlayPlacement, OverlayState, ScrollAxis, UiCheckbox, UiCheckboxChanged,
-    UiOverlayRoot, UiRadioGroup, UiRadioGroupChanged, UiScrollView, UiScrollViewChanged, UiSlider,
-    UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar, UiTabChanged, UiTextInput,
-    UiTextInputChanged, UiToast, UiTooltip, UiTreeNode, UiTreeNodeToggled, events::UiEventQueue,
+    AnchoredTo, AutoDismiss, HasTooltip, Hovered, MasonryRuntime, OverlayAnchorRect,
+    OverlayComputedPosition, OverlayConfig, OverlayPlacement, OverlayState, ScrollAxis, UiCheckbox,
+    UiCheckboxChanged, UiOverlayRoot, UiRadioGroup, UiRadioGroupChanged, UiScrollView,
+    UiScrollViewChanged, UiSlider, UiSliderChanged, UiSwitch, UiSwitchChanged, UiTabBar,
+    UiTabChanged, UiTextInput, UiTextInputChanged, UiTooltip, UiTreeNode, UiTreeNodeToggled,
+    events::UiEventQueue,
 };
 
 /// Internal action enum for non-overlay widget interactions.
@@ -77,6 +82,14 @@ fn scroll_delta_from_thumb_drag(
     delta_pixels * (max_scroll / travel)
 }
 
+fn clamp_scroll_offset_strict(scroll_view: &mut UiScrollView) {
+    let max_scroll_y = (scroll_view.content_size.y - scroll_view.viewport_size.y).max(0.0);
+    let max_scroll_x = (scroll_view.content_size.x - scroll_view.viewport_size.x).max(0.0);
+
+    scroll_view.scroll_offset.x = scroll_view.scroll_offset.x.clamp(0.0, max_scroll_x);
+    scroll_view.scroll_offset.y = scroll_view.scroll_offset.y.clamp(0.0, max_scroll_y);
+}
+
 fn find_ancestor_scroll_view(world: &World, mut entity: Entity) -> Option<Entity> {
     loop {
         if world.get::<UiScrollView>(entity).is_some() {
@@ -103,12 +116,15 @@ fn parse_entity_bits_from_debug(debug: &str) -> Option<u64> {
     None
 }
 
-fn resolve_scroll_view_target_from_hit_path(
+fn collect_scroll_view_targets_from_hit_path(
     runtime: &MasonryRuntime,
     hit_path: &[masonry::core::WidgetId],
     parents: &Query<&ChildOf>,
     scroll_markers: &Query<(), With<UiScrollView>>,
-) -> Option<Entity> {
+) -> Vec<Entity> {
+    let mut ordered = Vec::new();
+    let mut seen = HashSet::new();
+
     for widget_id in hit_path.iter().rev().copied() {
         let Some(entity_bits) = runtime
             .render_root
@@ -125,7 +141,10 @@ fn resolve_scroll_view_target_from_hit_path(
 
         loop {
             if scroll_markers.get(entity).is_ok() {
-                return Some(entity);
+                if seen.insert(entity) {
+                    ordered.push(entity);
+                }
+                break;
             }
 
             let Ok(parent) = parents.get(entity) else {
@@ -135,7 +154,85 @@ fn resolve_scroll_view_target_from_hit_path(
         }
     }
 
+    ordered
+}
+
+fn portal_geometry_from_subtree(widget: WidgetRef<'_, dyn Widget>) -> Option<(Vec2, Vec2)> {
+    if widget.ctx().is_stashed() {
+        return None;
+    }
+
+    if widget.short_type_name() == "Portal" {
+        let viewport_size = widget.ctx().border_box_size();
+        let viewport = Vec2::new(viewport_size.width as f32, viewport_size.height as f32);
+
+        let content = widget
+            .children()
+            .into_iter()
+            .find(|child| !child.ctx().is_stashed() && child.short_type_name() != "ScrollBar")
+            .map(|child| {
+                let size = child.ctx().border_box_size();
+                Vec2::new(size.width as f32, size.height as f32)
+            })
+            .unwrap_or(viewport);
+
+        return Some((viewport.max(Vec2::ZERO), content.max(Vec2::ZERO)));
+    }
+
+    for child in widget.children() {
+        if let Some(geometry) = portal_geometry_from_subtree(child) {
+            return Some(geometry);
+        }
+    }
+
     None
+}
+
+/// Synchronize [`UiScrollView`] geometry from Masonry layout results.
+///
+/// This keeps ECS `content_size`/`viewport_size` aligned with the retained portal,
+/// then strictly clamps `scroll_offset` so it cannot drift past real bounds.
+pub fn sync_scroll_view_layout_geometry(
+    runtime: Option<NonSend<MasonryRuntime>>,
+    mut scroll_views: Query<(Entity, &mut UiScrollView)>,
+    ui_events: Res<UiEventQueue>,
+) {
+    let Some(runtime) = runtime else {
+        return;
+    };
+
+    for (entity, mut scroll_view) in &mut scroll_views {
+        let widget_id = runtime
+            .find_widget_id_for_entity_bits(entity.to_bits(), false)
+            .or_else(|| runtime.find_widget_id_for_entity_bits(entity.to_bits(), true));
+
+        let Some(widget_id) = widget_id else {
+            continue;
+        };
+
+        let Some(root_widget) = runtime.render_root.get_widget(widget_id) else {
+            continue;
+        };
+
+        let Some((viewport_size, content_size)) = portal_geometry_from_subtree(root_widget) else {
+            continue;
+        };
+
+        let before = scroll_view.scroll_offset;
+        scroll_view.viewport_size = viewport_size;
+        scroll_view.content_size = content_size;
+        clamp_scroll_offset_strict(&mut scroll_view);
+
+        if scroll_view.scroll_offset != before {
+            ui_events.push_typed(
+                entity,
+                UiScrollViewChanged {
+                    scroll_view: entity,
+                    scroll_offset: scroll_view.scroll_offset,
+                },
+            );
+        }
+    }
 }
 
 /// Consume [`WidgetUiAction`] entries from [`UiEventQueue`] and apply the
@@ -300,7 +397,7 @@ pub fn handle_widget_actions(world: &mut World) {
                         }
                     }
 
-                    scroll_view.clamp_scroll_offset();
+                    clamp_scroll_offset_strict(&mut scroll_view);
                     let after = scroll_view.scroll_offset;
                     drop(scroll_view);
 
@@ -324,7 +421,7 @@ pub fn handle_widget_actions(world: &mut World) {
 /// This keeps ECS `scroll_offset` synchronized with pointer-wheel interactions
 /// while the portal primitive handles clipping/composition.
 pub fn handle_scroll_view_wheel(
-    runtime: Option<NonSendMut<MasonryRuntime>>,
+    runtime: Option<NonSend<MasonryRuntime>>,
     mut wheel_events: MessageReader<MouseWheel>,
     primary_window_query: Query<(Entity, &Window), With<PrimaryWindow>>,
     mut scroll_views: Query<&mut UiScrollView>,
@@ -351,18 +448,16 @@ pub fn handle_scroll_view_wheel(
 
         let hit_path = runtime.get_hit_path((cursor_pos.x as f64, cursor_pos.y as f64).into());
 
-        let Some(scroll_entity) = resolve_scroll_view_target_from_hit_path(
+        let scroll_targets = collect_scroll_view_targets_from_hit_path(
             &runtime,
             &hit_path,
             &parents,
             &scroll_markers,
-        ) else {
-            continue;
-        };
+        );
 
-        let Ok(mut scroll_view) = scroll_views.get_mut(scroll_entity) else {
+        if scroll_targets.is_empty() {
             continue;
-        };
+        }
 
         let factor = if wheel.unit == MouseScrollUnit::Line {
             MouseScrollUnit::SCROLL_UNIT_CONVERSION_FACTOR
@@ -370,51 +465,60 @@ pub fn handle_scroll_view_wheel(
             1.0
         } as f32;
 
-        let before = scroll_view.scroll_offset;
+        for scroll_entity in scroll_targets {
+            let Ok(mut scroll_view) = scroll_views.get_mut(scroll_entity) else {
+                continue;
+            };
 
-        if scroll_view.show_horizontal_scrollbar {
-            scroll_view.scroll_offset.x -= wheel.x * factor;
-        }
-        if scroll_view.show_vertical_scrollbar {
-            scroll_view.scroll_offset.y -= wheel.y * factor;
-        }
-        scroll_view.clamp_scroll_offset();
+            let before = scroll_view.scroll_offset;
 
-        let after = scroll_view.scroll_offset;
-        if after != before {
-            ui_events.push_typed(
-                scroll_entity,
-                UiScrollViewChanged {
-                    scroll_view: scroll_entity,
-                    scroll_offset: after,
-                },
-            );
+            if scroll_view.show_horizontal_scrollbar {
+                scroll_view.scroll_offset.x -= wheel.x * factor;
+            }
+            if scroll_view.show_vertical_scrollbar {
+                scroll_view.scroll_offset.y -= wheel.y * factor;
+            }
+
+            clamp_scroll_offset_strict(&mut scroll_view);
+
+            let after = scroll_view.scroll_offset;
+            if after != before {
+                ui_events.push_typed(
+                    scroll_entity,
+                    UiScrollViewChanged {
+                        scroll_view: scroll_entity,
+                        scroll_offset: after,
+                    },
+                );
+                break;
+            }
         }
     }
 }
 
-/// Advance toast display timers and despawn any toasts whose duration has elapsed.
-///
-/// Toasts with `duration_secs == 0.0` are persistent and must be dismissed
-/// manually via [`crate::OverlayUiAction::DismissToast`].
-pub fn tick_toasts(
+/// Advance all [`AutoDismiss`] timers and despawn finished entities.
+pub fn tick_auto_dismiss(
     mut commands: Commands,
-    mut toasts: Query<(Entity, &mut UiToast)>,
+    mut auto_dismiss_entities: Query<(Entity, &mut AutoDismiss)>,
     time: Res<Time>,
 ) {
-    let delta = time.delta_secs();
+    let delta = time.delta();
 
-    for (entity, mut toast) in &mut toasts {
-        if toast.duration_secs <= 0.0 {
-            continue;
-        }
-
-        toast.elapsed_secs += delta;
-
-        if toast.elapsed_secs >= toast.duration_secs {
+    for (entity, mut auto_dismiss) in &mut auto_dismiss_entities {
+        auto_dismiss.timer.tick(delta);
+        if auto_dismiss.timer.is_finished() {
             commands.entity(entity).despawn();
         }
     }
+}
+
+/// Backward-compatible alias retained for existing call sites.
+pub fn tick_toasts(
+    commands: Commands,
+    auto_dismiss_entities: Query<(Entity, &mut AutoDismiss)>,
+    time: Res<Time>,
+) {
+    tick_auto_dismiss(commands, auto_dismiss_entities, time);
 }
 
 /// Spawn or despawn tooltip overlay entities in response to hover state changes.
@@ -433,6 +537,13 @@ pub fn handle_tooltip_hovers(
     // Spawn new tooltips for freshly hovered entities.
     if let Ok(root) = overlay_root.single() {
         for (entity, has_tooltip) in &just_hovered {
+            let already_spawned = existing_tooltips
+                .iter()
+                .any(|(_, tooltip)| tooltip.anchor == entity);
+            if already_spawned {
+                continue;
+            }
+
             commands.spawn((
                 UiTooltip {
                     text: has_tooltip.text.clone(),

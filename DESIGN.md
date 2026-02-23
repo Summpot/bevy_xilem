@@ -98,7 +98,11 @@ The unifying trait is `UiComponentTemplate`. Trait responsibilities:
 
 ### 4.4 Portal-based `UiScrollView` UI component
 
-Implemented as a logical ECS UI component projected through a Masonry portal view, with explicit scroll state (`scroll_offset`, `content_size`) and optional external scrollbar parts (`PartScrollBarVertical`, `PartScrollThumbVertical`). Wheel deltas are routed to the nearest ancestor in `PreUpdate`.
+Implemented as a logical ECS UI component projected through a Masonry portal view, with explicit scroll state (`scroll_offset`, `content_size`) and optional external scrollbar parts (`PartScrollBarVertical`, `PartScrollThumbVertical`).
+
+- `PreUpdate` reads back portal geometry from Masonry and synchronizes ECS `viewport_size` / `content_size` each frame.
+- `scroll_offset` is strictly clamped to physical bounds (`0..max_scroll_x`, `0..max_scroll_y`) after drag/wheel/layout-sync updates.
+- Wheel deltas are routed from deepest hit target outward, and are consumed by the first ancestor `UiScrollView` that can actually move, preventing boundary desync in nested scroll views.
 
 ## 5. Event Handling
 
@@ -142,7 +146,9 @@ Layout-affecting styles (padding/border/background) are applied directly to the 
 
 - **Centralized Layering Model:** `OverlayStack` maintains top-most order. `sync_overlay_stack_lifecycle` keeps it pruned.
 - **Universal Placement Model:** `OverlayPlacement` handles Center/Top/Bottom alignments. `sync_overlay_positions` calculates clamping and auto-flipping against screen edges.
-- **Built-in Floating Widgets:** `UiDialog` (modal), `UiComboBox` (anchor), `UiDropdownMenu` (floating list).
+- **Built-in Floating Widgets:** `UiDialog` (modal), `UiComboBox` (anchor), `UiDropdownMenu` (floating list), `UiTooltip` (hover-anchor), `UiToast` (bottom placement).
+- **FOUC prevention invariant:** overlay projectors must render with fully transparent resolved styles while `OverlayComputedPosition.is_positioned == false`, then become visible once synchronized placement is available.
+- **Generic temporary lifecycle:** `AutoDismiss { timer }` supports timer-driven teardown for temporary overlays (e.g. toasts).
 
 ### 7.2 Layered Dismissal and Blocking Flow
 

@@ -966,7 +966,7 @@ fn reparent_overlay_entities_moves_dialog_to_overlay_root() {
 }
 
 #[test]
-fn ensure_overlay_defaults_assigns_dialog_and_dropdown_configs() {
+fn ensure_overlay_defaults_assigns_dialog_dropdown_and_toast_configs() {
     let mut world = World::new();
     let combo = world
         .spawn((crate::UiComboBox::new(vec![crate::UiComboOption::new(
@@ -976,6 +976,15 @@ fn ensure_overlay_defaults_assigns_dialog_and_dropdown_configs() {
     let dialog = world.spawn((crate::UiDialog::new("t", "b"),)).id();
     let dropdown = world
         .spawn((crate::UiDropdownMenu, crate::AnchoredTo(combo)))
+        .id();
+    let toast = world
+        .spawn((crate::UiToast::new("Saved").with_duration(1.25),))
+        .id();
+    let persistent_toast = world
+        .spawn((
+            crate::UiToast::new("Pinned").with_duration(0.0),
+            crate::AutoDismiss::from_seconds(2.0),
+        ))
         .id();
 
     ensure_overlay_defaults(&mut world);
@@ -1014,6 +1023,31 @@ fn ensure_overlay_defaults_assigns_dialog_and_dropdown_configs() {
         .get::<crate::OverlayComputedPosition>(dropdown)
         .expect("dropdown should receive computed position");
     assert!(!dropdown_position.is_positioned);
+
+    let toast_config = world
+        .get::<crate::OverlayConfig>(toast)
+        .expect("toast should receive overlay config");
+    assert_eq!(toast_config.placement, crate::OverlayPlacement::Bottom);
+    assert_eq!(toast_config.anchor, None);
+    assert!(!toast_config.auto_flip);
+
+    let toast_state = world
+        .get::<crate::OverlayState>(toast)
+        .expect("toast should receive overlay state");
+    assert!(!toast_state.is_modal);
+    assert_eq!(toast_state.anchor, None);
+
+    let toast_position = world
+        .get::<crate::OverlayComputedPosition>(toast)
+        .expect("toast should receive computed position");
+    assert!(!toast_position.is_positioned);
+
+    let dismiss = world
+        .get::<crate::AutoDismiss>(toast)
+        .expect("toast should receive auto-dismiss timer");
+    assert_eq!(dismiss.timer.duration(), Duration::from_secs_f32(1.25));
+
+    assert!(world.get::<crate::AutoDismiss>(persistent_toast).is_none());
 }
 
 #[test]
@@ -2071,4 +2105,96 @@ fn drag_scroll_thumb_action_updates_scroll_view_offset() {
         .drain_actions::<crate::UiScrollViewChanged>();
     assert_eq!(changed.len(), 1);
     assert_eq!(changed[0].entity, scroll_view);
+}
+
+#[test]
+fn tooltip_hover_spawns_and_despawns_overlay_entity() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let source = app
+        .world_mut()
+        .spawn((
+            crate::UiButton::new("Hover me"),
+            crate::HasTooltip::new("Tooltip text"),
+            crate::Hovered,
+            ChildOf(root),
+        ))
+        .id();
+
+    app.update();
+
+    let mut tooltip_query = app.world_mut().query::<(
+        Entity,
+        &crate::UiTooltip,
+        &crate::OverlayState,
+        &crate::OverlayConfig,
+    )>();
+    let spawned_tooltips = tooltip_query
+        .iter(app.world())
+        .filter_map(|(entity, tooltip, state, config)| {
+            (tooltip.anchor == source
+                && state.anchor == Some(source)
+                && config.anchor == Some(source)
+                && config.placement == crate::OverlayPlacement::Top)
+                .then_some(entity)
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(spawned_tooltips.len(), 1);
+
+    app.world_mut()
+        .entity_mut(source)
+        .remove::<crate::Hovered>();
+    app.update();
+
+    let mut tooltip_query = app.world_mut().query::<&crate::UiTooltip>();
+    assert!(
+        tooltip_query
+            .iter(app.world())
+            .all(|tooltip| tooltip.anchor != source)
+    );
+}
+
+#[test]
+fn scroll_view_geometry_sync_clamps_out_of_bounds_offset() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(900.0, 640.0);
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let scroll_view = app
+        .world_mut()
+        .spawn((
+            crate::UiScrollView {
+                scroll_offset: bevy_math::Vec2::new(0.0, 4_000.0),
+                content_size: bevy_math::Vec2::new(320.0, 10_000.0),
+                viewport_size: bevy_math::Vec2::new(320.0, 220.0),
+                show_horizontal_scrollbar: false,
+                show_vertical_scrollbar: true,
+            },
+            ChildOf(root),
+        ))
+        .id();
+
+    app.world_mut().spawn((
+        crate::UiLabel::new("Only one line of content"),
+        ChildOf(scroll_view),
+    ));
+
+    app.update();
+    app.update();
+
+    let scroll = app
+        .world()
+        .get::<crate::UiScrollView>(scroll_view)
+        .expect("scroll view should exist");
+
+    let max_y = (scroll.content_size.y - scroll.viewport_size.y).max(0.0);
+    assert!(scroll.content_size.y < 2_000.0);
+    assert!(scroll.scroll_offset.y <= max_y + f32::EPSILON);
 }

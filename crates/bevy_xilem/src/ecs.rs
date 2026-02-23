@@ -1,4 +1,5 @@
 use bevy_ecs::{entity::Entity, prelude::Component, prelude::Resource};
+use bevy_time::{Timer, TimerMode};
 
 /// Marker component for UI tree roots.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -123,9 +124,28 @@ pub struct OverlayState {
     pub anchor: Option<Entity>,
 }
 
-/// Marker for overlays that should close on outside click.
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct AutoDismiss;
+/// Generic timer-driven lifecycle component.
+///
+/// Entities carrying this component are despawned when [`Self::timer`] finishes.
+#[derive(Component, Debug, Clone)]
+pub struct AutoDismiss {
+    pub timer: Timer,
+}
+
+impl AutoDismiss {
+    #[must_use]
+    pub fn from_seconds(seconds: f32) -> Self {
+        Self {
+            timer: Timer::from_seconds(seconds.max(0.0), TimerMode::Once),
+        }
+    }
+}
+
+impl Default for AutoDismiss {
+    fn default() -> Self {
+        Self::from_seconds(0.0)
+    }
+}
 
 /// Marker telling an overlay widget which anchor entity it follows.
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]

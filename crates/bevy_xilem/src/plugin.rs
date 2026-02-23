@@ -32,7 +32,8 @@ use crate::{
     },
     synthesize::{SynthesizedUiViews, UiSynthesisStats, synthesize_ui},
     widget_actions::{
-        handle_scroll_view_wheel, handle_tooltip_hovers, handle_widget_actions, tick_toasts,
+        handle_scroll_view_wheel, handle_tooltip_hovers, handle_widget_actions,
+        sync_scroll_view_layout_geometry, tick_auto_dismiss,
     },
 };
 
@@ -96,6 +97,7 @@ impl Plugin for BevyXilemPlugin {
                     initialize_masonry_runtime_from_primary_window,
                     bubble_ui_pointer_events,
                     handle_global_overlay_clicks,
+                    sync_scroll_view_layout_geometry,
                     handle_scroll_view_wheel,
                     inject_bevy_input_into_masonry,
                     sync_ui_interaction_markers,
@@ -111,7 +113,7 @@ impl Plugin for BevyXilemPlugin {
                     handle_overlay_actions,
                     handle_widget_actions,
                     handle_tooltip_hovers,
-                    tick_toasts,
+                    tick_auto_dismiss,
                     sync_overlay_stack_lifecycle,
                     ensure_active_stylesheet_asset_handle,
                     sync_stylesheet_asset_events,

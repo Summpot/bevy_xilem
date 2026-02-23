@@ -1,6 +1,9 @@
 use bevy_ecs::prelude::*;
 
-use crate::{ProjectionCtx, UiView, components::UiComponentTemplate};
+use crate::{
+    AutoDismiss, OverlayComputedPosition, OverlayConfig, OverlayPlacement, OverlayState,
+    ProjectionCtx, UiView, components::UiComponentTemplate,
+};
 
 /// Visual severity / colour of a [`UiToast`] notification.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -48,6 +51,44 @@ impl UiToast {
 }
 
 impl UiComponentTemplate for UiToast {
+    fn expand(world: &mut World, entity: Entity) {
+        let toast = world.get::<UiToast>(entity).cloned();
+        let Some(toast) = toast else {
+            return;
+        };
+
+        if world.get::<OverlayConfig>(entity).is_none() {
+            world.entity_mut(entity).insert(OverlayConfig {
+                placement: OverlayPlacement::Bottom,
+                anchor: None,
+                auto_flip: false,
+            });
+        }
+
+        if world.get::<OverlayState>(entity).is_none() {
+            world.entity_mut(entity).insert(OverlayState {
+                is_modal: false,
+                anchor: None,
+            });
+        }
+
+        if world.get::<OverlayComputedPosition>(entity).is_none() {
+            world
+                .entity_mut(entity)
+                .insert(OverlayComputedPosition::default());
+        }
+
+        if toast.duration_secs > 0.0 {
+            if world.get::<AutoDismiss>(entity).is_none() {
+                world
+                    .entity_mut(entity)
+                    .insert(AutoDismiss::from_seconds(toast.duration_secs));
+            }
+        } else if world.get::<AutoDismiss>(entity).is_some() {
+            world.entity_mut(entity).remove::<AutoDismiss>();
+        }
+    }
+
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::widgets::project_toast(component, ctx)
     }
