@@ -1600,7 +1600,55 @@ fn handle_global_overlay_clicks_closes_when_clicking_anchor_and_suppresses_point
         .world_mut()
         .resource_mut::<crate::OverlayPointerRoutingState>();
     assert!(routing.take_suppressed_press(window_entity, MouseButton::Left));
-    assert!(routing.take_suppressed_release(window_entity, MouseButton::Left));
+    assert!(!routing.take_suppressed_release(window_entity, MouseButton::Left));
+}
+
+#[test]
+fn ui_button_projects_to_ecs_button_with_child_widget() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(800.0, 600.0);
+    app.world_mut().spawn((window, PrimaryWindow));
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let button = app
+        .world_mut()
+        .spawn((crate::UiButton::new("Action"), ChildOf(root)))
+        .id();
+
+    app.update();
+
+    let debug = format!("entity={}", button.to_bits());
+    let widget_id = {
+        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        let root = runtime.render_root.get_layer_root(0);
+        find_widget_id_by_debug_text(root, &debug)
+            .expect("UiButton should project an entity-tagged action button widget")
+    };
+
+    let short_type = {
+        let runtime = app.world().non_send_resource::<crate::MasonryRuntime>();
+        runtime
+            .render_root
+            .get_widget(widget_id)
+            .map(|widget| widget.short_type_name().to_string())
+            .unwrap_or_default()
+    };
+
+    assert_eq!(short_type, "EcsButtonWithChildWidget");
+}
+
+#[test]
+fn overlay_pointer_routing_suppress_click_only_suppresses_press() {
+    let mut routing = crate::OverlayPointerRoutingState::default();
+    let window = Entity::from_raw_u32(7).expect("test entity index should be valid");
+
+    routing.suppress_click(window, MouseButton::Left);
+
+    assert!(routing.take_suppressed_press(window, MouseButton::Left));
+    assert!(!routing.take_suppressed_release(window, MouseButton::Left));
 }
 
 #[test]

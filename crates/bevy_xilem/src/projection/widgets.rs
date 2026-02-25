@@ -33,7 +33,7 @@ use crate::{
 };
 
 use super::core::{ProjectionCtx, UiView};
-use super::utils::hide_style_without_collapsing_layout;
+use super::utils::{VectorIcon, hide_style_without_collapsing_layout, vector_icon};
 
 // ---------------------------------------------------------------------------
 // Private helpers
@@ -386,19 +386,30 @@ pub(crate) fn project_radio_group(radio_group: &UiRadioGroup, ctx: ProjectionCtx
         .iter()
         .enumerate()
         .map(|(i, opt)| {
+            let icon_color = item_style
+                .colors
+                .text
+                .or(style.colors.text)
+                .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
             let indicator = if i == radio_group.selected {
-                "● "
+                vector_icon(VectorIcon::RadioOn, 14.0, icon_color)
             } else {
-                "○ "
+                vector_icon(VectorIcon::RadioOff, 14.0, icon_color)
             };
-            let text = format!("{indicator}{opt}");
-            let btn = ecs_button(
+
+            let content = flex_row(vec![
+                indicator.into_any_flex(),
+                apply_label_style(label(opt.clone()), &item_style).into_any_flex(),
+            ])
+            .gap(Length::px(6.0));
+
+            let btn = ecs_button_with_child(
                 ctx.entity,
                 WidgetUiAction::SelectRadioItem {
                     group: ctx.entity,
                     index: i,
                 },
-                text,
+                content,
             );
             apply_direct_widget_style(btn, &item_style).into_any_flex()
         })
@@ -478,25 +489,31 @@ pub(crate) fn project_tree_node(tree_node: &UiTreeNode, ctx: ProjectionCtx<'_>) 
     let indent = (depth as f64) * 16.0;
 
     let has_children = !ctx.children.is_empty();
+    let icon_color = style
+        .colors
+        .text
+        .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
 
     let header: UiView = if has_children {
-        let arrow = if tree_node.is_expanded {
-            "▼ "
+        let icon = if tree_node.is_expanded {
+            vector_icon(VectorIcon::ChevronDown, 12.0, icon_color)
         } else {
-            "▶ "
+            vector_icon(VectorIcon::ChevronRight, 12.0, icon_color)
         };
-        let text = format!("{arrow}{}", tree_node.label);
-        let btn = ecs_button(
+        let content = flex_row(vec![
+            icon.into_any_flex(),
+            apply_label_style(label(tree_node.label.clone()), &style).into_any_flex(),
+        ])
+        .gap(Length::px(6.0));
+
+        let btn = ecs_button_with_child(
             ctx.entity,
             WidgetUiAction::ToggleTreeNode { node: ctx.entity },
-            text,
+            content,
         );
         Arc::new(apply_direct_widget_style(btn, &style))
     } else {
-        Arc::new(apply_label_style(
-            label(format!("  {}", tree_node.label)),
-            &style,
-        ))
+        Arc::new(apply_label_style(label(tree_node.label.clone()), &style))
     };
 
     let header_padded = sized_box(header).width(Dim::Stretch).into_any_flex();
@@ -618,10 +635,22 @@ pub(crate) fn project_menu_bar(_: &UiMenuBar, ctx: ProjectionCtx<'_>) -> UiView 
 
 pub(crate) fn project_menu_bar_item(item: &UiMenuBarItem, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let arrow = if item.is_open { " ▴" } else { " ▾" };
-    let btn_label = format!("{}{arrow}", item.label);
+    let icon_color = style
+        .colors
+        .text
+        .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
+    let icon = if item.is_open {
+        vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
+    } else {
+        vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
+    };
+    let content = flex_row(vec![
+        apply_label_style(label(item.label.clone()), &style).into_any_flex(),
+        icon.into_any_flex(),
+    ])
+    .gap(Length::px(4.0));
     Arc::new(apply_direct_widget_style(
-        ecs_button(ctx.entity, OverlayUiAction::ToggleMenuBarItem, btn_label),
+        ecs_button_with_child(ctx.entity, OverlayUiAction::ToggleMenuBarItem, content),
         &style,
     ))
 }
@@ -781,10 +810,22 @@ const COLOR_SWATCHES: [(u8, u8, u8); 20] = [
 pub(crate) fn project_color_picker(picker: &UiColorPicker, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let hex = format!("#{:02X}{:02X}{:02X}", picker.r, picker.g, picker.b);
-    let arrow = if picker.is_open { " ▴" } else { " ▾" };
-    let btn_label = format!("{hex}{arrow}");
+    let icon_color = style
+        .colors
+        .text
+        .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
+    let icon = if picker.is_open {
+        vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
+    } else {
+        vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
+    };
+    let content = flex_row(vec![
+        apply_label_style(label(hex), &style).into_any_flex(),
+        icon.into_any_flex(),
+    ])
+    .gap(Length::px(6.0));
     Arc::new(apply_direct_widget_style(
-        ecs_button(ctx.entity, OverlayUiAction::ToggleColorPicker, btn_label),
+        ecs_button_with_child(ctx.entity, OverlayUiAction::ToggleColorPicker, content),
         &style,
     ))
 }
@@ -1004,10 +1045,22 @@ pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
 pub(crate) fn project_date_picker(picker: &UiDatePicker, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
     let date_str = format!("{:04}-{:02}-{:02}", picker.year, picker.month, picker.day);
-    let arrow = if picker.is_open { " ▴" } else { " ▾" };
-    let btn_label = format!("{date_str}{arrow}");
+    let icon_color = style
+        .colors
+        .text
+        .unwrap_or(Color::from_rgb8(0xE7, 0xEC, 0xF8));
+    let icon = if picker.is_open {
+        vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
+    } else {
+        vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
+    };
+    let content = flex_row(vec![
+        apply_label_style(label(date_str), &style).into_any_flex(),
+        icon.into_any_flex(),
+    ])
+    .gap(Length::px(6.0));
     Arc::new(apply_direct_widget_style(
-        ecs_button(ctx.entity, OverlayUiAction::ToggleDatePicker, btn_label),
+        ecs_button_with_child(ctx.entity, OverlayUiAction::ToggleDatePicker, content),
         &style,
     ))
 }

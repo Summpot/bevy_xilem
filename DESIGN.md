@@ -111,7 +111,12 @@ Implemented as a logical ECS UI component projected through a Masonry portal vie
 To remove user-facing closure boilerplate:
 
 - `EcsButtonView` implements `xilem_core::View` on top of a custom wrapper widget.
+- `EcsButtonWithChildView` provides the same event semantics for composed button content
+  (icon + label rows, swatches, custom child layouts).
 - On interaction, it emits structural events (`PointerEntered`, `PointerPressed`) and typed ECS actions (`UiEventQueue`).
+
+This keeps built-in interactive controls (`UiButton`, checkbox/radio compositions, menu/dropdown items,
+color/date trigger buttons) on a unified ECS event route even in headless-runtime mode.
 
 ### 5.2 Typed action queue
 
@@ -158,7 +163,17 @@ Layout-affecting styles (padding/border/background) are applied directly to the 
 
 Clicks outside the opaque overlay root cause dismissals without disrupting interactive siblings. Optional `UiOverlayRoot` dimly rendering full-view backgrounds without structurally wrapping modal UI boundaries.
 
-## 8. Assets and Internationalization
+When clicking an overlay anchor to close an anchored overlay, pointer suppression is press-only
+for the consumed click. This avoids stale suppressed-release state that can otherwise leave
+trigger buttons in a sticky pressed visual/input state.
+
+## 8. Iconography
+
+Built-in directional indicators and radio markers are rendered by vector drawing (self-drawn)
+instead of Unicode fallback glyphs. This keeps radio/dropdown/tree indicators visually stable
+across different font stacks/locales.
+
+## 9. Assets and Internationalization
 
 ### 8.1 Font Bridge
 
@@ -168,7 +183,7 @@ Clicks outside the opaque overlay root cause dismissals without disrupting inter
 
 Centralized in `AppI18n`. Synchronous setup through `.register_i18n_bundle()`. Uses declarative font stacks applied based on locale priorities.
 
-## 9. ECS Data Model & Synthesis Pipeline
+## 10. ECS Data Model & Synthesis Pipeline
 
 ### 9.1 Data Model
 
@@ -184,7 +199,7 @@ Driven via `UiProjectorRegistry`.
 3. Store `SynthesizedUiViews`.
 4. Rebuild retained Masonry root in `MasonryRuntime`.
 
-## 10. Developer Ergonomics
+## 11. Developer Ergonomics
 
 ### 10.1 Two-level UI componentization policy
 
@@ -195,7 +210,7 @@ Driven via `UiProjectorRegistry`.
 
 `run_app()` avoids raw setup tasks, bootstrapping native `bevy_winit` safely to Bevy systems for seamless desktop lifecycle apps.
 
-## 11. Examples and Non-goals
+## 12. Examples and Non-goals
 
 - **Examples:** Highlighted in crates evaluating architectures (`chess_game`, `ui_showcase`, `todo_list`).
 - **Non-goals:** Custom render-graph bridging out of scope; sticks to Masonry retained runtime ownership implicitly.

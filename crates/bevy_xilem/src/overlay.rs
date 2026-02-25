@@ -105,15 +105,12 @@ impl OverlayPointerRoutingState {
         Self::push_unique(&mut self.suppressed_presses, window, button);
     }
 
-    /// Mark the next `Released` event for this `(window, button)` pair as consumed.
-    pub(crate) fn suppress_release(&mut self, window: Entity, button: MouseButton) {
-        Self::push_unique(&mut self.suppressed_releases, window, button);
-    }
-
-    /// Suppress both press and release for a globally consumed click.
+    /// Suppress the next press for a globally consumed click.
     pub(crate) fn suppress_click(&mut self, window: Entity, button: MouseButton) {
         self.suppress_press(window, button);
-        self.suppress_release(window, button);
+        // NOTE: suppressing release can outlive the originating click across frames,
+        // which may consume the next valid release and leave trigger buttons in a
+        // sticky-pressed state that requires an extra click.
     }
 }
 
@@ -1006,7 +1003,9 @@ struct EntityHitBox {
 }
 
 fn parse_entity_from_ecs_button(widget: WidgetRef<'_, dyn Widget>) -> Option<Entity> {
-    if widget.short_type_name() != "EcsButtonWidget" {
+    if widget.short_type_name() != "EcsButtonWidget"
+        && widget.short_type_name() != "EcsButtonWithChildWidget"
+    {
         return None;
     }
 

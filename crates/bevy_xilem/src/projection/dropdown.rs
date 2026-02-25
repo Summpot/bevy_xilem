@@ -1,20 +1,22 @@
 use crate::{
     ecs::{
-        AnchoredTo, OverlayAnchorRect, OverlayComputedPosition, PartComboBoxChevron,
-        PartComboBoxDisplay, UiComboBox, UiDropdownMenu,
+        AnchoredTo, OverlayAnchorRect, OverlayComputedPosition, PartComboBoxDisplay, UiComboBox,
+        UiDropdownMenu,
     },
     overlay::OverlayUiAction,
     styling::{
         apply_direct_widget_style, apply_flex_alignment, apply_label_style, apply_widget_style,
         resolve_style, resolve_style_for_classes,
     },
-    views::{ecs_button, ecs_button_with_child, opaque_hitbox_for_entity},
+    views::{ecs_button_with_child, opaque_hitbox_for_entity},
 };
 use bevy_ecs::hierarchy::Children;
 use masonry::layout::{Dim, Length};
 use std::sync::Arc;
 use xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
-use xilem_masonry::view::{CrossAxisAlignment, FlexExt as _, flex_col, label, portal, transformed};
+use xilem_masonry::view::{
+    CrossAxisAlignment, FlexExt as _, flex_col, flex_row, label, portal, transformed,
+};
 
 #[cfg(test)]
 use crate::UiDropdownPlacement;
@@ -22,8 +24,8 @@ use crate::UiDropdownPlacement;
 use super::{
     core::{ProjectionCtx, UiView},
     utils::{
-        app_i18n_font_stack, estimate_text_width_px, hide_style_without_collapsing_layout,
-        translate_text,
+        VectorIcon, app_i18n_font_stack, estimate_text_width_px,
+        hide_style_without_collapsing_layout, translate_text, vector_icon,
     },
 };
 
@@ -372,20 +374,27 @@ pub(crate) fn project_combo_box(combo_box: &UiComboBox, ctx: ProjectionCtx<'_>) 
         })
         .unwrap_or_else(|| selected_label.clone());
 
-    let chevron_text = child_entities
-        .iter()
-        .find_map(|entity| {
-            ctx.world
-                .get::<PartComboBoxChevron>(*entity)
-                .and_then(|_| ctx.world.get::<crate::UiLabel>(*entity))
-                .map(|label| label.text.clone())
-        })
-        .unwrap_or_else(|| if combo_box.is_open { "▴" } else { "▾" }.to_string());
+    let icon_color = style
+        .colors
+        .text
+        .unwrap_or(xilem::Color::from_rgb8(0xE7, 0xEC, 0xF8));
+    let chevron = if combo_box.is_open {
+        vector_icon(VectorIcon::ChevronUp, 10.0, icon_color)
+    } else {
+        vector_icon(VectorIcon::ChevronDown, 10.0, icon_color)
+    };
 
-    let button_text = format!("{display_text} {chevron_text}");
+    let button_content = flex_row(vec![
+        apply_label_style(label(display_text), &style)
+            .flex(1.0)
+            .into_any_flex(),
+        chevron.into_any_flex(),
+    ])
+    .cross_axis_alignment(CrossAxisAlignment::Center)
+    .gap(Length::px(6.0));
 
     Arc::new(apply_direct_widget_style(
-        ecs_button(ctx.entity, OverlayUiAction::ToggleCombo, button_text),
+        ecs_button_with_child(ctx.entity, OverlayUiAction::ToggleCombo, button_content),
         &style,
     ))
 }
