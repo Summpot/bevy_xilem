@@ -125,7 +125,8 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
         .copied()
         .unwrap_or_default();
 
-    if !computed_position.is_positioned {
+    let is_positioned = computed_position.is_positioned;
+    if !is_positioned {
         hide_style_without_collapsing_layout(&mut dialog_style);
         hide_style_without_collapsing_layout(&mut title_style);
         hide_style_without_collapsing_layout(&mut body_style);
@@ -185,19 +186,33 @@ pub(crate) fn project_dialog(dialog: &UiDialog, ctx: ProjectionCtx<'_>) -> UiVie
             .find_map(|(entity, view)| predicate(*entity).then_some(view.clone()))
     };
 
-    let title_view = part_view(&|entity| ctx.world.get::<PartDialogTitle>(entity).is_some())
-        .unwrap_or_else(|| Arc::new(apply_label_style(label(title), &title_style)));
-    let body_view = part_view(&|entity| ctx.world.get::<PartDialogBody>(entity).is_some())
-        .unwrap_or_else(|| Arc::new(apply_label_style(label(body), &body_style)));
-    let dismiss_text = child_parts
-        .iter()
-        .find_map(|(entity, _)| {
-            ctx.world
-                .get::<PartDialogDismiss>(*entity)
-                .and_then(|_| ctx.world.get::<UiLabel>(*entity))
-                .map(|label| label.text.clone())
-        })
-        .unwrap_or_else(|| dismiss_label.clone());
+    let title_view = if is_positioned {
+        part_view(&|entity| ctx.world.get::<PartDialogTitle>(entity).is_some())
+            .unwrap_or_else(|| Arc::new(apply_label_style(label(title.clone()), &title_style)))
+    } else {
+        Arc::new(apply_label_style(label(title.clone()), &title_style))
+    };
+
+    let body_view = if is_positioned {
+        part_view(&|entity| ctx.world.get::<PartDialogBody>(entity).is_some())
+            .unwrap_or_else(|| Arc::new(apply_label_style(label(body.clone()), &body_style)))
+    } else {
+        Arc::new(apply_label_style(label(body.clone()), &body_style))
+    };
+
+    let dismiss_text = if is_positioned {
+        child_parts
+            .iter()
+            .find_map(|(entity, _)| {
+                ctx.world
+                    .get::<PartDialogDismiss>(*entity)
+                    .and_then(|_| ctx.world.get::<UiLabel>(*entity))
+                    .map(|label| label.text.clone())
+            })
+            .unwrap_or_else(|| dismiss_label.clone())
+    } else {
+        dismiss_label.clone()
+    };
 
     let dismiss_button = apply_direct_widget_style(
         ecs_button(ctx.entity, OverlayUiAction::DismissDialog, dismiss_text),

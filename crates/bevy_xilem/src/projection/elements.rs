@@ -4,16 +4,16 @@ use super::{
 };
 use crate::{
     ecs::{
-        LocalizeText, PartCheckboxIndicator, PartCheckboxLabel, PartSliderDecrease,
-        PartSliderIncrease, PartSliderThumb, PartSliderTrack, PartSwitchThumb, PartSwitchTrack,
-        UiButton, UiCheckbox, UiLabel, UiSlider, UiSwitch, UiTextInput,
+        LocalizeText, PartSliderDecrease, PartSliderIncrease, PartSliderThumb, PartSliderTrack,
+        PartSwitchThumb, PartSwitchTrack, UiButton, UiCheckbox, UiLabel, UiSlider, UiSwitch,
+        UiTextInput,
     },
     i18n::resolve_localized_text,
     styling::{
         apply_direct_widget_style, apply_label_style, apply_text_input_style, apply_widget_style,
         resolve_style,
     },
-    views::{ecs_button_with_child, ecs_text_input},
+    views::{ecs_button_with_child, ecs_checkbox, ecs_text_input},
     widget_actions::WidgetUiAction,
 };
 use bevy_ecs::{hierarchy::Children, prelude::*};
@@ -93,23 +93,14 @@ pub(crate) fn project_button(button_component: &UiButton, ctx: ProjectionCtx<'_>
 
 pub(crate) fn project_checkbox(checkbox: &UiCheckbox, ctx: ProjectionCtx<'_>) -> UiView {
     let style = resolve_style(ctx.world, ctx.entity);
-    let parts = child_entity_views(&ctx);
-
-    let indicator = first_part_view::<PartCheckboxIndicator>(&ctx, &parts)
-        .unwrap_or_else(|| Arc::new(label(if checkbox.checked { "☑" } else { "☐" })));
-    let label_view = first_part_view::<PartCheckboxLabel>(&ctx, &parts)
-        .unwrap_or_else(|| Arc::new(label(checkbox.label.clone())));
-
-    let content = flex_row(vec![indicator.into_any_flex(), label_view.into_any_flex()])
-        .gap(Length::px(style.layout.gap.max(6.0)));
-
     Arc::new(apply_direct_widget_style(
-        ecs_button_with_child(
+        ecs_checkbox(
             ctx.entity,
-            WidgetUiAction::ToggleCheckbox {
+            checkbox.label.clone(),
+            checkbox.checked,
+            move |_| WidgetUiAction::ToggleCheckbox {
                 checkbox: ctx.entity,
             },
-            content,
         ),
         &style,
     ))

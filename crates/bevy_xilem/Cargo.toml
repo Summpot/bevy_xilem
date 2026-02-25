@@ -9,6 +9,7 @@ autoexamples = false
 [dependencies]
 bevy_a11y.workspace = true
 bevy_app.workspace = true
+bevy_xilem-icons.workspace = true
 bevy_asset.workspace = true
 bevy_ecs.workspace = true
 bevy_input.workspace = true

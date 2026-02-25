@@ -663,8 +663,8 @@ pub(crate) fn project_menu_item_panel(_: &UiMenuItemPanel, ctx: ProjectionCtx<'_
         None => return hidden_placeholder(),
     };
 
-    let menu_style = default_panel_style(ctx.world, "overlay.menu.panel");
-    let item_style = default_item_style(ctx.world, "overlay.menu.item");
+    let menu_style = default_panel_style(ctx.world, "overlay.dropdown.menu");
+    let item_style = default_item_style(ctx.world, "overlay.dropdown.item");
 
     let items: Vec<_> = anchor
         .and_then(|a| ctx.world.get::<UiMenuBarItem>(a))
@@ -1005,7 +1005,13 @@ pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
         style.layout.padding = 10.0;
     }
     if style.layout.corner_radius <= 0.0 {
-        style.layout.corner_radius = 6.0;
+        style.layout.corner_radius = 4.0;
+    }
+    if style.layout.border_width <= 0.0 {
+        style.layout.border_width = 1.0;
+    }
+    if style.colors.border.is_none() {
+        style.colors.border = Some(Color::from_rgba8(255, 255, 255, 56));
     }
 
     let computed_pos = ctx
@@ -1021,17 +1027,17 @@ pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
     }
 
     let msg = apply_label_style(label(toast.message.clone()), &style);
-    let dismiss = apply_direct_widget_style(
-        ecs_button(ctx.entity, OverlayUiAction::DismissToast, "✕".to_string()),
-        &dismiss_style,
-    );
+    let mut items = vec![msg.flex(1.0).into_any_flex()];
+    if toast.show_close_button {
+        let dismiss = apply_direct_widget_style(
+            ecs_button(ctx.entity, OverlayUiAction::DismissToast, "✕".to_string()),
+            &dismiss_style,
+        );
+        items.push(dismiss.into_any_flex());
+    }
 
     let panel = apply_widget_style(
-        apply_flex_alignment(
-            flex_row(vec![msg.flex(1.0).into_any_flex(), dismiss.into_any_flex()]),
-            &style,
-        )
-        .gap(Length::px(8.0)),
+        apply_flex_alignment(flex_row(items), &style).gap(Length::px(8.0)),
         &style,
     );
 

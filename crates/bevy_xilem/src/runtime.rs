@@ -7,21 +7,24 @@ use bevy_ecs::{
 };
 use bevy_input::{
     ButtonState,
+    keyboard::{KeyCode, KeyboardInput},
     mouse::{MouseButton, MouseButtonInput, MouseScrollUnit, MouseWheel},
 };
 #[cfg(test)]
 use bevy_math::Vec2;
 use bevy_time::Time;
 use bevy_window::{
-    CursorLeft, CursorMoved, PrimaryWindow, Window, WindowResized, WindowScaleFactorChanged,
+    CursorLeft, CursorMoved, Ime as BevyIme, PrimaryWindow, Window, WindowFocused, WindowResized,
+    WindowScaleFactorChanged,
 };
 use masonry::layout::{Dim, UnitPoint};
 use masonry::{
     app::{RenderRoot, RenderRootOptions, WindowSizePolicy},
     core::{
         Handled, PointerButton, PointerButtonEvent, PointerEvent, PointerId, PointerInfo,
-        PointerScrollEvent, PointerState, PointerType, PointerUpdate, ScrollDelta, Widget,
-        WidgetId, WidgetRef, WindowEvent,
+        PointerScrollEvent, PointerState, PointerType, PointerUpdate, ScrollDelta, TextEvent,
+        Widget, WidgetId, WidgetRef, WindowEvent,
+        keyboard::{Key, KeyState, NamedKey},
     },
     dpi::{PhysicalPosition, PhysicalSize},
     peniko::Color,
@@ -453,6 +456,14 @@ impl MasonryRuntime {
             }))
     }
 
+    pub fn handle_text_event(&mut self, window: Entity, event: TextEvent) -> Handled {
+        if !self.accepts_window(window) {
+            return Handled::No;
+        }
+
+        self.render_root.handle_text_event(event)
+    }
+
     pub fn handle_window_resized(&mut self, window: Entity, width: f32, height: f32) -> Handled {
         if !self.accepts_window(window) {
             return Handled::No;
@@ -598,12 +609,41 @@ fn map_mouse_button(button: MouseButton) -> Option<PointerButton> {
     }
 }
 
+fn map_button_state_to_key_state(state: ButtonState) -> KeyState {
+    match state {
+        ButtonState::Pressed => KeyState::Down,
+        ButtonState::Released => KeyState::Up,
+    }
+}
+
+fn map_named_key_from_key_code(key_code: KeyCode) -> Option<NamedKey> {
+    match key_code {
+        KeyCode::Backspace => Some(NamedKey::Backspace),
+        KeyCode::Delete => Some(NamedKey::Delete),
+        KeyCode::Tab => Some(NamedKey::Tab),
+        KeyCode::Enter | KeyCode::NumpadEnter => Some(NamedKey::Enter),
+        KeyCode::Escape => Some(NamedKey::Escape),
+        KeyCode::ArrowLeft => Some(NamedKey::ArrowLeft),
+        KeyCode::ArrowRight => Some(NamedKey::ArrowRight),
+        KeyCode::ArrowUp => Some(NamedKey::ArrowUp),
+        KeyCode::ArrowDown => Some(NamedKey::ArrowDown),
+        KeyCode::Home => Some(NamedKey::Home),
+        KeyCode::End => Some(NamedKey::End),
+        KeyCode::PageUp => Some(NamedKey::PageUp),
+        KeyCode::PageDown => Some(NamedKey::PageDown),
+        _ => None,
+    }
+}
+
 /// PreUpdate input bridge: consume Bevy window/input messages and inject them into Masonry.
 pub fn inject_bevy_input_into_masonry(
     runtime: Option<NonSendMut<MasonryRuntime>>,
     mut overlay_routing: ResMut<OverlayPointerRoutingState>,
     primary_window_query: Query<&Window, With<PrimaryWindow>>,
     primary_window_entity_query: Query<Entity, With<PrimaryWindow>>,
+    mut keyboard_input: MessageReader<KeyboardInput>,
+    mut ime_events: MessageReader<BevyIme>,
+    mut window_focused: MessageReader<WindowFocused>,
     mut cursor_moved: MessageReader<CursorMoved>,
     mut cursor_left: MessageReader<CursorLeft>,
     mut mouse_button_input: MessageReader<MouseButtonInput>,
@@ -650,6 +690,82 @@ pub fn inject_bevy_input_into_masonry(
         }
 
         runtime.handle_cursor_left(primary_window_entity);
+    }
+
+    for event in window_focused.read() {
+        if event.window != primary_window_entity {
+            continue;
+        }
+
+        runtime.handle_text_event(
+            primary_window_entity,
+            TextEvent::WindowFocusChange(event.focused),
+        );
+    }
+
+    for event in ime_events.read() {
+        let (window, text_event) = match event {
+            BevyIme::Preedit {
+                window,
+                value,
+                cursor,
+            } => (
+                *window,
+                TextEvent::Ime(masonry::core::Ime::Preedit(value.clone(), *cursor)),
+            ),
+            BevyIme::Commit { window, value } => (
+                *window,
+                TextEvent::Ime(masonry::core::Ime::Commit(value.clone())),
+            ),
+            BevyIme::Enabled { window } => (*window, TextEvent::Ime(masonry::core::Ime::Enabled)),
+            BevyIme::Disabled { window } => (*window, TextEvent::Ime(masonry::core::Ime::Disabled)),
+        };
+
+        if window != primary_window_entity {
+            continue;
+        }
+
+        runtime.handle_text_event(primary_window_entity, text_event);
+    }
+
+    for event in keyboard_input.read() {
+        if event.window != primary_window_entity {
+            continue;
+        }
+
+        if let Some(named_key) = map_named_key_from_key_code(event.key_code) {
+            runtime.handle_text_event(
+                primary_window_entity,
+                TextEvent::Keyboard(masonry::core::KeyboardEvent {
+                    state: map_button_state_to_key_state(event.state),
+                    key: Key::Named(named_key),
+                    repeat: event.repeat,
+                    ..Default::default()
+                }),
+            );
+        }
+
+        if event.key_code == KeyCode::Space {
+            runtime.handle_text_event(
+                primary_window_entity,
+                TextEvent::Keyboard(masonry::core::KeyboardEvent {
+                    state: map_button_state_to_key_state(event.state),
+                    key: Key::Character(" ".into()),
+                    repeat: event.repeat,
+                    ..Default::default()
+                }),
+            );
+        }
+
+        if event.state == ButtonState::Pressed
+            && let Some(text) = event.text.as_ref()
+            && !text.is_empty()
+        {
+            runtime.handle_text_event(
+                primary_window_entity,
+                TextEvent::Ime(masonry::core::Ime::Commit(text.to_string())),
+            );
+        }
     }
 
     for event in mouse_button_input.read() {

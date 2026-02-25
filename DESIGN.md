@@ -61,7 +61,7 @@ window/input plugins are active.
 
 ### 3.1 Input injection bridge (PreUpdate)
 
-`PreUpdate` system consumes Bevy messages (`CursorMoved`, `CursorLeft`, `MouseButtonInput`, `MouseWheel`, `WindowResized`, `WindowScaleFactorChanged`) and translates them to Masonry events (`PointerEvent`, `WindowEvent`), which are injected into `MasonryRuntime.render_root`.
+`PreUpdate` system consumes Bevy messages (`CursorMoved`, `CursorLeft`, `MouseButtonInput`, `MouseWheel`, `KeyboardInput`, `Ime`, `WindowFocused`, `WindowResized`, `WindowScaleFactorChanged`) and translates them to Masonry events (`PointerEvent`, `TextEvent`, `WindowEvent`), which are injected into `MasonryRuntime.render_root`.
 
 **Pointer bridge invariants:**
 
@@ -72,6 +72,9 @@ window/input plugins are active.
 - `CursorMoved.position` payload is not trusted for hit-test coordinates.
 - `MouseButtonInput` / `MouseWheel` are injected only when physical cursor data is available;
   when unavailable (cursor outside), pointer interaction injection is skipped.
+- Text input is bridged through both keyboard semantics (`TextEvent::Keyboard` for navigation/editing keys)
+  and committed text (`TextEvent::Ime::Commit`) so ECS `UiTextInput` remains editable under
+  Bevy-driven input scheduling.
 - Window resize injection uses logical `Window::width()` / `Window::height()` from the active
   primary window, ensuring Masonry receives DPI-correct dimensions.
 - Click-path ordering is enforced by injecting `PointerMove` before each
@@ -153,7 +156,7 @@ Layout-affecting styles (padding/border/background) are applied directly to the 
 
 - **Centralized Layering Model:** `OverlayStack` maintains top-most order. `sync_overlay_stack_lifecycle` keeps it pruned.
 - **Universal Placement Model:** `OverlayPlacement` handles Center/Top/Bottom alignments. `sync_overlay_positions` calculates clamping and auto-flipping against screen edges.
-- **Built-in Floating Widgets:** `UiDialog` (modal), `UiComboBox` (anchor), `UiDropdownMenu` (floating list), `UiTooltip` (hover-anchor), `UiToast` (bottom placement).
+- **Built-in Floating Widgets:** `UiDialog` (modal), `UiComboBox` (anchor), `UiDropdownMenu` (floating list), `UiTooltip` (hover-anchor), `UiToast` (default bottom-end placement, configurable placement/width/close-button).
 - **FOUC prevention invariant:** overlay projectors must render with fully transparent resolved styles while `OverlayComputedPosition.is_positioned == false`, then become visible once synchronized placement is available.
 - **Generic temporary lifecycle:** `AutoDismiss { timer }` supports timer-driven teardown for temporary overlays (e.g. toasts).
 
@@ -169,9 +172,10 @@ trigger buttons in a sticky pressed visual/input state.
 
 ## 8. Iconography
 
-Built-in directional indicators and radio markers are rendered by vector drawing (self-drawn)
-instead of Unicode fallback glyphs. This keeps radio/dropdown/tree indicators visually stable
-across different font stacks/locales.
+Built-in directional indicators and radio markers are provided through a dedicated
+`bevy_xilem-icons` wrapper crate backed by `lucide-rs` icon data/font assets (instead of
+hand-drawn canvas paths). The plugin registers bundled Lucide font bytes at startup so icon
+rendering remains stable across locales and system font configurations.
 
 ## 9. Assets and Internationalization
 

@@ -467,16 +467,23 @@ pub fn ensure_overlay_defaults(world: &mut World) {
         let mut query = world.query::<(Entity, &UiToast)>();
         query
             .iter(world)
-            .map(|(entity, toast)| (entity, toast.duration_secs))
+            .map(|(entity, toast)| {
+                (
+                    entity,
+                    toast.duration_secs,
+                    toast.placement,
+                    toast.auto_flip_placement,
+                )
+            })
             .collect::<Vec<_>>()
     };
 
-    for (toast_entity, duration_secs) in toasts {
+    for (toast_entity, duration_secs, placement, auto_flip) in toasts {
         if world.get::<OverlayConfig>(toast_entity).is_none() {
             world.entity_mut(toast_entity).insert(OverlayConfig {
-                placement: OverlayPlacement::Bottom,
+                placement,
                 anchor: None,
-                auto_flip: false,
+                auto_flip,
             });
         }
         if world.get::<OverlayState>(toast_entity).is_none() {
@@ -611,6 +618,21 @@ fn close_date_picker_panel(world: &mut World, panel_entity: Entity) {
         if let Some(mut picker) = world.get_mut::<UiDatePicker>(anchor) {
             picker.is_open = false;
         }
+    }
+}
+
+fn close_overlay_entity(world: &mut World, overlay_entity: Entity) {
+    if world.get::<UiDropdownMenu>(overlay_entity).is_some() {
+        close_dropdown(world, overlay_entity);
+    } else if world.get::<UiMenuItemPanel>(overlay_entity).is_some() {
+        close_menu_panel(world, overlay_entity);
+    } else if world.get::<UiColorPickerPanel>(overlay_entity).is_some() {
+        close_color_picker_panel(world, overlay_entity);
+    } else if world.get::<UiDatePickerPanel>(overlay_entity).is_some() {
+        close_date_picker_panel(world, overlay_entity);
+    } else {
+        despawn_entity_tree(world, overlay_entity);
+        remove_overlay_from_stack(world, overlay_entity);
     }
 }
 
@@ -1317,7 +1339,9 @@ fn overlay_size_for_entity(
         }
 
         let text_width = estimate_text_width_px(&toast.message, style.text.size);
-        let width = (text_width + style.layout.padding * 2.0 + 52.0).clamp(180.0, 560.0);
+        let min_width = toast.min_width.max(120.0);
+        let max_width = toast.max_width.max(min_width);
+        let width = (text_width + style.layout.padding * 2.0 + 52.0).clamp(min_width, max_width);
         let line_height = (style.text.size as f64 * 1.35).max(20.0);
         let height = (line_height + style.layout.padding * 2.0).max(44.0);
         return (width, height);
@@ -1800,12 +1824,7 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
             && !clicked_inside_overlay_by_hit_path;
 
     if clicked_anchor {
-        if world.get::<UiDropdownMenu>(top_overlay_entity).is_some() {
-            close_dropdown(world, top_overlay_entity);
-        } else {
-            despawn_entity_tree(world, top_overlay_entity);
-            remove_overlay_from_stack(world, top_overlay_entity);
-        }
+        close_overlay_entity(world, top_overlay_entity);
 
         if let Some(mut routing) = world.get_resource_mut::<OverlayPointerRoutingState>() {
             routing.suppress_click(window_entity, MouseButton::Left);
@@ -1884,12 +1903,7 @@ pub fn handle_global_overlay_clicks(world: &mut World) {
         );
     }
 
-    if world.get::<UiDropdownMenu>(top_overlay_entity).is_some() {
-        close_dropdown(world, top_overlay_entity);
-    } else {
-        despawn_entity_tree(world, top_overlay_entity);
-        remove_overlay_from_stack(world, top_overlay_entity);
-    }
+    close_overlay_entity(world, top_overlay_entity);
 
     tracing::debug!(
         "Closed overlay {:?} from outside click and allowed pointer propagation",

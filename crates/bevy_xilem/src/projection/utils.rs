@@ -1,15 +1,16 @@
 use std::sync::Arc;
 
 use super::core::UiView;
-use crate::{ecs::LocalizeText, i18n::AppI18n, styling::ResolvedStyle};
-use bevy_ecs::prelude::*;
-use masonry::{
-    kurbo::{Affine, BezPath, Circle, Stroke},
-    layout::{Dim, Length},
-    peniko::Fill,
+use crate::{
+    ecs::LocalizeText,
+    i18n::AppI18n,
+    styling::{ResolvedStyle, apply_label_style},
 };
+use bevy_ecs::prelude::*;
+use bevy_xilem_icons::BevyXilemIcon;
+use masonry::layout::{Dim, Length};
 use xilem_masonry::style::Style as _;
-use xilem_masonry::view::{canvas, sized_box};
+use xilem_masonry::view::{label, sized_box};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum VectorIcon {
@@ -21,79 +22,24 @@ pub(crate) enum VectorIcon {
 }
 
 pub(crate) fn vector_icon(icon: VectorIcon, size_px: f64, color: xilem::Color) -> UiView {
+    let lucide_icon = match icon {
+        VectorIcon::ChevronDown => BevyXilemIcon::ChevronDown,
+        VectorIcon::ChevronUp => BevyXilemIcon::ChevronUp,
+        VectorIcon::ChevronRight => BevyXilemIcon::ChevronRight,
+        VectorIcon::RadioOff => BevyXilemIcon::Circle,
+        VectorIcon::RadioOn => BevyXilemIcon::CircleDot,
+    };
+
+    let mut icon_style = ResolvedStyle::default();
+    icon_style.colors.text = Some(color);
+    icon_style.text.size = (size_px * 0.90) as f32;
+    icon_style.font_family = Some(vec![bevy_xilem_icons::LUCIDE_FONT_FAMILY.to_string()]);
+
     Arc::new(
-        sized_box(canvas(move |_, _, scene, size| {
-            let width = size.width.max(1.0);
-            let height = size.height.max(1.0);
-
-            match icon {
-                VectorIcon::ChevronDown => {
-                    let mut path = BezPath::new();
-                    path.move_to((width * 0.22, height * 0.34));
-                    path.line_to((width * 0.50, height * 0.66));
-                    path.line_to((width * 0.78, height * 0.34));
-                    scene.stroke(
-                        &Stroke::new((size_px * 0.14).max(1.6)),
-                        Affine::IDENTITY,
-                        color,
-                        None,
-                        &path,
-                    );
-                }
-                VectorIcon::ChevronUp => {
-                    let mut path = BezPath::new();
-                    path.move_to((width * 0.22, height * 0.66));
-                    path.line_to((width * 0.50, height * 0.34));
-                    path.line_to((width * 0.78, height * 0.66));
-                    scene.stroke(
-                        &Stroke::new((size_px * 0.14).max(1.6)),
-                        Affine::IDENTITY,
-                        color,
-                        None,
-                        &path,
-                    );
-                }
-                VectorIcon::ChevronRight => {
-                    let mut path = BezPath::new();
-                    path.move_to((width * 0.34, height * 0.22));
-                    path.line_to((width * 0.66, height * 0.50));
-                    path.line_to((width * 0.34, height * 0.78));
-                    scene.stroke(
-                        &Stroke::new((size_px * 0.14).max(1.6)),
-                        Affine::IDENTITY,
-                        color,
-                        None,
-                        &path,
-                    );
-                }
-                VectorIcon::RadioOff => {
-                    let radius = width.min(height) * 0.40;
-                    let circle = Circle::new((width * 0.5, height * 0.5), radius);
-                    scene.stroke(
-                        &Stroke::new((size_px * 0.11).max(1.4)),
-                        Affine::IDENTITY,
-                        color,
-                        None,
-                        &circle,
-                    );
-                }
-                VectorIcon::RadioOn => {
-                    let outer_radius = width.min(height) * 0.40;
-                    let outer = Circle::new((width * 0.5, height * 0.5), outer_radius);
-                    scene.stroke(
-                        &Stroke::new((size_px * 0.11).max(1.4)),
-                        Affine::IDENTITY,
-                        color,
-                        None,
-                        &outer,
-                    );
-
-                    let inner_radius = outer_radius * 0.45;
-                    let inner = Circle::new((width * 0.5, height * 0.5), inner_radius);
-                    scene.fill(Fill::NonZero, Affine::IDENTITY, color, None, &inner);
-                }
-            }
-        }))
+        sized_box(apply_label_style(
+            label(lucide_icon.glyph().to_string()),
+            &icon_style,
+        ))
         .width(Dim::Fixed(Length::px(size_px)))
         .height(Dim::Fixed(Length::px(size_px))),
     )

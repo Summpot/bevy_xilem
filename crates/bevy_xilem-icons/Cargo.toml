@@ -1,0 +1,8 @@
+[package]
+name = "bevy_xilem-icons"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+lucide-icons = "0.575.0"

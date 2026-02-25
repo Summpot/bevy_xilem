@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+	"crates/bevy_xilem-icons",
 	"crates/bevy_xilem",
 	"examples/async_downloader",
 	"examples/calculator",
@@ -21,6 +22,7 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+bevy_xilem-icons = { path = "crates/bevy_xilem-icons" }
 bevy_a11y = { version = "0.18", default-features = false }
 bevy_app = { version = "0.18", default-features = false, features = ["std"] }
 bevy_asset = { version = "0.18", default-features = false }

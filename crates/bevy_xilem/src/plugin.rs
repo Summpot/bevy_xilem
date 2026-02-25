@@ -1,14 +1,17 @@
 use bevy_app::{App, Last, Plugin, PostUpdate, PreUpdate, TaskPoolPlugin, Update};
 use bevy_asset::{AssetApp, AssetEvent, AssetPlugin};
 use bevy_ecs::schedule::IntoScheduleConfigs;
+use bevy_input::keyboard::KeyboardInput;
 use bevy_input::mouse::{MouseButtonInput, MouseWheel};
 use bevy_text::Font;
 use bevy_time::TimePlugin;
 use bevy_tweening::{AnimationSystem, TweeningPlugin};
-use bevy_window::{CursorLeft, CursorMoved, WindowResized, WindowScaleFactorChanged};
+use bevy_window::{
+    CursorLeft, CursorMoved, Ime, WindowFocused, WindowResized, WindowScaleFactorChanged,
+};
 
 use crate::{
-    OverlayStack,
+    AppBevyXilemExt, OverlayStack,
     components::register_builtin_ui_components,
     events::UiEventQueue,
     fonts::{XilemFontBridge, collect_bevy_font_assets, sync_fonts_to_xilem},
@@ -64,6 +67,7 @@ impl Plugin for BevyXilemPlugin {
         }
 
         app.add_plugins((TimePlugin, TweeningPlugin, BevyXilemBuiltinsPlugin))
+            .register_xilem_font_bytes(bevy_xilem_icons::LUCIDE_FONT_BYTES)
             .init_asset::<StyleSheet>()
             .init_asset_loader::<StyleSheetRonLoader>()
             .init_resource::<UiProjectorRegistry>()
@@ -84,8 +88,11 @@ impl Plugin for BevyXilemPlugin {
             .init_non_send_resource::<MasonryRuntime>()
             .add_message::<CursorMoved>()
             .add_message::<CursorLeft>()
+            .add_message::<KeyboardInput>()
             .add_message::<MouseButtonInput>()
             .add_message::<MouseWheel>()
+            .add_message::<Ime>()
+            .add_message::<WindowFocused>()
             .add_message::<WindowResized>()
             .add_message::<WindowScaleFactorChanged>()
             .add_message::<AssetEvent<Font>>()

@@ -70,6 +70,10 @@ impl Default for ShowcaseState {
 struct ShowcaseRuntime {
     root: Entity,
     status_label: Entity,
+    pages_tab_bar: Entity,
+    sidebar_components_btn: Entity,
+    sidebar_theming_btn: Entity,
+    sidebar_localization_btn: Entity,
     components_combo: Entity,
     dialog_demo_btn: Entity,
     theme_mode_combo: Entity,
@@ -203,9 +207,30 @@ fn setup_showcase(mut commands: Commands) {
         ))
         .id();
 
-    commands.spawn((UiLabel::new("• Components"), ChildOf(sidebar)));
-    commands.spawn((UiLabel::new("• Theming"), ChildOf(sidebar)));
-    commands.spawn((UiLabel::new("• Localization & CJK"), ChildOf(sidebar)));
+    let sidebar_components_btn = commands
+        .spawn((
+            UiButton::new("Components"),
+            StyleClass(vec![
+                "showcase.sidebar.button".to_string(),
+                "showcase.sidebar.button.active".to_string(),
+            ]),
+            ChildOf(sidebar),
+        ))
+        .id();
+    let sidebar_theming_btn = commands
+        .spawn((
+            UiButton::new("Theming"),
+            StyleClass(vec!["showcase.sidebar.button".to_string()]),
+            ChildOf(sidebar),
+        ))
+        .id();
+    let sidebar_localization_btn = commands
+        .spawn((
+            UiButton::new("Localization & CJK"),
+            StyleClass(vec!["showcase.sidebar.button".to_string()]),
+            ChildOf(sidebar),
+        ))
+        .id();
     commands.spawn((
         UiLabel::new("Use the tabs on the right to switch pages."),
         ChildOf(sidebar),
@@ -647,6 +672,10 @@ fn setup_showcase(mut commands: Commands) {
     commands.insert_resource(ShowcaseRuntime {
         root,
         status_label,
+        pages_tab_bar: pages,
+        sidebar_components_btn,
+        sidebar_theming_btn,
+        sidebar_localization_btn,
         components_combo,
         dialog_demo_btn,
         theme_mode_combo,
@@ -769,6 +798,42 @@ fn setup_showcase_styles(mut style_sheet: ResMut<StyleSheet>) {
             colors: ColorStyle {
                 bg: Some(Color::from_rgba8(255, 255, 255, 10)),
                 border: Some(Color::from_rgb8(0x3D, 0x4D, 0x70)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "showcase.sidebar.button",
+        StyleSetter {
+            layout: LayoutStyle {
+                padding: Some(8.0),
+                corner_radius: Some(6.0),
+                border_width: Some(1.0),
+                ..LayoutStyle::default()
+            },
+            colors: ColorStyle {
+                bg: Some(Color::from_rgba8(255, 255, 255, 18)),
+                hover_bg: Some(Color::from_rgba8(255, 255, 255, 34)),
+                pressed_bg: Some(Color::from_rgba8(255, 255, 255, 42)),
+                border: Some(Color::from_rgb8(0x4B, 0x5C, 0x82)),
+                text: Some(Color::from_rgb8(0xE8, 0xEE, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    style_sheet.set_class(
+        "showcase.sidebar.button.active",
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x2F, 0x66, 0xE5)),
+                hover_bg: Some(Color::from_rgb8(0x3C, 0x73, 0xF1)),
+                pressed_bg: Some(Color::from_rgb8(0x25, 0x57, 0xC5)),
+                border: Some(Color::from_rgb8(0x2F, 0x66, 0xE5)),
+                text: Some(Color::from_rgb8(0xF8, 0xFB, 0xFF)),
                 ..ColorStyle::default()
             },
             ..StyleSetter::default()
@@ -1004,30 +1069,59 @@ fn drain_showcase_events(world: &mut World) {
             continue;
         }
 
-        if event.entity == rt.toast_info_btn {
+        if event.entity == rt.sidebar_components_btn {
+            set_showcase_page(world, rt, 0);
+            update_status(
+                world,
+                rt.status_label,
+                "Sidebar: switched to Components".to_string(),
+            );
+        } else if event.entity == rt.sidebar_theming_btn {
+            set_showcase_page(world, rt, 1);
+            update_status(
+                world,
+                rt.status_label,
+                "Sidebar: switched to Theming".to_string(),
+            );
+        } else if event.entity == rt.sidebar_localization_btn {
+            set_showcase_page(world, rt, 2);
+            update_status(
+                world,
+                rt.status_label,
+                "Sidebar: switched to Localization & CJK".to_string(),
+            );
+        } else if event.entity == rt.toast_info_btn {
             spawn_in_overlay_root(
                 world,
-                (UiToast::new(
-                    "Info: Components page interaction successful.",
-                ),),
+                (
+                    UiToast::new("Info: Components page interaction successful.")
+                        .with_duration(2.8)
+                        .with_min_width(260.0)
+                        .with_max_width(440.0),
+                ),
             );
         } else if event.entity == rt.toast_success_btn {
             spawn_in_overlay_root(
                 world,
-                (UiToast::new("Success: UI action completed.").with_kind(ToastKind::Success),),
+                (UiToast::new("Success: UI action completed.")
+                    .with_kind(ToastKind::Success)
+                    .with_duration(2.4)
+                    .with_show_close_button(false),),
             );
         } else if event.entity == rt.toast_warning_btn {
             spawn_in_overlay_root(
                 world,
-                (
-                    UiToast::new("Warning: Double-check this config.")
-                        .with_kind(ToastKind::Warning),
-                ),
+                (UiToast::new("Warning: Double-check this config.")
+                    .with_kind(ToastKind::Warning)
+                    .with_duration(3.6),),
             );
         } else if event.entity == rt.toast_error_btn {
             spawn_in_overlay_root(
                 world,
-                (UiToast::new("Error: Simulated failure toast.").with_kind(ToastKind::Error),),
+                (UiToast::new("Error: Simulated failure toast.")
+                    .with_kind(ToastKind::Error)
+                    .with_duration(0.0)
+                    .with_min_width(320.0),),
             );
         } else if event.entity == rt.theme_primary_btn {
             update_status(
@@ -1091,6 +1185,9 @@ fn drain_showcase_events(world: &mut World) {
         .resource_mut::<UiEventQueue>()
         .drain_actions::<UiTabChanged>();
     for event in tab_events {
+        if event.action.bar == rt.pages_tab_bar {
+            set_showcase_page(world, rt, event.action.active);
+        }
         let msg = format!("Tab: switched to index {}", event.action.active);
         update_status(world, rt.status_label, msg);
     }
@@ -1219,6 +1316,30 @@ fn drain_showcase_events(world: &mut World) {
 fn update_status(world: &mut World, _label_entity: Entity, text: String) {
     if let Some(mut state) = world.get_resource_mut::<ShowcaseState>() {
         state.last_event = text;
+    }
+}
+
+fn set_showcase_page(world: &mut World, rt: ShowcaseRuntime, page: usize) {
+    if let Some(mut tabs) = world.get_mut::<UiTabBar>(rt.pages_tab_bar) {
+        tabs.active = page.min(tabs.tabs.len().saturating_sub(1));
+    }
+
+    let buttons = [
+        (rt.sidebar_components_btn, 0usize),
+        (rt.sidebar_theming_btn, 1usize),
+        (rt.sidebar_localization_btn, 2usize),
+    ];
+
+    for (button, index) in buttons {
+        let classes = if index == page {
+            vec![
+                "showcase.sidebar.button".to_string(),
+                "showcase.sidebar.button.active".to_string(),
+            ]
+        } else {
+            vec!["showcase.sidebar.button".to_string()]
+        };
+        world.entity_mut(button).insert(StyleClass(classes));
     }
 }
 

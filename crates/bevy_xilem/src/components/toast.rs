@@ -24,6 +24,16 @@ pub struct UiToast {
     pub duration_secs: f32,
     /// Elapsed display time. Updated each frame by the toast tick system.
     pub elapsed_secs: f32,
+    /// Preferred overlay placement for this toast.
+    pub placement: OverlayPlacement,
+    /// Whether toast placement may auto-flip when it would overflow.
+    pub auto_flip_placement: bool,
+    /// Whether the close button should be rendered.
+    pub show_close_button: bool,
+    /// Minimum preferred toast width.
+    pub min_width: f64,
+    /// Maximum preferred toast width.
+    pub max_width: f64,
 }
 
 impl UiToast {
@@ -34,6 +44,11 @@ impl UiToast {
             kind: ToastKind::Info,
             duration_secs: 3.0,
             elapsed_secs: 0.0,
+            placement: OverlayPlacement::BottomEnd,
+            auto_flip_placement: false,
+            show_close_button: true,
+            min_width: 220.0,
+            max_width: 420.0,
         }
     }
 
@@ -48,6 +63,36 @@ impl UiToast {
         self.duration_secs = duration_secs;
         self
     }
+
+    #[must_use]
+    pub fn with_placement(mut self, placement: OverlayPlacement) -> Self {
+        self.placement = placement;
+        self
+    }
+
+    #[must_use]
+    pub fn with_auto_flip_placement(mut self, auto_flip: bool) -> Self {
+        self.auto_flip_placement = auto_flip;
+        self
+    }
+
+    #[must_use]
+    pub fn with_show_close_button(mut self, show: bool) -> Self {
+        self.show_close_button = show;
+        self
+    }
+
+    #[must_use]
+    pub fn with_min_width(mut self, width: f64) -> Self {
+        self.min_width = width.max(0.0);
+        self
+    }
+
+    #[must_use]
+    pub fn with_max_width(mut self, width: f64) -> Self {
+        self.max_width = width.max(0.0);
+        self
+    }
 }
 
 impl UiComponentTemplate for UiToast {
@@ -59,9 +104,9 @@ impl UiComponentTemplate for UiToast {
 
         if world.get::<OverlayConfig>(entity).is_none() {
             world.entity_mut(entity).insert(OverlayConfig {
-                placement: OverlayPlacement::Bottom,
+                placement: toast.placement,
                 anchor: None,
-                auto_flip: false,
+                auto_flip: toast.auto_flip_placement,
             });
         }
 

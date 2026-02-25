@@ -1053,6 +1053,12 @@ fn ensure_overlay_defaults_assigns_dialog_dropdown_and_toast_configs() {
     let toast = world
         .spawn((crate::UiToast::new("Saved").with_duration(1.25),))
         .id();
+    let custom_toast = world
+        .spawn((crate::UiToast::new("Pinned top")
+            .with_placement(crate::OverlayPlacement::TopEnd)
+            .with_auto_flip_placement(true)
+            .with_duration(0.0),))
+        .id();
     let persistent_toast = world
         .spawn((
             crate::UiToast::new("Pinned").with_duration(0.0),
@@ -1100,7 +1106,7 @@ fn ensure_overlay_defaults_assigns_dialog_dropdown_and_toast_configs() {
     let toast_config = world
         .get::<crate::OverlayConfig>(toast)
         .expect("toast should receive overlay config");
-    assert_eq!(toast_config.placement, crate::OverlayPlacement::Bottom);
+    assert_eq!(toast_config.placement, crate::OverlayPlacement::BottomEnd);
     assert_eq!(toast_config.anchor, None);
     assert!(!toast_config.auto_flip);
 
@@ -1119,6 +1125,16 @@ fn ensure_overlay_defaults_assigns_dialog_dropdown_and_toast_configs() {
         .get::<crate::AutoDismiss>(toast)
         .expect("toast should receive auto-dismiss timer");
     assert_eq!(dismiss.timer.duration(), Duration::from_secs_f32(1.25));
+
+    let custom_toast_config = world
+        .get::<crate::OverlayConfig>(custom_toast)
+        .expect("custom toast should receive overlay config");
+    assert_eq!(
+        custom_toast_config.placement,
+        crate::OverlayPlacement::TopEnd
+    );
+    assert!(custom_toast_config.auto_flip);
+    assert!(world.get::<crate::AutoDismiss>(custom_toast).is_none());
 
     assert!(world.get::<crate::AutoDismiss>(persistent_toast).is_none());
 }
@@ -1601,6 +1617,68 @@ fn handle_global_overlay_clicks_closes_when_clicking_anchor_and_suppresses_point
         .resource_mut::<crate::OverlayPointerRoutingState>();
     assert!(routing.take_suppressed_press(window_entity, MouseButton::Left));
     assert!(!routing.take_suppressed_release(window_entity, MouseButton::Left));
+}
+
+#[test]
+fn handle_global_overlay_clicks_closes_menu_panel_anchor_and_resets_open_state() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    let mut window = Window::default();
+    window.resolution.set(900.0, 680.0);
+    let window_entity = app.world_mut().spawn((window, PrimaryWindow)).id();
+
+    let root = app.world_mut().spawn((UiRoot, crate::UiFlexColumn)).id();
+    let menu_bar = app
+        .world_mut()
+        .spawn((crate::UiMenuBar, ChildOf(root)))
+        .id();
+    let menu_item = app
+        .world_mut()
+        .spawn((
+            crate::UiMenuBarItem::new(
+                "File",
+                [
+                    crate::UiMenuItem::new("Open", "file.open"),
+                    crate::UiMenuItem::new("Save", "file.save"),
+                ],
+            ),
+            ChildOf(menu_bar),
+        ))
+        .id();
+
+    app.update();
+
+    app.world()
+        .resource::<UiEventQueue>()
+        .push_typed(menu_item, crate::OverlayUiAction::ToggleMenuBarItem);
+    app.update();
+
+    let panel = {
+        let mut query = app.world_mut().query::<(Entity, &crate::UiMenuItemPanel)>();
+        query
+            .iter(app.world())
+            .find_map(|(entity, panel)| (panel.anchor == menu_item).then_some(entity))
+            .expect("menu toggle should spawn menu panel")
+    };
+
+    assert!(
+        app.world()
+            .get::<crate::UiMenuBarItem>(menu_item)
+            .expect("menu item should exist")
+            .is_open
+    );
+
+    let anchor_center = widget_center_for_entity(&app, menu_item);
+    run_global_overlay_click(&mut app, window_entity, anchor_center);
+
+    assert!(app.world().get_entity(panel).is_err());
+    assert!(
+        !app.world()
+            .get::<crate::UiMenuBarItem>(menu_item)
+            .expect("menu item should remain")
+            .is_open
+    );
 }
 
 #[test]
