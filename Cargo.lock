@@ -1125,9 +1125,9 @@ dependencies = [
  "bevy_tweening",
  "bevy_window",
  "bevy_winit",
- "bevy_xilem-icons",
  "crossbeam-queue",
  "fluent",
+ "lucide-icons",
  "masonry",
  "masonry_winit",
  "num-traits",
@@ -1143,13 +1143,6 @@ dependencies = [
  "xilem",
  "xilem_core",
  "xilem_masonry",
-]
-
-[[package]]
-name = "bevy_xilem-icons"
-version = "0.1.0"
-dependencies = [
- "lucide-icons",
 ]
 
 [[package]]

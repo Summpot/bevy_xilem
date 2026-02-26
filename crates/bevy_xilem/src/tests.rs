@@ -764,6 +764,11 @@ fn xilem_font_bridge_deduplicates_same_font_bytes() {
 }
 
 #[test]
+fn lucide_font_family_matches_upstream_identifier() {
+    assert_eq!(crate::LUCIDE_FONT_FAMILY, "lucide");
+}
+
+#[test]
 fn register_i18n_bundle_stores_locale_font_stacks_in_app_i18n() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)

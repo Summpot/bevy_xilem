@@ -9,7 +9,6 @@ autoexamples = false
 [dependencies]
 bevy_a11y.workspace = true
 bevy_app.workspace = true
-bevy_xilem-icons.workspace = true
 bevy_asset.workspace = true
 bevy_ecs.workspace = true
 bevy_input.workspace = true
@@ -36,6 +35,7 @@ vello.workspace = true
 tracing.workspace = true
 serde.workspace = true
 ron.workspace = true
+lucide-icons.workspace = true
 
 [dev-dependencies]
 num-traits.workspace = true

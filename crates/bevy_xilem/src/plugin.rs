@@ -67,7 +67,7 @@ impl Plugin for BevyXilemPlugin {
         }
 
         app.add_plugins((TimePlugin, TweeningPlugin, BevyXilemBuiltinsPlugin))
-            .register_xilem_font_bytes(bevy_xilem_icons::LUCIDE_FONT_BYTES)
+            .register_xilem_font_bytes(crate::icons::LUCIDE_FONT_BYTES)
             .init_asset::<StyleSheet>()
             .init_asset_loader::<StyleSheetRonLoader>()
             .init_resource::<UiProjectorRegistry>()

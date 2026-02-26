@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
 members = [
-	"crates/bevy_xilem-icons",
 	"crates/bevy_xilem",
 	"examples/async_downloader",
 	"examples/calculator",
@@ -22,7 +21,6 @@ edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-bevy_xilem-icons = { path = "crates/bevy_xilem-icons" }
 bevy_a11y = { version = "0.18", default-features = false }
 bevy_app = { version = "0.18", default-features = false, features = ["std"] }
 bevy_asset = { version = "0.18", default-features = false }
@@ -54,6 +52,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 bevy_reflect = { version = "0.18", default-features = false }
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
+lucide-icons = "0.575.0"
 
 [patch.crates-io]
 bevy = { path = "third_party/bevy" }

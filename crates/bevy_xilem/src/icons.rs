@@ -1,7 +1,9 @@
 #![forbid(unsafe_code)]
 
 /// Preferred family name exposed by the bundled Lucide font.
-pub const LUCIDE_FONT_FAMILY: &str = "Lucide Icons";
+///
+/// `lucide-icons` itself uses this family identifier in its own integration code.
+pub const LUCIDE_FONT_FAMILY: &str = "lucide";
 
 /// Raw TrueType bytes for Lucide glyph rendering.
 pub const LUCIDE_FONT_BYTES: &[u8] = lucide_icons::LUCIDE_FONT_BYTES;

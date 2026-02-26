@@ -4,10 +4,10 @@ use super::core::UiView;
 use crate::{
     ecs::LocalizeText,
     i18n::AppI18n,
+    icons::{BevyXilemIcon, LUCIDE_FONT_FAMILY},
     styling::{ResolvedStyle, apply_label_style},
 };
 use bevy_ecs::prelude::*;
-use bevy_xilem_icons::BevyXilemIcon;
 use masonry::layout::{Dim, Length};
 use xilem_masonry::style::Style as _;
 use xilem_masonry::view::{label, sized_box};
@@ -33,7 +33,7 @@ pub(crate) fn vector_icon(icon: VectorIcon, size_px: f64, color: xilem::Color) -
     let mut icon_style = ResolvedStyle::default();
     icon_style.colors.text = Some(color);
     icon_style.text.size = (size_px * 0.90) as f32;
-    icon_style.font_family = Some(vec![bevy_xilem_icons::LUCIDE_FONT_FAMILY.to_string()]);
+    icon_style.font_family = Some(vec![LUCIDE_FONT_FAMILY.to_string()]);
 
     Arc::new(
         sized_box(apply_label_style(

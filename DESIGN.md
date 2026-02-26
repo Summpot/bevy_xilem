@@ -173,9 +173,10 @@ trigger buttons in a sticky pressed visual/input state.
 ## 8. Iconography
 
 Built-in directional indicators and radio markers are provided through a dedicated
-`bevy_xilem-icons` wrapper crate backed by `lucide-rs` icon data/font assets (instead of
-hand-drawn canvas paths). The plugin registers bundled Lucide font bytes at startup so icon
-rendering remains stable across locales and system font configurations.
+`bevy_xilem::icons` module backed by `lucide-icons` icon data/font assets (instead of
+hand-drawn canvas paths). The plugin registers bundled Lucide font bytes at startup and icon
+text styling uses the upstream Lucide family name (`"lucide"`) so rendering remains stable
+across locales and system font configurations.
 
 ## 9. Assets and Internationalization
 
