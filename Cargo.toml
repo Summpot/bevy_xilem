@@ -39,9 +39,9 @@ bevy_embedded_assets = "0.15.0"
 crossbeam-queue = "0.3"
 tokio = { version = "1.49", features = ["rt-multi-thread"] }
 num-traits = "0.2"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.13", default-features = false, features = ["blocking", "rustls"] }
 rfd = "0.17"
-fluent = "0.16"
+fluent = "0.17"
 unic-langid = { version = "0.9", features = ["macros"] }
 masonry = { path = "third_party/xilem/masonry" }
 masonry_winit = { path = "third_party/xilem/masonry_winit" }
@@ -53,7 +53,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 bevy_reflect = { version = "0.18", default-features = false }
 serde = { version = "1", features = ["derive"] }
-ron = "0.10"
+ron = "0.12"
 
 [patch.crates-io]
 bevy = { path = "third_party/bevy" }
