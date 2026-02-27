@@ -19,7 +19,7 @@ use bevy_xilem::{
     resolve_style, resolve_style_for_classes, run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
-        masonry::layout::Length,
+        masonry::layout::{Dim, Length},
         style::Style as _,
         view::{FlexExt as _, flex_col, label},
         winit::{dpi::LogicalSize, error::EventLoopError},
@@ -156,7 +156,10 @@ fn project_showcase_root(_: &ShowcaseRoot, ctx: ProjectionCtx<'_>) -> UiView {
         .collect::<Vec<_>>();
 
     Arc::new(apply_widget_style(
-        flex_col(children).gap(Length::px(14.0)),
+        flex_col(children)
+            .gap(Length::px(14.0))
+            .width(Dim::Stretch)
+            .height(Dim::Stretch),
         &style,
     ))
 }
@@ -700,17 +703,6 @@ fn setup_showcase_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..LayoutStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.22 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "theme.dark",
-        StyleSetter {
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x0D, 0x12, 0x1E)),
-                ..ColorStyle::default()
-            },
             ..StyleSetter::default()
         },
     );

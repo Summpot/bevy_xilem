@@ -510,6 +510,56 @@ fn selector_type_rule_matches_component_type() {
 }
 
 #[test]
+fn ui_root_background_uses_stylesheet_rules_and_class_overrides() {
+    let mut world = World::new();
+    let mut sheet = StyleSheet::default();
+
+    let base_bg = crate::xilem::Color::from_rgb8(0x22, 0x26, 0x2F);
+    let light_bg = crate::xilem::Color::from_rgb8(0xF4, 0xF7, 0xFF);
+
+    sheet.add_rule(StyleRule::new(
+        Selector::of_type::<UiRoot>(),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(base_bg),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    sheet.set_class(
+        "theme.light",
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(light_bg),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    );
+
+    world.insert_resource(sheet);
+
+    let root = world
+        .spawn((UiRoot, crate::StyleClass(vec!["theme.dark".to_string()])))
+        .id();
+
+    crate::mark_style_dirty(&mut world);
+    crate::sync_style_targets(&mut world);
+    assert_eq!(resolve_style(&world, root).colors.bg, Some(base_bg));
+
+    world.clear_trackers();
+    world
+        .entity_mut(root)
+        .insert(crate::StyleClass(vec!["theme.light".to_string()]));
+
+    crate::mark_style_dirty(&mut world);
+    crate::sync_style_targets(&mut world);
+    assert_eq!(resolve_style(&world, root).colors.bg, Some(light_bg));
+}
+
+#[test]
 fn selector_descendant_rule_matches_nested_entity_and_updates_on_ancestor_change() {
     let mut world = World::new();
     let mut sheet = StyleSheet::default();
