@@ -2,22 +2,23 @@ use std::sync::Arc;
 
 use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_xilem::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, BuiltinUiAction, ColorStyle, HasTooltip,
-    LayoutStyle, LocalizeText, ProjectionCtx, StyleClass, StyleSetter, StyleSheet, StyleTransition,
-    SyncAssetSource, SyncTextSource, TextStyle, ToastKind, UiButton, UiCheckbox, UiCheckboxChanged,
-    UiColorPicker, UiColorPickerChanged, UiComboBox, UiComboBoxChanged, UiComboOption,
-    UiDatePicker, UiDatePickerChanged, UiDialog, UiEventQueue, UiFlexColumn, UiFlexRow, UiGroupBox,
-    UiLabel, UiMenuBar, UiMenuBarItem, UiMenuItem, UiMenuItemSelected, UiRadioGroup,
-    UiRadioGroupChanged, UiRoot, UiScrollView, UiScrollViewChanged, UiSlider, UiSliderChanged,
-    UiSpinner, UiSplitPane, UiTabBar, UiTabChanged, UiTable, UiTextInput, UiTextInputChanged,
-    UiToast, UiTreeNode, UiTreeNodeToggled, UiView, apply_label_style, apply_widget_style,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, BuiltinUiAction, ColorStyle, FluentThemeVariant,
+    HasTooltip, LayoutStyle, LocalizeText, ProjectionCtx, Selector, StyleClass, StyleRule,
+    StyleSetter, StyleSheet, StyleTransition, SyncAssetSource, SyncTextSource, TextStyle,
+    ToastKind, UiButton, UiCheckbox, UiCheckboxChanged, UiColorPicker, UiColorPickerChanged,
+    UiComboBox, UiComboBoxChanged, UiComboOption, UiDatePicker, UiDatePickerChanged, UiDialog,
+    UiEventQueue, UiFlexColumn, UiFlexRow, UiGroupBox, UiLabel, UiMenuBar, UiMenuBarItem,
+    UiMenuItem, UiMenuItemSelected, UiRadioGroup, UiRadioGroupChanged, UiRoot, UiScrollView,
+    UiScrollViewChanged, UiSlider, UiSliderChanged, UiSpinner, UiSplitPane, UiTabBar, UiTabChanged,
+    UiTable, UiTextInput, UiTextInputChanged, UiToast, UiTreeNode, UiTreeNodeToggled, UiView,
+    apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_asset::AssetPlugin,
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_math::Vec2,
     bevy_text::TextPlugin,
-    install_embedded_fluent_dark_theme, install_embedded_fluent_light_theme, resolve_style,
-    resolve_style_for_classes, run_app_with_window_options, spawn_in_overlay_root,
+    install_embedded_fluent_theme_variant, resolve_style, resolve_style_for_classes,
+    run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
         masonry::layout::{Dim, Length},
@@ -41,6 +42,20 @@ impl ThemeMode {
             "fluent_dark" => Some(Self::FluentDark),
             "fluent_light" => Some(Self::FluentLight),
             _ => None,
+        }
+    }
+
+    const fn variant(self) -> FluentThemeVariant {
+        match self {
+            Self::FluentDark => FluentThemeVariant::Dark,
+            Self::FluentLight => FluentThemeVariant::Light,
+        }
+    }
+
+    const fn root_variant_class(self) -> &'static str {
+        match self {
+            Self::FluentDark => "showcase.theme.fluent_dark",
+            Self::FluentLight => "showcase.theme.fluent_light",
         }
     }
 }
@@ -134,8 +149,11 @@ fn ja_cjk_fallback_font_stack() -> Vec<&'static str> {
     ]
 }
 
-fn root_classes() -> StyleClass {
-    StyleClass(vec!["showcase.root".to_string()])
+fn root_classes(theme: ThemeMode) -> StyleClass {
+    StyleClass(vec![
+        "showcase.root".to_string(),
+        theme.root_variant_class().to_string(),
+    ])
 }
 
 fn project_showcase_root(_: &ShowcaseRoot, ctx: ProjectionCtx<'_>) -> UiView {
@@ -167,7 +185,9 @@ fn project_status_display(_: &StatusDisplay, ctx: ProjectionCtx<'_>) -> UiView {
 }
 
 fn setup_showcase(mut commands: Commands) {
-    let root = commands.spawn((UiRoot, ShowcaseRoot, root_classes())).id();
+    let root = commands
+        .spawn((UiRoot, ShowcaseRoot, root_classes(ThemeMode::FluentDark)))
+        .id();
 
     commands.spawn((
         UiLabel::new("UI Showcase (Components / Theming / Localization & CJK)"),
@@ -1022,6 +1042,165 @@ fn setup_showcase_styles(mut style_sheet: ResMut<StyleSheet>) {
             ..StyleSetter::default()
         },
     );
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_light"),
+            Selector::class("showcase.title"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_light"),
+            Selector::class("showcase.status"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgba8(0x00, 0x00, 0x00, 10)),
+                border: Some(Color::from_rgb8(0xD2, 0xDB, 0xEA)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_light"),
+            Selector::class("showcase.status.text"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0x46, 0x56, 0x75)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_light"),
+            Selector::class("showcase.sidebar"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgba8(255, 255, 255, 220)),
+                border: Some(Color::from_rgb8(0xD0, 0xDA, 0xEC)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_light"),
+            Selector::class("showcase.sidebar.button"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgba8(0x0F, 0x6C, 0xBD, 0x10)),
+                hover_bg: Some(Color::from_rgba8(0x0F, 0x6C, 0xBD, 0x1E)),
+                pressed_bg: Some(Color::from_rgba8(0x0F, 0x6C, 0xBD, 0x28)),
+                border: Some(Color::from_rgb8(0xC6, 0xD4, 0xEA)),
+                text: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_light"),
+            Selector::class("showcase.page.scroll"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgba8(255, 255, 255, 200)),
+                border: Some(Color::from_rgb8(0xD1, 0xDB, 0xEE)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_light"),
+            Selector::class("showcase.theme.combo"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                hover_bg: Some(Color::from_rgb8(0xF5, 0xF7, 0xFB)),
+                pressed_bg: Some(Color::from_rgb8(0xE9, 0xEE, 0xF8)),
+                border: Some(Color::from_rgb8(0xC3, 0xD1, 0xEA)),
+                text: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_light"),
+            Selector::class("showcase.locale.combo"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                hover_bg: Some(Color::from_rgb8(0xF5, 0xF7, 0xFB)),
+                pressed_bg: Some(Color::from_rgb8(0xE9, 0xEE, 0xF8)),
+                border: Some(Color::from_rgb8(0xC3, 0xD1, 0xEA)),
+                text: Some(Color::from_rgb8(0x1B, 0x1B, 0x1B)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_light"),
+            Selector::class("showcase.theme.button.outline"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::TRANSPARENT),
+                hover_bg: Some(Color::from_rgba8(0x0F, 0x6C, 0xBD, 0x1C)),
+                pressed_bg: Some(Color::from_rgba8(0x0F, 0x6C, 0xBD, 0x2E)),
+                border: Some(Color::from_rgb8(0x0F, 0x6C, 0xBD)),
+                text: Some(Color::from_rgb8(0x0F, 0x54, 0x8C)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_light"),
+            Selector::class("showcase.cjk.text"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0x1F, 0x29, 0x37)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
 }
 
 fn drain_showcase_events(world: &mut World) {
@@ -1257,10 +1436,7 @@ fn drain_showcase_events(world: &mut World) {
 
         if event.action.combo == rt.theme_mode_combo {
             if let Some(theme) = ThemeMode::from_combo_value(event.action.value.as_str()) {
-                let install_result = match theme {
-                    ThemeMode::FluentDark => install_embedded_fluent_dark_theme(world),
-                    ThemeMode::FluentLight => install_embedded_fluent_light_theme(world),
-                };
+                let install_result = install_embedded_fluent_theme_variant(world, theme.variant());
 
                 if let Err(error) = install_result {
                     update_status(
@@ -1272,7 +1448,7 @@ fn drain_showcase_events(world: &mut World) {
                 }
 
                 world.resource_mut::<ShowcaseState>().theme = theme;
-                world.entity_mut(rt.root).insert(root_classes());
+                world.entity_mut(rt.root).insert(root_classes(theme));
                 update_status(
                     world,
                     rt.status_label,

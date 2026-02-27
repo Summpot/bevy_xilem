@@ -1,8 +1,5 @@
 use crate::{
-    ecs::{
-        AnchoredTo, OverlayAnchorRect, OverlayComputedPosition, PartComboBoxDisplay, UiComboBox,
-        UiDropdownMenu,
-    },
+    ecs::{AnchoredTo, OverlayAnchorRect, OverlayComputedPosition, UiComboBox, UiDropdownMenu},
     overlay::OverlayUiAction,
     styling::{
         apply_direct_widget_style, apply_flex_alignment, apply_label_style, apply_widget_style,
@@ -10,7 +7,6 @@ use crate::{
     },
     views::{ecs_button_with_child, opaque_hitbox_for_entity},
 };
-use bevy_ecs::hierarchy::Children;
 use masonry::layout::{Dim, Length};
 use std::sync::Arc;
 use xilem::{palette::css::BLACK, style::BoxShadow, style::Style as _};
@@ -333,6 +329,20 @@ pub(crate) fn select_dropdown_origin(
     (placement, x, y)
 }
 
+fn combo_box_display_text(combo_box: &UiComboBox, world: &bevy_ecs::world::World) -> String {
+    combo_box
+        .clamped_selected()
+        .and_then(|idx| combo_box.options.get(idx))
+        .map(|option| translate_text(world, option.label_key.as_deref(), &option.label))
+        .unwrap_or_else(|| {
+            translate_text(
+                world,
+                combo_box.placeholder_key.as_deref(),
+                &combo_box.placeholder,
+            )
+        })
+}
+
 pub(crate) fn project_combo_box(combo_box: &UiComboBox, ctx: ProjectionCtx<'_>) -> UiView {
     let mut style = resolve_style(ctx.world, ctx.entity);
 
@@ -346,33 +356,7 @@ pub(crate) fn project_combo_box(combo_box: &UiComboBox, ctx: ProjectionCtx<'_>) 
         style.font_family = Some(stack);
     }
 
-    let selected_label = combo_box
-        .clamped_selected()
-        .and_then(|idx| combo_box.options.get(idx))
-        .map(|option| translate_text(ctx.world, option.label_key.as_deref(), &option.label))
-        .unwrap_or_else(|| {
-            translate_text(
-                ctx.world,
-                combo_box.placeholder_key.as_deref(),
-                &combo_box.placeholder,
-            )
-        });
-
-    let child_entities = ctx
-        .world
-        .get::<Children>(ctx.entity)
-        .map(|children| children.iter().copied().collect::<Vec<_>>())
-        .unwrap_or_default();
-
-    let display_text = child_entities
-        .iter()
-        .find_map(|entity| {
-            ctx.world
-                .get::<PartComboBoxDisplay>(*entity)
-                .and_then(|_| ctx.world.get::<crate::UiLabel>(*entity))
-                .map(|label| label.text.clone())
-        })
-        .unwrap_or_else(|| selected_label.clone());
+    let selected_label = combo_box_display_text(combo_box, ctx.world);
 
     let icon_color = style
         .colors
@@ -385,7 +369,7 @@ pub(crate) fn project_combo_box(combo_box: &UiComboBox, ctx: ProjectionCtx<'_>) 
     };
 
     let button_content = flex_row(vec![
-        apply_label_style(label(display_text), &style)
+        apply_label_style(label(selected_label), &style)
             .flex(1.0)
             .into_any_flex(),
         chevron.into_any_flex(),
@@ -535,10 +519,11 @@ pub(crate) fn project_dropdown_menu(_: &UiDropdownMenu, ctx: ProjectionCtx<'_>) 
 #[cfg(test)]
 mod tests {
     use super::{
-        DROPDOWN_MAX_VIEWPORT_HEIGHT, OverlayAnchorRect, UiDropdownPlacement,
-        estimate_dropdown_surface_width_px, estimate_dropdown_viewport_height_px,
-        select_dropdown_origin,
+        DROPDOWN_MAX_VIEWPORT_HEIGHT, OverlayAnchorRect, UiComboBox, UiDropdownPlacement,
+        combo_box_display_text, estimate_dropdown_surface_width_px,
+        estimate_dropdown_viewport_height_px, select_dropdown_origin,
     };
+    use crate::UiComboOption;
 
     #[test]
     fn dropdown_width_estimation_respects_anchor_min_width() {
@@ -630,5 +615,27 @@ mod tests {
         );
 
         assert_eq!(placement, UiDropdownPlacement::LeftStart);
+    }
+
+    #[test]
+    fn combo_box_display_text_uses_selected_option_label() {
+        let world = bevy_ecs::world::World::new();
+        let mut combo = UiComboBox::new(vec![
+            UiComboOption::new("one", "One"),
+            UiComboOption::new("two", "Two"),
+        ])
+        .with_placeholder("Pick");
+
+        combo.selected = 1;
+        assert_eq!(combo_box_display_text(&combo, &world), "Two");
+    }
+
+    #[test]
+    fn combo_box_display_text_uses_placeholder_when_unselected() {
+        let world = bevy_ecs::world::World::new();
+        let combo =
+            UiComboBox::new(vec![UiComboOption::new("one", "One")]).with_placeholder("Pick one");
+
+        assert_eq!(combo_box_display_text(&combo, &world), "Pick one");
     }
 }

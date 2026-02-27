@@ -50,7 +50,7 @@ impl UiComboBox {
     pub fn new(options: Vec<UiComboOption>) -> Self {
         Self {
             options,
-            selected: 0,
+            selected: usize::MAX,
             is_open: false,
             placeholder: "Select".to_string(),
             placeholder_key: None,
@@ -95,11 +95,7 @@ impl UiComboBox {
 
     #[must_use]
     pub fn clamped_selected(&self) -> Option<usize> {
-        if self.options.is_empty() {
-            None
-        } else {
-            Some(self.selected.min(self.options.len() - 1))
-        }
+        (!self.options.is_empty() && self.selected < self.options.len()).then_some(self.selected)
     }
 }
 
@@ -164,5 +160,30 @@ impl UiComponentTemplate for UiComboBox {
 impl UiComponentTemplate for UiDropdownMenu {
     fn project(component: &Self, ctx: ProjectionCtx<'_>) -> UiView {
         crate::projection::dropdown::project_dropdown_menu(component, ctx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{UiComboBox, UiComboOption};
+
+    #[test]
+    fn combo_box_defaults_to_placeholder_selection_state() {
+        let combo = UiComboBox::new(vec![UiComboOption::new("one", "One")]);
+        assert_eq!(combo.clamped_selected(), None);
+    }
+
+    #[test]
+    fn combo_box_clamped_selection_rejects_out_of_range_indices() {
+        let mut combo = UiComboBox::new(vec![
+            UiComboOption::new("one", "One"),
+            UiComboOption::new("two", "Two"),
+        ]);
+
+        combo.selected = 1;
+        assert_eq!(combo.clamped_selected(), Some(1));
+
+        combo.selected = 9;
+        assert_eq!(combo.clamped_selected(), None);
     }
 }

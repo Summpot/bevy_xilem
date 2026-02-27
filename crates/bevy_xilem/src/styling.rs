@@ -580,6 +580,13 @@ pub const BUILTIN_FLUENT_DARK_THEME_RON: &str = include_str!("theme/fluent_dark.
 /// Embedded Fluent-inspired light palette overrides.
 pub const BUILTIN_FLUENT_LIGHT_THEME_RON: &str = include_str!("theme/fluent_light.ron");
 
+/// Built-in Fluent theme variants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FluentThemeVariant {
+    Dark,
+    Light,
+}
+
 /// Register built-in ECS component type aliases usable from RON selectors.
 pub fn register_builtin_style_type_aliases(world: &mut World) {
     world.init_resource::<StyleTypeRegistry>();
@@ -644,6 +651,17 @@ pub fn parse_stylesheet_ron(ron_text: &str) -> io::Result<StyleSheet> {
 /// Install the embedded Fluent-inspired dark baseline stylesheet.
 pub fn install_embedded_fluent_dark_theme(world: &mut World) -> io::Result<()> {
     merge_base_stylesheet_ron(world, BUILTIN_FLUENT_DARK_THEME_RON)
+}
+
+/// Install one of the embedded Fluent theme variants.
+pub fn install_embedded_fluent_theme_variant(
+    world: &mut World,
+    variant: FluentThemeVariant,
+) -> io::Result<()> {
+    match variant {
+        FluentThemeVariant::Dark => install_embedded_fluent_dark_theme(world),
+        FluentThemeVariant::Light => install_embedded_fluent_light_theme(world),
+    }
 }
 
 /// Install the embedded Fluent-inspired light theme.

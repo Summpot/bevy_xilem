@@ -123,8 +123,44 @@ fn embedded_fluent_light_theme_installs_and_overrides_surface_bg_token() {
     assert!(matches!(
         token,
         crate::TokenValue::Color(color)
-            if *color == crate::xilem::Color::from_rgb8(0xF3, 0xF3, 0xF3)
+            if *color == crate::xilem::Color::from_rgb8(0xFA, 0xF9, 0xF8)
     ));
+}
+
+#[test]
+fn embedded_fluent_theme_variant_api_switches_between_dark_and_light() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    crate::install_embedded_fluent_theme_variant(app.world_mut(), crate::FluentThemeVariant::Light)
+        .expect("light variant should install");
+
+    let light_surface = app
+        .world()
+        .resource::<crate::StyleSheet>()
+        .tokens
+        .get("surface-bg")
+        .cloned()
+        .expect("surface-bg should exist after light install");
+    assert_eq!(
+        light_surface,
+        crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0xFA, 0xF9, 0xF8))
+    );
+
+    crate::install_embedded_fluent_theme_variant(app.world_mut(), crate::FluentThemeVariant::Dark)
+        .expect("dark variant should install");
+
+    let dark_surface = app
+        .world()
+        .resource::<crate::StyleSheet>()
+        .tokens
+        .get("surface-bg")
+        .cloned()
+        .expect("surface-bg should exist after dark install");
+    assert_eq!(
+        dark_surface,
+        crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0x1F, 0x1F, 0x1F))
+    );
 }
 
 #[test]

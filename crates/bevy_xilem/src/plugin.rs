@@ -28,10 +28,11 @@ use crate::{
     },
     styling::{
         ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,
-        ActiveStyleSheetTokenNames, BaseStyleSheet, StyleAssetEventCursor, StyleSheet,
-        StyleSheetRonLoader, animate_style_transitions, ensure_active_stylesheet_asset_handle,
-        install_embedded_fluent_dark_theme, mark_style_dirty, register_builtin_style_type_aliases,
-        sync_style_targets, sync_stylesheet_asset_events, sync_ui_interaction_markers,
+        ActiveStyleSheetTokenNames, BaseStyleSheet, FluentThemeVariant, StyleAssetEventCursor,
+        StyleSheet, StyleSheetRonLoader, animate_style_transitions,
+        ensure_active_stylesheet_asset_handle, install_embedded_fluent_theme_variant,
+        mark_style_dirty, register_builtin_style_type_aliases, sync_style_targets,
+        sync_stylesheet_asset_events, sync_ui_interaction_markers,
     },
     synthesize::{SynthesizedUiViews, UiSynthesisStats, synthesize_ui},
     widget_actions::{
@@ -146,7 +147,7 @@ impl Plugin for BevyXilemPlugin {
         app.add_systems(Last, paint_masonry_ui);
 
         register_builtin_style_type_aliases(app.world_mut());
-        install_embedded_fluent_dark_theme(app.world_mut())
+        install_embedded_fluent_theme_variant(app.world_mut(), FluentThemeVariant::Dark)
             .unwrap_or_else(|error| panic!("failed to parse embedded Fluent dark theme: {error}"));
 
         {

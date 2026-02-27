@@ -144,7 +144,7 @@ Runtime styling distinguishes two explicit tiers: `BaseStyleSheet` (embedded Flu
 
 Baseline Fluent theme includes a global `Type("UiRoot")` preflight rule for app-surface background, and the `UiRoot` projector stretches to full viewport so root background styling consistently covers the entire window.
 
-`BevyXilemPlugin` boots with embedded **Fluent Dark** by default. Apps/examples can switch to embedded **Fluent Light** at runtime (`install_embedded_fluent_light_theme`), which keeps selector coverage from Fluent Dark and applies light token overrides for palette-level theme switching.
+`BevyXilemPlugin` boots with embedded **Fluent Dark** by default. Apps/examples can switch Fluent variants at runtime through `install_embedded_fluent_theme_variant(FluentThemeVariant::{Dark|Light})` (or call `install_embedded_fluent_light_theme` directly). Fluent Light keeps selector coverage from Fluent Dark and applies light token overrides for palette-level theme switching.
 
 ### 6.3 Hit-testing invariants
 
