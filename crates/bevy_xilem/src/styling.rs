@@ -574,11 +574,11 @@ fn upsert_rules_by_selector(sheet: &mut StyleSheet, incoming: Vec<StyleRule>) {
     }
 }
 
-/// Optional stylesheet asset path for apps that still prefer filesystem themes.
-pub const DEFAULT_STYLE_SHEET_ASSET_PATH: &str = "themes/default_theme.ron";
-
 /// Embedded baseline Fluent-inspired dark theme used with zero filesystem configuration.
 pub const BUILTIN_FLUENT_DARK_THEME_RON: &str = include_str!("theme/fluent_dark.ron");
+
+/// Embedded Fluent-inspired light palette overrides.
+pub const BUILTIN_FLUENT_LIGHT_THEME_RON: &str = include_str!("theme/fluent_light.ron");
 
 /// Register built-in ECS component type aliases usable from RON selectors.
 pub fn register_builtin_style_type_aliases(world: &mut World) {
@@ -644,6 +644,15 @@ pub fn parse_stylesheet_ron(ron_text: &str) -> io::Result<StyleSheet> {
 /// Install the embedded Fluent-inspired dark baseline stylesheet.
 pub fn install_embedded_fluent_dark_theme(world: &mut World) -> io::Result<()> {
     merge_base_stylesheet_ron(world, BUILTIN_FLUENT_DARK_THEME_RON)
+}
+
+/// Install the embedded Fluent-inspired light theme.
+///
+/// This keeps selector/rule coverage identical to Fluent dark by first installing
+/// the dark baseline and then applying light token overrides.
+pub fn install_embedded_fluent_light_theme(world: &mut World) -> io::Result<()> {
+    install_embedded_fluent_dark_theme(world)?;
+    merge_base_stylesheet_ron(world, BUILTIN_FLUENT_LIGHT_THEME_RON)
 }
 
 /// Merge a baseline stylesheet RON into the base + runtime tiers.

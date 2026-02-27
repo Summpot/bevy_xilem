@@ -94,7 +94,7 @@ fn plugin_auto_registers_builtin_ui_components_without_manual_setup() {
 }
 
 #[test]
-fn plugin_boots_with_embedded_default_theme_and_no_asset_path() {
+fn plugin_boots_with_embedded_fluent_dark_theme_and_no_asset_path() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
@@ -104,6 +104,27 @@ fn plugin_boots_with_embedded_default_theme_and_no_asset_path() {
     let sheet = app.world().resource::<crate::StyleSheet>();
     assert!(!sheet.rules.is_empty());
     assert!(sheet.tokens.contains_key("surface-bg"));
+}
+
+#[test]
+fn embedded_fluent_light_theme_installs_and_overrides_surface_bg_token() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    crate::install_embedded_fluent_light_theme(app.world_mut())
+        .expect("embedded fluent light theme should install");
+
+    let sheet = app.world().resource::<crate::StyleSheet>();
+    let token = sheet
+        .tokens
+        .get("surface-bg")
+        .expect("surface-bg token should exist after fluent light install");
+
+    assert!(matches!(
+        token,
+        crate::TokenValue::Color(color)
+            if *color == crate::xilem::Color::from_rgb8(0xF3, 0xF3, 0xF3)
+    ));
 }
 
 #[test]
@@ -2168,11 +2189,6 @@ fn stylesheet_hex_literal_for_bg_is_not_treated_as_token_var() {
 
 #[test]
 fn embedded_fluent_theme_color_fields_do_not_parse_hex_literals_as_var_tokens() {
-    let sheet = crate::styling::parse_stylesheet_ron_for_tests(
-        crate::styling::BUILTIN_FLUENT_DARK_THEME_RON,
-    )
-    .expect("embedded fluent theme should parse");
-
     let assert_not_hex_var =
         |value: &Option<crate::StyleValue<crate::xilem::Color>>, field: &str, selector: &str| {
             if let Some(crate::StyleValue::Var(token)) = value {
@@ -2183,18 +2199,29 @@ fn embedded_fluent_theme_color_fields_do_not_parse_hex_literals_as_var_tokens() 
             }
         };
 
-    for rule in &sheet.rules {
-        let selector = format!("{:?}", rule.selector);
-        let colors = &rule.setter.colors;
-        assert_not_hex_var(&colors.bg, "bg", &selector);
-        assert_not_hex_var(&colors.text, "text", &selector);
-        assert_not_hex_var(&colors.border, "border", &selector);
-        assert_not_hex_var(&colors.hover_bg, "hover_bg", &selector);
-        assert_not_hex_var(&colors.hover_text, "hover_text", &selector);
-        assert_not_hex_var(&colors.hover_border, "hover_border", &selector);
-        assert_not_hex_var(&colors.pressed_bg, "pressed_bg", &selector);
-        assert_not_hex_var(&colors.pressed_text, "pressed_text", &selector);
-        assert_not_hex_var(&colors.pressed_border, "pressed_border", &selector);
+    for (theme_name, ron) in [
+        ("fluent_dark", crate::styling::BUILTIN_FLUENT_DARK_THEME_RON),
+        (
+            "fluent_light",
+            crate::styling::BUILTIN_FLUENT_LIGHT_THEME_RON,
+        ),
+    ] {
+        let sheet = crate::styling::parse_stylesheet_ron_for_tests(ron)
+            .unwrap_or_else(|_| panic!("embedded {theme_name} theme should parse"));
+
+        for rule in &sheet.rules {
+            let selector = format!("{theme_name}::{:?}", rule.selector);
+            let colors = &rule.setter.colors;
+            assert_not_hex_var(&colors.bg, "bg", &selector);
+            assert_not_hex_var(&colors.text, "text", &selector);
+            assert_not_hex_var(&colors.border, "border", &selector);
+            assert_not_hex_var(&colors.hover_bg, "hover_bg", &selector);
+            assert_not_hex_var(&colors.hover_text, "hover_text", &selector);
+            assert_not_hex_var(&colors.hover_border, "hover_border", &selector);
+            assert_not_hex_var(&colors.pressed_bg, "pressed_bg", &selector);
+            assert_not_hex_var(&colors.pressed_text, "pressed_text", &selector);
+            assert_not_hex_var(&colors.pressed_border, "pressed_border", &selector);
+        }
     }
 }
 

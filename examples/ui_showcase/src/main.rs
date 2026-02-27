@@ -16,7 +16,8 @@ use bevy_xilem::{
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_math::Vec2,
     bevy_text::TextPlugin,
-    resolve_style, resolve_style_for_classes, run_app_with_window_options, spawn_in_overlay_root,
+    install_embedded_fluent_dark_theme, install_embedded_fluent_light_theme, resolve_style,
+    resolve_style_for_classes, run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
         masonry::layout::{Dim, Length},
@@ -30,22 +31,15 @@ use unic_langid::LanguageIdentifier;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ThemeMode {
-    Dark,
-    Light,
+    FluentDark,
+    FluentLight,
 }
 
 impl ThemeMode {
-    fn class_name(self) -> &'static str {
-        match self {
-            Self::Dark => "theme.dark",
-            Self::Light => "theme.light",
-        }
-    }
-
     fn from_combo_value(value: &str) -> Option<Self> {
         match value {
-            "dark" => Some(Self::Dark),
-            "light" => Some(Self::Light),
+            "fluent_dark" => Some(Self::FluentDark),
+            "fluent_light" => Some(Self::FluentLight),
             _ => None,
         }
     }
@@ -61,7 +55,7 @@ impl Default for ShowcaseState {
     fn default() -> Self {
         Self {
             last_event: "Interact with any page to see events here.".to_string(),
-            theme: ThemeMode::Dark,
+            theme: ThemeMode::FluentDark,
         }
     }
 }
@@ -140,11 +134,8 @@ fn ja_cjk_fallback_font_stack() -> Vec<&'static str> {
     ]
 }
 
-fn root_classes(theme: ThemeMode) -> StyleClass {
-    StyleClass(vec![
-        "showcase.root".to_string(),
-        theme.class_name().to_string(),
-    ])
+fn root_classes() -> StyleClass {
+    StyleClass(vec!["showcase.root".to_string()])
 }
 
 fn project_showcase_root(_: &ShowcaseRoot, ctx: ProjectionCtx<'_>) -> UiView {
@@ -176,9 +167,7 @@ fn project_status_display(_: &StatusDisplay, ctx: ProjectionCtx<'_>) -> UiView {
 }
 
 fn setup_showcase(mut commands: Commands) {
-    let root = commands
-        .spawn((UiRoot, ShowcaseRoot, root_classes(ThemeMode::Dark)))
-        .id();
+    let root = commands.spawn((UiRoot, ShowcaseRoot, root_classes())).id();
 
     commands.spawn((
         UiLabel::new("UI Showcase (Components / Theming / Localization & CJK)"),
@@ -537,10 +526,10 @@ fn setup_showcase(mut commands: Commands) {
     let theme_mode_combo = commands
         .spawn((
             UiComboBox::new(vec![
-                UiComboOption::new("dark", "Dark"),
-                UiComboOption::new("light", "Light"),
+                UiComboOption::new("fluent_dark", "Fluent Dark"),
+                UiComboOption::new("fluent_light", "Fluent Light"),
             ])
-            .with_placeholder("Choose dark/light theme"),
+            .with_placeholder("Choose Fluent theme"),
             StyleClass(vec!["showcase.theme.combo".to_string()]),
             ChildOf(theme_mode_section),
         ))
@@ -703,17 +692,6 @@ fn setup_showcase_styles(mut style_sheet: ResMut<StyleSheet>) {
                 ..LayoutStyle::default()
             },
             transition: Some(StyleTransition { duration: 0.22 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "theme.light",
-        StyleSetter {
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0xF4, 0xF7, 0xFF)),
-                ..ColorStyle::default()
-            },
             ..StyleSetter::default()
         },
     );
@@ -1279,8 +1257,22 @@ fn drain_showcase_events(world: &mut World) {
 
         if event.action.combo == rt.theme_mode_combo {
             if let Some(theme) = ThemeMode::from_combo_value(event.action.value.as_str()) {
+                let install_result = match theme {
+                    ThemeMode::FluentDark => install_embedded_fluent_dark_theme(world),
+                    ThemeMode::FluentLight => install_embedded_fluent_light_theme(world),
+                };
+
+                if let Err(error) = install_result {
+                    update_status(
+                        world,
+                        rt.status_label,
+                        format!("Theme switch failed: {error}"),
+                    );
+                    continue;
+                }
+
                 world.resource_mut::<ShowcaseState>().theme = theme;
-                world.entity_mut(rt.root).insert(root_classes(theme));
+                world.entity_mut(rt.root).insert(root_classes());
                 update_status(
                     world,
                     rt.status_label,
