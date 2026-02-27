@@ -128,7 +128,31 @@ fn embedded_fluent_light_theme_installs_and_overrides_surface_bg_token() {
 }
 
 #[test]
-fn embedded_fluent_theme_variant_api_switches_between_dark_and_light() {
+fn embedded_fluent_high_contrast_theme_installs_and_overrides_surface_bg_token() {
+    let mut app = App::new();
+    app.add_plugins(BevyXilemPlugin);
+
+    crate::install_embedded_fluent_theme_variant(
+        app.world_mut(),
+        crate::FluentThemeVariant::HighContrast,
+    )
+    .expect("embedded fluent high-contrast theme should install");
+
+    let sheet = app.world().resource::<crate::StyleSheet>();
+    let token = sheet
+        .tokens
+        .get("surface-bg")
+        .expect("surface-bg token should exist after fluent high-contrast install");
+
+    assert!(matches!(
+        token,
+        crate::TokenValue::Color(color)
+            if *color == crate::xilem::Color::from_rgb8(0x00, 0x00, 0x00)
+    ));
+}
+
+#[test]
+fn embedded_fluent_theme_variant_api_switches_between_dark_light_and_high_contrast() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
@@ -160,6 +184,112 @@ fn embedded_fluent_theme_variant_api_switches_between_dark_and_light() {
     assert_eq!(
         dark_surface,
         crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0x1F, 0x1F, 0x1F))
+    );
+
+    crate::install_embedded_fluent_theme_variant(
+        app.world_mut(),
+        crate::FluentThemeVariant::HighContrast,
+    )
+    .expect("high-contrast variant should install");
+
+    let hc_surface = app
+        .world()
+        .resource::<crate::StyleSheet>()
+        .tokens
+        .get("surface-bg")
+        .cloned()
+        .expect("surface-bg should exist after high-contrast install");
+    assert_eq!(
+        hc_surface,
+        crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0x00, 0x00, 0x00))
+    );
+}
+
+#[test]
+fn parse_stylesheet_variants_merges_default_rules_and_variant_overrides() {
+    let ron_text = r##"(
+        default_variant: "dark",
+        variants: {
+            "dark": (
+                tokens: {
+                    "surface-bg": Color(Hex("#111111")),
+                },
+                rules: [
+                    (
+                        selector: Class("demo.root"),
+                        setter: (
+                            colors: (
+                                bg: Var("surface-bg"),
+                            ),
+                        ),
+                    ),
+                ],
+            ),
+            "light": (
+                tokens: {
+                    "surface-bg": Color(Hex("#EEEEEE")),
+                },
+            ),
+        },
+    )"##;
+
+    let variants = crate::parse_stylesheet_variants_ron_for_tests(ron_text)
+        .expect("variant bundle should parse in tests");
+
+    assert_eq!(variants.default_variant, "dark");
+    let dark = variants
+        .variants
+        .get("dark")
+        .expect("dark variant should exist");
+    let light = variants
+        .variants
+        .get("light")
+        .expect("light variant should exist");
+
+    assert_eq!(dark.rules.len(), 1);
+    assert_eq!(light.rules.len(), 1);
+    assert_eq!(
+        light.tokens.get("surface-bg"),
+        Some(&crate::TokenValue::Color(crate::xilem::Color::from_rgb8(
+            0xEE, 0xEE, 0xEE,
+        )))
+    );
+}
+
+#[test]
+fn install_registered_style_variant_applies_selected_variant_to_runtime_sheet() {
+    let ron_text = r##"(
+        default_variant: "dark",
+        variants: {
+            "dark": (
+                tokens: {
+                    "surface-bg": Color(Hex("#111111")),
+                },
+            ),
+            "light": (
+                tokens: {
+                    "surface-bg": Color(Hex("#F8F8F8")),
+                },
+            ),
+        },
+    )"##;
+
+    let mut world = World::new();
+    crate::register_stylesheet_variants_ron(&mut world, ron_text)
+        .expect("style variants should register");
+    crate::install_registered_style_variant(&mut world, "light")
+        .expect("registered style variant should install");
+
+    let token = world
+        .resource::<crate::StyleSheet>()
+        .tokens
+        .get("surface-bg")
+        .cloned()
+        .expect("surface-bg should exist after variant install");
+
+    assert_eq!(
+        token,
+        crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0xF8, 0xF8, 0xF8))
     );
 }
 

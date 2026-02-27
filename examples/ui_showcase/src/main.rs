@@ -34,6 +34,7 @@ use unic_langid::LanguageIdentifier;
 enum ThemeMode {
     FluentDark,
     FluentLight,
+    FluentHighContrast,
 }
 
 impl ThemeMode {
@@ -41,6 +42,7 @@ impl ThemeMode {
         match value {
             "fluent_dark" => Some(Self::FluentDark),
             "fluent_light" => Some(Self::FluentLight),
+            "fluent_high_contrast" => Some(Self::FluentHighContrast),
             _ => None,
         }
     }
@@ -49,6 +51,7 @@ impl ThemeMode {
         match self {
             Self::FluentDark => FluentThemeVariant::Dark,
             Self::FluentLight => FluentThemeVariant::Light,
+            Self::FluentHighContrast => FluentThemeVariant::HighContrast,
         }
     }
 
@@ -56,6 +59,7 @@ impl ThemeMode {
         match self {
             Self::FluentDark => "showcase.theme.fluent_dark",
             Self::FluentLight => "showcase.theme.fluent_light",
+            Self::FluentHighContrast => "showcase.theme.fluent_high_contrast",
         }
     }
 }
@@ -548,6 +552,7 @@ fn setup_showcase(mut commands: Commands) {
             UiComboBox::new(vec![
                 UiComboOption::new("fluent_dark", "Fluent Dark"),
                 UiComboOption::new("fluent_light", "Fluent Light"),
+                UiComboOption::new("fluent_high_contrast", "Fluent High Contrast"),
             ])
             .with_placeholder("Choose Fluent theme"),
             StyleClass(vec!["showcase.theme.combo".to_string()]),
@@ -1196,6 +1201,147 @@ fn setup_showcase_styles(mut style_sheet: ResMut<StyleSheet>) {
         StyleSetter {
             colors: ColorStyle {
                 text: Some(Color::from_rgb8(0x1F, 0x29, 0x37)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_high_contrast"),
+            Selector::class("showcase.title"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_high_contrast"),
+            Selector::class("showcase.status"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x00, 0x00, 0x00)),
+                border: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_high_contrast"),
+            Selector::class("showcase.status.text"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_high_contrast"),
+            Selector::class("showcase.sidebar"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x00, 0x00, 0x00)),
+                border: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_high_contrast"),
+            Selector::class("showcase.page.scroll"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x00, 0x00, 0x00)),
+                border: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_high_contrast"),
+            Selector::class("showcase.theme.combo"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x00, 0x00, 0x00)),
+                hover_bg: Some(Color::from_rgb8(0x1C, 0x1C, 0x1C)),
+                pressed_bg: Some(Color::from_rgb8(0x30, 0x30, 0x30)),
+                border: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_high_contrast"),
+            Selector::class("showcase.locale.combo"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::from_rgb8(0x00, 0x00, 0x00)),
+                hover_bg: Some(Color::from_rgb8(0x1C, 0x1C, 0x1C)),
+                pressed_bg: Some(Color::from_rgb8(0x30, 0x30, 0x30)),
+                border: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_high_contrast"),
+            Selector::class("showcase.theme.button.outline"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                bg: Some(Color::TRANSPARENT),
+                hover_bg: Some(Color::from_rgba8(0xFF, 0xFF, 0xFF, 0x18)),
+                pressed_bg: Some(Color::from_rgba8(0xFF, 0xFF, 0xFF, 0x2C)),
+                border: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
+                ..ColorStyle::default()
+            },
+            ..StyleSetter::default()
+        },
+    ));
+
+    style_sheet.add_rule(StyleRule::new(
+        Selector::descendant(
+            Selector::class("showcase.theme.fluent_high_contrast"),
+            Selector::class("showcase.cjk.text"),
+        ),
+        StyleSetter {
+            colors: ColorStyle {
+                text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
                 ..ColorStyle::default()
             },
             ..StyleSetter::default()

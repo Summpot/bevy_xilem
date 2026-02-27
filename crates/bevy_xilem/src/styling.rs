@@ -472,6 +472,13 @@ pub struct ActiveStyleSheetSelectors(pub HashSet<Selector>);
 #[derive(Resource, Debug, Clone, Default)]
 pub struct ActiveStyleSheetTokenNames(pub HashSet<String>);
 
+/// Registered named style variants parsed from a variant bundle.
+#[derive(Resource, Debug, Clone, Default)]
+pub struct RegisteredStyleVariants {
+    pub default_variant: String,
+    pub variants: HashMap<String, StyleSheet>,
+}
+
 /// Name-to-component-type map used by selector type tags loaded from RON assets.
 #[derive(Resource, Debug, Clone, Default)]
 pub struct StyleTypeRegistry {
@@ -574,17 +581,90 @@ fn upsert_rules_by_selector(sheet: &mut StyleSheet, incoming: Vec<StyleRule>) {
     }
 }
 
+fn merge_sheet_inplace(sheet: &mut StyleSheet, incoming: StyleSheet) {
+    for (name, token) in incoming.tokens {
+        sheet.tokens.insert(name, token);
+    }
+    upsert_rules_by_selector(sheet, incoming.rules);
+}
+
+fn apply_base_stylesheet(world: &mut World, new_base: StyleSheet) {
+    world.init_resource::<BaseStyleSheet>();
+    world.init_resource::<StyleSheet>();
+    world.init_resource::<ActiveStyleSheetTokenNames>();
+
+    let (previous_base_selectors, previous_base_tokens) = {
+        let previous = &world.resource::<BaseStyleSheet>().0;
+        (
+            previous
+                .rules
+                .iter()
+                .map(|rule| rule.selector.clone())
+                .collect::<HashSet<_>>(),
+            previous.tokens.keys().cloned().collect::<HashSet<_>>(),
+        )
+    };
+
+    world.resource_mut::<BaseStyleSheet>().0 = new_base.clone();
+
+    let active_selectors = world
+        .get_resource::<ActiveStyleSheetSelectors>()
+        .map(|selectors| selectors.0.clone())
+        .unwrap_or_default();
+    let active_tokens = world
+        .get_resource::<ActiveStyleSheetTokenNames>()
+        .map(|names| names.0.clone())
+        .unwrap_or_default();
+
+    let mut runtime_sheet = world.resource_mut::<StyleSheet>();
+    runtime_sheet.rules.retain(|rule| {
+        !previous_base_selectors.contains(&rule.selector)
+            || active_selectors.contains(&rule.selector)
+    });
+    runtime_sheet
+        .tokens
+        .retain(|name, _| !previous_base_tokens.contains(name) || active_tokens.contains(name));
+
+    for (name, token) in new_base.tokens {
+        if !active_tokens.contains(name.as_str()) {
+            runtime_sheet.tokens.insert(name, token);
+        }
+    }
+
+    let filtered_rules = new_base
+        .rules
+        .into_iter()
+        .filter(|rule| !active_selectors.contains(&rule.selector))
+        .collect::<Vec<_>>();
+    upsert_rules_by_selector(&mut runtime_sheet, filtered_rules);
+}
+
 /// Embedded baseline Fluent-inspired dark theme used with zero filesystem configuration.
 pub const BUILTIN_FLUENT_DARK_THEME_RON: &str = include_str!("theme/fluent_dark.ron");
 
 /// Embedded Fluent-inspired light palette overrides.
 pub const BUILTIN_FLUENT_LIGHT_THEME_RON: &str = include_str!("theme/fluent_light.ron");
 
+/// Embedded Fluent theme bundle containing multiple named variants.
+pub const BUILTIN_FLUENT_THEME_RON: &str = include_str!("theme/fluent_theme.ron");
+
 /// Built-in Fluent theme variants.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FluentThemeVariant {
     Dark,
     Light,
+    HighContrast,
+}
+
+impl FluentThemeVariant {
+    #[must_use]
+    pub const fn as_name(self) -> &'static str {
+        match self {
+            Self::Dark => "dark",
+            Self::Light => "light",
+            Self::HighContrast => "high-contrast",
+        }
+    }
 }
 
 /// Register built-in ECS component type aliases usable from RON selectors.
@@ -648,9 +728,62 @@ pub fn parse_stylesheet_ron(ron_text: &str) -> io::Result<StyleSheet> {
     stylesheet_from_ron_bytes(ron_text.as_bytes())
 }
 
+/// Parse a multi-variant stylesheet bundle RON into registered variants.
+pub fn parse_stylesheet_variants_ron(ron_text: &str) -> io::Result<RegisteredStyleVariants> {
+    stylesheet_variants_from_ron_bytes(ron_text.as_bytes())
+}
+
+/// Parse + register named stylesheet variants in the world.
+pub fn register_stylesheet_variants_ron(world: &mut World, ron_text: &str) -> io::Result<()> {
+    let variants = parse_stylesheet_variants_ron(ron_text)?;
+    world.insert_resource(variants);
+    Ok(())
+}
+
+/// Install a previously registered stylesheet variant by name.
+pub fn install_registered_style_variant(world: &mut World, variant_name: &str) -> io::Result<()> {
+    let variants = world
+        .get_resource::<RegisteredStyleVariants>()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "style variants are not registered in this world",
+            )
+        })?
+        .clone();
+
+    let selected = variants
+        .variants
+        .get(variant_name)
+        .cloned()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("style variant `{variant_name}` is not registered"),
+            )
+        })?;
+
+    apply_base_stylesheet(world, selected);
+    Ok(())
+}
+
+/// Register all embedded Fluent variants from the bundled multi-variant theme file.
+pub fn register_embedded_fluent_theme_variants(world: &mut World) -> io::Result<()> {
+    register_stylesheet_variants_ron(world, BUILTIN_FLUENT_THEME_RON)
+}
+
+/// Install an embedded Fluent variant by string name.
+pub fn install_embedded_fluent_theme_variant_by_name(
+    world: &mut World,
+    variant_name: &str,
+) -> io::Result<()> {
+    register_embedded_fluent_theme_variants(world)?;
+    install_registered_style_variant(world, variant_name)
+}
+
 /// Install the embedded Fluent-inspired dark baseline stylesheet.
 pub fn install_embedded_fluent_dark_theme(world: &mut World) -> io::Result<()> {
-    merge_base_stylesheet_ron(world, BUILTIN_FLUENT_DARK_THEME_RON)
+    install_embedded_fluent_theme_variant_by_name(world, FluentThemeVariant::Dark.as_name())
 }
 
 /// Install one of the embedded Fluent theme variants.
@@ -658,10 +791,7 @@ pub fn install_embedded_fluent_theme_variant(
     world: &mut World,
     variant: FluentThemeVariant,
 ) -> io::Result<()> {
-    match variant {
-        FluentThemeVariant::Dark => install_embedded_fluent_dark_theme(world),
-        FluentThemeVariant::Light => install_embedded_fluent_light_theme(world),
-    }
+    install_embedded_fluent_theme_variant_by_name(world, variant.as_name())
 }
 
 /// Install the embedded Fluent-inspired light theme.
@@ -669,8 +799,7 @@ pub fn install_embedded_fluent_theme_variant(
 /// This keeps selector/rule coverage identical to Fluent dark by first installing
 /// the dark baseline and then applying light token overrides.
 pub fn install_embedded_fluent_light_theme(world: &mut World) -> io::Result<()> {
-    install_embedded_fluent_dark_theme(world)?;
-    merge_base_stylesheet_ron(world, BUILTIN_FLUENT_LIGHT_THEME_RON)
+    install_embedded_fluent_theme_variant_by_name(world, FluentThemeVariant::Light.as_name())
 }
 
 /// Merge a baseline stylesheet RON into the base + runtime tiers.
@@ -2213,6 +2342,13 @@ struct StyleSheetDef {
 }
 
 #[derive(Debug, Deserialize)]
+struct StyleSheetVariantsDef {
+    default_variant: String,
+    #[serde(default)]
+    variants: HashMap<String, StyleSheetDef>,
+}
+
+#[derive(Debug, Deserialize)]
 struct StyleRuleDef {
     selector: SelectorDef,
     #[serde(default)]
@@ -2861,14 +2997,7 @@ fn parse_hex_color(hex: &str) -> io::Result<Color> {
     }
 }
 
-fn stylesheet_from_ron_bytes(bytes: &[u8]) -> io::Result<StyleSheet> {
-    let parsed: StyleSheetDef = ron::de::from_bytes(bytes).map_err(|error| {
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("failed to parse stylesheet RON: {error}"),
-        )
-    })?;
-
+fn stylesheet_from_def(parsed: StyleSheetDef) -> io::Result<StyleSheet> {
     let mut sheet = StyleSheet::default();
     for (name, token) in parsed.tokens {
         sheet.tokens.insert(name, token.into_token_value()?);
@@ -2884,9 +3013,73 @@ fn stylesheet_from_ron_bytes(bytes: &[u8]) -> io::Result<StyleSheet> {
     Ok(sheet)
 }
 
+fn stylesheet_from_ron_bytes(bytes: &[u8]) -> io::Result<StyleSheet> {
+    let parsed: StyleSheetDef = ron::de::from_bytes(bytes).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("failed to parse stylesheet RON: {error}"),
+        )
+    })?;
+
+    stylesheet_from_def(parsed)
+}
+
+fn stylesheet_variants_from_ron_bytes(bytes: &[u8]) -> io::Result<RegisteredStyleVariants> {
+    let parsed: StyleSheetVariantsDef = ron::de::from_bytes(bytes).map_err(|error| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("failed to parse stylesheet variants RON: {error}"),
+        )
+    })?;
+
+    if parsed.variants.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "stylesheet variants RON must define at least one variant",
+        ));
+    }
+
+    let default_variant = parsed.default_variant;
+    let mut raw_variants = HashMap::new();
+    for (name, def) in parsed.variants {
+        raw_variants.insert(name, stylesheet_from_def(def)?);
+    }
+
+    let default_sheet = raw_variants.get(&default_variant).cloned().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("stylesheet variants RON default_variant `{default_variant}` is not defined"),
+        )
+    })?;
+
+    let mut variants = HashMap::new();
+    for (name, variant_sheet) in raw_variants {
+        if name == default_variant {
+            variants.insert(name, default_sheet.clone());
+            continue;
+        }
+
+        let mut merged = default_sheet.clone();
+        merge_sheet_inplace(&mut merged, variant_sheet);
+        variants.insert(name, merged);
+    }
+
+    Ok(RegisteredStyleVariants {
+        default_variant,
+        variants,
+    })
+}
+
 #[cfg(test)]
 pub(crate) fn parse_stylesheet_ron_for_tests(ron_text: &str) -> io::Result<StyleSheet> {
     parse_stylesheet_ron(ron_text)
+}
+
+#[cfg(test)]
+pub(crate) fn parse_stylesheet_variants_ron_for_tests(
+    ron_text: &str,
+) -> io::Result<RegisteredStyleVariants> {
+    parse_stylesheet_variants_ron(ron_text)
 }
 
 /// Asset loader for stylesheet `.ron` files.

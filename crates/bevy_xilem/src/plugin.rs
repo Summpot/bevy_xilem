@@ -28,8 +28,8 @@ use crate::{
     },
     styling::{
         ActiveStyleSheet, ActiveStyleSheetAsset, ActiveStyleSheetSelectors,
-        ActiveStyleSheetTokenNames, BaseStyleSheet, FluentThemeVariant, StyleAssetEventCursor,
-        StyleSheet, StyleSheetRonLoader, animate_style_transitions,
+        ActiveStyleSheetTokenNames, BaseStyleSheet, FluentThemeVariant, RegisteredStyleVariants,
+        StyleAssetEventCursor, StyleSheet, StyleSheetRonLoader, animate_style_transitions,
         ensure_active_stylesheet_asset_handle, install_embedded_fluent_theme_variant,
         mark_style_dirty, register_builtin_style_type_aliases, sync_style_targets,
         sync_stylesheet_asset_events, sync_ui_interaction_markers,
@@ -81,6 +81,7 @@ impl Plugin for BevyXilemPlugin {
             .init_resource::<ActiveStyleSheetAsset>()
             .init_resource::<ActiveStyleSheetSelectors>()
             .init_resource::<ActiveStyleSheetTokenNames>()
+            .init_resource::<RegisteredStyleVariants>()
             .init_resource::<StyleAssetEventCursor>()
             .init_resource::<XilemFontBridge>()
             .init_resource::<AppI18n>()
