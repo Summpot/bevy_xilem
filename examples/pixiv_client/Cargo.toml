@@ -17,6 +17,7 @@ bevy_embedded_assets.workspace = true
 bevy_ecs.workspace = true
 bevy_image = { version = "0.18", default-features = false }
 bevy_text = { version = "0.18", default-features = false }
+bevy_xilem-activation = { path = "../../crates/bevy_xilem-activation" }
 bevy_xilem = { path = "../../crates/bevy_xilem" }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 crossbeam-channel = "0.5"

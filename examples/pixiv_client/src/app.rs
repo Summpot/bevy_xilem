@@ -1,4 +1,9 @@
-use std::{f32::consts::PI, process::Command, sync::Arc, time::Duration};
+use std::{
+    f32::consts::PI,
+    process::Command,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 use bevy_asset::{AssetPlugin, Assets, Handle, RenderAssetUsages};
@@ -28,6 +33,9 @@ use bevy_xilem::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
+use bevy_xilem_activation::{
+    ActivationConfig, ActivationService, BootstrapOutcome, ProtocolRegistration, bootstrap,
+};
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use pixiv_client::{
     AuthSession, DecodedImageRgba, IdpUrlResponse, Illust, PixivApiClient, PixivResponse,
@@ -48,6 +56,7 @@ const RESPONSE_PANEL_HEIGHT: f64 = 180.0;
 const PIXIV_AUTH_TOKEN_FALLBACK: &str = "https://oauth.secure.pixiv.net/auth/token";
 const PIXIV_WEB_REDIRECT_FALLBACK: &str =
     "https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback";
+const PIXIV_ACTIVATION_APP_ID: &str = "bevy-xilem-example-pixiv-client";
 
 fn parse_locale(tag: &str) -> LanguageIdentifier {
     tag.parse()
@@ -370,6 +379,12 @@ struct ImageBridge {
     result_rx: Receiver<ImageResult>,
 }
 
+#[derive(Resource)]
+struct ActivationBridge {
+    service: Mutex<ActivationService>,
+    startup_uris: Vec<String>,
+}
+
 #[derive(Clone, Copy)]
 struct CardAnimLens {
     start: CardAnimState,
@@ -483,6 +498,74 @@ fn extract_auth_code_from_input(input: &str) -> Option<String> {
     }
 
     Some(trimmed.to_string())
+}
+
+fn is_pixiv_callback_uri(input: &str) -> bool {
+    Url::parse(input)
+        .map(|url| url.scheme().eq_ignore_ascii_case("pixiv"))
+        .unwrap_or(false)
+}
+
+fn process_activation_uri(world: &mut World, uri: &str) {
+    if !is_pixiv_callback_uri(uri) {
+        return;
+    }
+
+    {
+        let mut auth = world.resource_mut::<AuthState>();
+        auth.auth_code_input = uri.to_string();
+    }
+
+    let Some(code) = extract_auth_code_from_input(uri) else {
+        set_status_key(
+            world,
+            "pixiv.status.activation_code_missing",
+            "Received pixiv callback but no `code=` was found.",
+        );
+        return;
+    };
+
+    let code_verifier = world.resource::<AuthState>().code_verifier_input.clone();
+    if code_verifier.trim().is_empty() {
+        set_status_key(
+            world,
+            "pixiv.status.activation_verifier_missing",
+            "Received pixiv callback, but PKCE code_verifier is empty. Click Open Browser Login first.",
+        );
+        return;
+    }
+
+    let _ = world
+        .resource::<NetworkBridge>()
+        .cmd_tx
+        .send(NetworkCommand::ExchangeCode {
+            code,
+            code_verifier,
+        });
+
+    set_status_key(
+        world,
+        "pixiv.status.activation_exchange_started",
+        "Received pixiv callback. Exchanging auth code automatically…",
+    );
+}
+
+fn poll_activation_messages(world: &mut World) {
+    let pending_uris = {
+        let Some(mut activation) = world.get_resource_mut::<ActivationBridge>() else {
+            return;
+        };
+
+        let mut pending = std::mem::take(&mut activation.startup_uris);
+        if let Ok(mut service) = activation.service.lock() {
+            pending.extend(service.drain_uris());
+        }
+        pending
+    };
+
+    for uri in pending_uris {
+        process_activation_uri(world, &uri);
+    }
 }
 
 fn summarize_error(details: &str) -> String {
@@ -2318,11 +2401,19 @@ bevy_xilem::impl_ui_component_template!(PixivDetailOverlay, project_detail_overl
 bevy_xilem::impl_ui_component_template!(PixivOverlayTags, project_overlay_tags);
 bevy_xilem::impl_ui_component_template!(OverlayTag, project_overlay_tag);
 
-fn build_app() -> App {
+fn build_app(mut activation_service: Option<ActivationService>) -> App {
     ensure_task_pool_initialized();
 
     let mut app = App::new();
     register_bridge_fonts(&mut app);
+
+    if let Some(mut service) = activation_service.take() {
+        let startup_uris = service.take_startup_uris();
+        app.insert_resource(ActivationBridge {
+            service: Mutex::new(service),
+            startup_uris,
+        });
+    }
 
     app.add_plugins((
         EmbeddedAssetPlugin {
@@ -2381,7 +2472,10 @@ fn build_app() -> App {
     .register_ui_component::<PixivOverlayTags>()
     .register_ui_component::<OverlayTag>()
     .add_systems(Startup, (setup_styles, setup))
-    .add_systems(PreUpdate, drain_ui_actions_and_dispatch)
+    .add_systems(
+        PreUpdate,
+        (drain_ui_actions_and_dispatch, poll_activation_messages),
+    )
     .add_systems(
         Update,
         (
@@ -2397,7 +2491,20 @@ fn build_app() -> App {
 }
 
 pub fn run() -> std::result::Result<(), EventLoopError> {
-    run_app_with_window_options(build_app(), "Pixiv Desktop", |options| {
+    let activation_config = ActivationConfig::new(PIXIV_ACTIVATION_APP_ID).with_protocol(
+        ProtocolRegistration::new("pixiv", "Pixiv OAuth callback", None),
+    );
+
+    let activation_service = match bootstrap(activation_config) {
+        Ok(BootstrapOutcome::Primary(service)) => Some(service),
+        Ok(BootstrapOutcome::SecondaryForwarded) => return Ok(()),
+        Err(error) => {
+            eprintln!("activation bootstrap failed: {error}");
+            None
+        }
+    };
+
+    run_app_with_window_options(build_app(activation_service), "Pixiv Desktop", |options| {
         options.with_initial_inner_size(LogicalSize::new(1360.0, 860.0))
     })
 }
@@ -2432,6 +2539,16 @@ mod tests {
             extract_auth_code_from_input(nested).as_deref(),
             Some("abc123")
         );
+    }
+
+    #[test]
+    fn pixiv_custom_scheme_auth_code_is_supported() {
+        let uri = "pixiv://account/login?code=from_protocol&via=login";
+        assert_eq!(
+            extract_auth_code_from_input(uri).as_deref(),
+            Some("from_protocol")
+        );
+        assert!(is_pixiv_callback_uri(uri));
     }
 
     #[test]

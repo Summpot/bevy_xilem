@@ -27,11 +27,9 @@ From workspace root:
    - The login URL follows official Android flow:
      - `https://app-api.pixiv.net/web/v1/login?code_challenge=...&code_challenge_method=S256&client=pixiv-android`
 3. Complete login in browser.
-4. After redirect, copy the `code` query value from the callback URL.
-   - You can paste either:
-     - the raw code, or
-     - the full callback URL (the app will extract `code` automatically).
-5. Back in app, click **Login (auth_code)**.
+4. The app registers the `pixiv:` custom URI scheme on startup.
+   - If callback opens `pixiv://account/login?code=...&via=login`, the running app receives it automatically and starts token exchange.
+5. If your browser does not hand off the callback automatically, copy the `code` value (or the full callback URL) manually and click **Login (auth_code)**.
 6. (Optional) Save and use the refresh token with **Refresh Token** later.
 
 ### How to get `code_verifier` + `auth_code`

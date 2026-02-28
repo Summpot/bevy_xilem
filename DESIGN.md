@@ -225,7 +225,28 @@ Driven via `UiProjectorRegistry`.
 
 `run_app()` avoids raw setup tasks, bootstrapping native `bevy_winit` safely to Bevy systems for seamless desktop lifecycle apps.
 
-## 12. Examples and Non-goals
+## 12. Activation / Deep-link Runtime
+
+The workspace now includes a dedicated crate: `bevy_xilem-activation`.
+
+### 12.1 Responsibilities
+
+- **Single-instance gate** (`single-instance`): only one primary process keeps the UI/runtime.
+- **Activation IPC bridge** (`interprocess` local socket): secondary launches forward URI payloads to the primary process, then exit.
+- **Custom URI protocol registration** (`sysuri`): app-managed registration for OS-level protocol handling.
+
+### 12.2 Pixiv callback flow
+
+`example_pixiv_client` registers `pixiv:` on startup through `bevy_xilem-activation` and uses activation IPC to route callback URIs:
+
+1. User starts browser OAuth from running app.
+2. Browser callback opens `pixiv://account/login?code=...&via=login`.
+3. OS launches app entrypoint; secondary instance forwards URI to primary and exits.
+4. Primary instance auto-extracts `code` and triggers token exchange (`authorization_code`) using current PKCE verifier.
+
+This removes the manual copy/paste requirement in normal desktop callback flow while preserving manual fallback input behavior.
+
+## 13. Examples and Non-goals
 
 - **Examples:** Highlighted in crates evaluating architectures (`chess_game`, `ui_showcase`, `todo_list`).
 - **Non-goals:** Custom render-graph bridging out of scope; sticks to Masonry retained runtime ownership implicitly.

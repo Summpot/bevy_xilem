@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+	"crates/bevy_xilem-activation",
 	"crates/bevy_xilem",
 	"examples/async_downloader",
 	"examples/calculator",
@@ -53,6 +54,9 @@ bevy_reflect = { version = "0.18", default-features = false }
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 lucide-icons = "0.575.0"
+single-instance = "0.3.3"
+interprocess = "2.4.0"
+sysuri = "0.4.0"
 
 [patch.crates-io]
 bevy = { path = "third_party/bevy" }
