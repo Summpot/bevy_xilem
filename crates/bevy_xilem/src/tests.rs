@@ -637,6 +637,16 @@ fn resolve_style_for_entity_classes_applies_hover_pseudo_state() {
 }
 
 #[test]
+fn resolve_style_without_any_style_source_uses_transparent_text_fallback() {
+    let mut world = World::new();
+    let entity = world.spawn_empty().id();
+
+    let resolved = resolve_style(&world, entity);
+
+    assert_eq!(resolved.colors.text, Some(crate::xilem::Color::TRANSPARENT));
+}
+
+#[test]
 fn selector_and_rule_applies_hover_and_pressed_states() {
     let mut world = World::new();
     let mut sheet = StyleSheet::default();

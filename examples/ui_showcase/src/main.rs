@@ -574,14 +574,16 @@ fn setup_showcase(mut commands: Commands) {
     let theme_mode_section = commands
         .spawn((UiGroupBox::new("Theme Mode"), ChildOf(theming_col)))
         .id();
+    let mut theme_mode_combo_config = UiComboBox::new(vec![
+        UiComboOption::new("fluent_dark", "Fluent Dark"),
+        UiComboOption::new("fluent_light", "Fluent Light"),
+        UiComboOption::new("fluent_high_contrast", "Fluent High Contrast"),
+    ])
+    .with_placeholder("Choose Fluent theme");
+    theme_mode_combo_config.selected = 0;
     let theme_mode_combo = commands
         .spawn((
-            UiComboBox::new(vec![
-                UiComboOption::new("fluent_dark", "Fluent Dark"),
-                UiComboOption::new("fluent_light", "Fluent Light"),
-                UiComboOption::new("fluent_high_contrast", "Fluent High Contrast"),
-            ])
-            .with_placeholder("Choose Fluent theme"),
+            theme_mode_combo_config,
             StyleClass(vec!["showcase.theme.combo".to_string()]),
             ChildOf(theme_mode_section),
         ))

@@ -1687,7 +1687,16 @@ pub fn resolve_style(world: &World, entity: Entity) -> ResolvedStyle {
         return style;
     }
 
-    compute_resolved_style(world, entity).unwrap_or_default()
+    compute_resolved_style(world, entity).unwrap_or(ResolvedStyle {
+        // When no stylesheet/inline style source is present, force transparent
+        // text to avoid falling back to Masonry/Xilem intrinsic text painting.
+        // This keeps "no theme selected" surfaces visually empty as intended.
+        colors: ResolvedColorStyle {
+            text: Some(Color::TRANSPARENT),
+            ..ResolvedColorStyle::default()
+        },
+        ..ResolvedStyle::default()
+    })
 }
 
 /// Resolve style from class names only, without inline entity overrides.

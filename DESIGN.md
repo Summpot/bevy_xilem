@@ -150,6 +150,8 @@ Apps/examples can switch variants at runtime by name via `install_embedded_fluen
 
 Variant bundles support top-level shared `rules`/`tokens` plus per-variant overrides. This keeps common selector graphs out of any single variant and lets each variant focus on palette/token deltas.
 
+When an entity has no matched selector rules and no inline style sources, style resolution intentionally uses a transparent text fallback so the UI does not inherit Masonry/Xilem intrinsic default text appearance. In practice, this keeps "no theme selected" surfaces visually empty instead of looking partially themed by engine defaults.
+
 ### 6.3 Hit-testing invariants
 
 Layout-affecting styles (padding/border/background) are applied directly to the target UI component widget itself, ensuring Masonry's hit-testing matches the structural box model users see, specifically on bounded overlays/dialogs vs global backgrounds.
