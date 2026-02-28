@@ -1331,11 +1331,12 @@ fn overlay_size_for_entity(
 
     if let Some(toast) = world.get::<UiToast>(entity) {
         let mut style = resolve_style(world, entity);
+        let fallback_style = resolve_style_for_classes(world, ["overlay.toast"]);
         if style.layout.padding <= 0.0 {
-            style.layout.padding = 10.0;
+            style.layout.padding = fallback_style.layout.padding.max(10.0);
         }
         if style.text.size <= 0.0 {
-            style.text.size = 16.0;
+            style.text.size = fallback_style.text.size.max(15.0);
         }
 
         let text_width = estimate_text_width_px(&toast.message, style.text.size);
@@ -1976,5 +1977,54 @@ pub fn clear_stale_pressed_interactions(world: &mut World) {
         world
             .resource::<UiEventQueue>()
             .push_typed(event.entity, event.action);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        OVERLAY_ANCHOR_GAP, OverlayAnchorRect, OverlayPlacement, overlay_origin_for_placement,
+    };
+
+    #[test]
+    fn top_placement_is_horizontally_centered_on_anchor() {
+        let anchor = OverlayAnchorRect {
+            left: 140.0,
+            top: 320.0,
+            width: 120.0,
+            height: 40.0,
+        };
+
+        let (x, y) = overlay_origin_for_placement(
+            OverlayPlacement::Top,
+            anchor,
+            200.0,
+            56.0,
+            OVERLAY_ANCHOR_GAP,
+        );
+
+        assert_eq!(x, 100.0);
+        assert_eq!(y, 260.0);
+    }
+
+    #[test]
+    fn top_start_placement_keeps_anchor_left_edge() {
+        let anchor = OverlayAnchorRect {
+            left: 96.0,
+            top: 200.0,
+            width: 180.0,
+            height: 32.0,
+        };
+
+        let (x, y) = overlay_origin_for_placement(
+            OverlayPlacement::TopStart,
+            anchor,
+            160.0,
+            44.0,
+            OVERLAY_ANCHOR_GAP,
+        );
+
+        assert_eq!(x, 96.0);
+        assert_eq!(y, 152.0);
     }
 }

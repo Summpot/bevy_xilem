@@ -2714,10 +2714,10 @@ mod tests {
             _ => panic!("pixiv.button.warn text should come from a theme token"),
         };
 
-        assert_eq!(bg, "surface-subtle");
-        assert_eq!(hover_bg, "surface-subtle-hover");
-        assert_eq!(pressed_bg, "surface-subtle-pressed");
-        assert_eq!(border, "border-default");
+        assert_eq!(bg, "status-error-bg");
+        assert_eq!(hover_bg, "status-error-border");
+        assert_eq!(pressed_bg, "surface-overlay-item-pressed");
+        assert_eq!(border, "status-error-border");
         assert_eq!(text, "text-primary");
     }
 

@@ -852,6 +852,82 @@
     ),
 
     (
+      selector: Class("overlay.toast"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("gap-sm"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        box_shadow: Var("shadow-flyout"),
+      ),
+    ),
+    (
+      selector: Class("overlay.toast.info"),
+      setter: (
+        colors: (
+          bg: Var("status-info-bg"),
+          border: Var("status-info-border"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("overlay.toast.success"),
+      setter: (
+        colors: (
+          bg: Var("status-success-bg"),
+          border: Var("status-success-border"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("overlay.toast.warning"),
+      setter: (
+        colors: (
+          bg: Var("status-warning-bg"),
+          border: Var("status-warning-border"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("overlay.toast.error"),
+      setter: (
+        colors: (
+          bg: Var("status-error-bg"),
+          border: Var("status-error-border"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("overlay.toast.dismiss"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("transparent"),
+          hover_bg: Var("surface-overlay-item-hover"),
+          pressed_bg: Var("surface-overlay-item-pressed"),
+          text: Var("text-primary"),
+          border: Var("transparent"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+
+    (
       selector: Class("overlay.color_picker.panel"),
       setter: (
         layout: (
@@ -1228,6 +1304,14 @@
         "surface-accent-hover": Color(Hex("#1589E0")),
         "surface-accent-pressed": Color(Hex("#006CBE")),
         "surface-tab-active": Color(Hex("#103754")),
+        "status-info-bg": Color(Hex("#17324D")),
+        "status-info-border": Color(Hex("#4CA0FF")),
+        "status-success-bg": Color(Hex("#173A2A")),
+        "status-success-border": Color(Hex("#6CCB5F")),
+        "status-warning-bg": Color(Hex("#4B3B1A")),
+        "status-warning-border": Color(Hex("#F7C94B")),
+        "status-error-bg": Color(Hex("#4B2424")),
+        "status-error-border": Color(Hex("#FF99A4")),
         "overlay-dimmer": Color(Rgba(0.0, 0.0, 0.0, 0.58)),
         "border-default": Color(Hex("#3F3F3F")),
         "border-muted": Color(Hex("#333333")),
@@ -1270,6 +1354,14 @@
         "surface-accent-hover": Color(Hex("#0F6CBD")),
         "surface-accent-pressed": Color(Hex("#115EA3")),
         "surface-tab-active": Color(Hex("#E8F3FC")),
+        "status-info-bg": Color(Hex("#E6F2FB")),
+        "status-info-border": Color(Hex("#0F6CBD")),
+        "status-success-bg": Color(Hex("#E7F6E9")),
+        "status-success-border": Color(Hex("#0B6A2B")),
+        "status-warning-bg": Color(Hex("#FFF4D6")),
+        "status-warning-border": Color(Hex("#9A6700")),
+        "status-error-bg": Color(Hex("#FDE7E9")),
+        "status-error-border": Color(Hex("#A4262C")),
         "overlay-dimmer": Color(Rgba(0.0, 0.0, 0.0, 0.25)),
         "border-default": Color(Hex("#D1D1D1")),
         "border-muted": Color(Hex("#E5E5E5")),
@@ -1312,6 +1404,14 @@
         "surface-accent-hover": Color(Hex("#5EFAFF")),
         "surface-accent-pressed": Color(Hex("#00C2D1")),
         "surface-tab-active": Color(Hex("#000000")),
+        "status-info-bg": Color(Hex("#000000")),
+        "status-info-border": Color(Hex("#1AEBFF")),
+        "status-success-bg": Color(Hex("#000000")),
+        "status-success-border": Color(Hex("#00FF00")),
+        "status-warning-bg": Color(Hex("#000000")),
+        "status-warning-border": Color(Hex("#FFFF00")),
+        "status-error-bg": Color(Hex("#000000")),
+        "status-error-border": Color(Hex("#FF4D4D")),
         "overlay-dimmer": Color(Rgba(0.0, 0.0, 0.0, 0.82)),
         "border-default": Color(Hex("#FFFFFF")),
         "border-muted": Color(Hex("#BFBFBF")),

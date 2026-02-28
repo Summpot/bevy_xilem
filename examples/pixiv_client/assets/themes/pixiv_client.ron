@@ -174,10 +174,10 @@
       selector: Class("pixiv.button.warn"),
       setter: (
         colors: (
-          bg: Var("surface-subtle"),
-          hover_bg: Var("surface-subtle-hover"),
-          pressed_bg: Var("surface-subtle-pressed"),
-          border: Var("border-default"),
+          bg: Var("status-error-bg"),
+          hover_bg: Var("status-error-border"),
+          pressed_bg: Var("surface-overlay-item-pressed"),
+          border: Var("status-error-border"),
           text: Var("text-primary"),
         ),
       ),

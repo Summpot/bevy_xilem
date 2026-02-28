@@ -121,6 +121,18 @@ fn default_item_style(world: &bevy_ecs::world::World, class: &str) -> ResolvedSt
     style
 }
 
+fn apply_color_overrides(base: &mut ResolvedStyle, overrides: &ResolvedStyle) {
+    if overrides.colors.bg.is_some() {
+        base.colors.bg = overrides.colors.bg;
+    }
+    if overrides.colors.text.is_some() {
+        base.colors.text = overrides.colors.text;
+    }
+    if overrides.colors.border.is_some() {
+        base.colors.border = overrides.colors.border;
+    }
+}
+
 /// Returns the entity and (x, y) of a positioned overlay, or None if not yet positioned.
 fn overlay_position(
     world: &bevy_ecs::world::World,
@@ -792,8 +804,17 @@ pub(crate) fn project_tooltip(tooltip: &UiTooltip, ctx: ProjectionCtx<'_>) -> Ui
         hide_style_without_collapsing_layout(&mut style);
     }
 
+    let tooltip_width = if computed_pos.width > 1.0 {
+        computed_pos.width
+    } else {
+        96.0
+    };
+
     let text_lbl = apply_label_style(label(tooltip.text.clone()), &style);
-    let panel = apply_widget_style(text_lbl, &style);
+    let panel = apply_widget_style(
+        sized_box(text_lbl).width(Dim::Fixed(Length::px(tooltip_width))),
+        &style,
+    );
 
     Arc::new(transformed(opaque_hitbox_for_entity(ctx.entity, panel)).translate(pos))
 }
@@ -1030,26 +1051,30 @@ pub(crate) fn project_split_pane(pane: &UiSplitPane, ctx: ProjectionCtx<'_>) -> 
 // ---------------------------------------------------------------------------
 
 pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
-    let mut style = resolve_style(ctx.world, ctx.entity);
-    let mut dismiss_style = style.clone();
+    let mut style = default_panel_style(ctx.world, "overlay.toast");
+    let kind_style = match toast.kind {
+        ToastKind::Info => resolve_style_for_classes(ctx.world, ["overlay.toast.info"]),
+        ToastKind::Success => resolve_style_for_classes(ctx.world, ["overlay.toast.success"]),
+        ToastKind::Warning => resolve_style_for_classes(ctx.world, ["overlay.toast.warning"]),
+        ToastKind::Error => resolve_style_for_classes(ctx.world, ["overlay.toast.error"]),
+    };
+    apply_color_overrides(&mut style, &kind_style);
 
-    // Apply kind-based background color if not overridden
-    if style.colors.bg.is_none() {
-        style.colors.bg = Some(match toast.kind {
-            ToastKind::Info => Color::from_rgb8(0x1D, 0x4E, 0xD8),
-            ToastKind::Success => Color::from_rgb8(0x15, 0x80, 0x3D),
-            ToastKind::Warning => Color::from_rgb8(0xB4, 0x5D, 0x09),
-            ToastKind::Error => Color::from_rgb8(0xB9, 0x1C, 0x1C),
-        });
-    }
+    let mut dismiss_style = resolve_style_for_classes(ctx.world, ["overlay.toast.dismiss"]);
     if style.colors.text.is_none() {
-        style.colors.text = Some(Color::WHITE);
+        style.colors.text = Some(Color::from_rgb8(0xF3, 0xF3, 0xF3));
+    }
+    if dismiss_style.colors.text.is_none() {
+        dismiss_style.colors.text = style.colors.text;
+    }
+    if dismiss_style.text.size <= 0.0 {
+        dismiss_style.text.size = style.text.size;
     }
     if style.layout.padding <= 0.0 {
         style.layout.padding = 10.0;
     }
     if style.layout.corner_radius <= 0.0 {
-        style.layout.corner_radius = 4.0;
+        style.layout.corner_radius = 6.0;
     }
     if style.layout.border_width <= 0.0 {
         style.layout.border_width = 1.0;
@@ -1070,6 +1095,12 @@ pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
         hide_style_without_collapsing_layout(&mut dismiss_style);
     }
 
+    let toast_width = if computed_pos.width > 1.0 {
+        computed_pos.width
+    } else {
+        toast.min_width.max(180.0)
+    };
+
     let msg = apply_label_style(label(toast.message.clone()), &style);
     let mut items = vec![msg.flex(1.0).into_any_flex()];
     if toast.show_close_button {
@@ -1081,7 +1112,8 @@ pub(crate) fn project_toast(toast: &UiToast, ctx: ProjectionCtx<'_>) -> UiView {
     }
 
     let panel = apply_widget_style(
-        apply_flex_alignment(flex_row(items), &style).gap(Length::px(8.0)),
+        sized_box(apply_flex_alignment(flex_row(items), &style).gap(Length::px(8.0)))
+            .width(Dim::Fixed(Length::px(toast_width))),
         &style,
     );
 
