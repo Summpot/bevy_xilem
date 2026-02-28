@@ -1,5 +1,1197 @@
 (
   default_variant: "dark",
+  tokens: {
+    "radius-sm": Float(4.0),
+    "radius-md": Float(6.0),
+    "radius-lg": Float(8.0),
+    "radius-pill": Float(999.0),
+    "space-xs": Float(4.0),
+    "space-sm": Float(6.0),
+    "space-md": Float(8.0),
+    "space-lg": Float(10.0),
+    "space-xl": Float(16.0),
+    "gap-sm": Float(6.0),
+    "gap-md": Float(8.0),
+    "gap-lg": Float(10.0),
+    "border-thin": Float(1.0),
+    "text-sm": Float(15.0),
+    "text-md": Float(16.0),
+    "text-lg": Float(22.0),
+    "duration-fast": Float(0.10),
+  },
+  rules: [
+    (
+      selector: Type("UiRoot"),
+      setter: (
+        layout: (
+          justify_content: Start,
+          align_items: Stretch,
+        ),
+        colors: (
+          bg: Var("surface-bg"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiFlexColumn"),
+      setter: (
+        layout: (
+          gap: Var("gap-md"),
+          justify_content: Start,
+          align_items: Stretch,
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiFlexRow"),
+      setter: (
+        layout: (
+          gap: Var("gap-md"),
+          justify_content: Start,
+          align_items: Center,
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiLabel"),
+      setter: (
+        colors: (
+          text: Var("text-primary"),
+        ),
+        text: (
+          size: Var("text-sm"),
+          text_align: Start,
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiButton"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          justify_content: Center,
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          text_align: Center,
+        ),
+        box_shadow: Var("shadow-ui-component"),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiButton"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiButton"), PseudoClass(Pressed)]),
+      setter: (
+        layout: (
+          scale: 0.98,
+        ),
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiCheckbox"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("gap-md"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiCheckbox"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiCheckbox"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiSlider"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("gap-md"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiSlider"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiSlider"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiSwitch"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-pill"),
+          border_width: Var("border-thin"),
+          gap: Var("gap-md"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiSwitch"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiSwitch"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiTextInput"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          justify_content: Start,
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          text_align: Start,
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiTextInput"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiTextInput"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiScrollView"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiComboBox"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          justify_content: Start,
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        text: (
+          text_align: Start,
+        ),
+        box_shadow: Var("shadow-ui-component"),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiComboBox"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiComboBox"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiRadioGroup"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiTabBar"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiTreeNode"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiTreeNode"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiTreeNode"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiTable"),
+      setter: (
+        layout: (
+          gap: Var("border-thin"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiMenuBar"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          gap: Var("space-xs"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-overlay"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiMenuBarItem"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiMenuBarItem"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiMenuBarItem"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiMenuItemPanel"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("space-xs"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiTooltip"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiSpinner"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("gap-md"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiColorPicker"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiColorPicker"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiColorPicker"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiColorPickerPanel"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("gap-sm"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiGroupBox"),
+      setter: (
+        layout: (
+          padding: Var("space-lg"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("gap-sm"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiSplitPane"),
+      setter: (
+        layout: (
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-md"),
+        ),
+        colors: (
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiToast"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("gap-md"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiDatePicker"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Type("UiDatePicker"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Type("UiDatePicker"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Type("UiDatePickerPanel"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("space-xs"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+        ),
+        box_shadow: Var("shadow-flyout"),
+      ),
+    ),
+
+    (
+      selector: Type("UiDialog"),
+      setter: (
+        layout: (
+          padding: Var("space-xl"),
+          gap: Var("gap-lg"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          justify_content: Start,
+          align_items: Stretch,
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+        ),
+        box_shadow: Var("shadow-flyout"),
+      ),
+    ),
+
+    (
+      selector: Type("UiDropdownMenu"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("gap-sm"),
+          justify_content: Start,
+          align_items: Stretch,
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+        ),
+        box_shadow: Var("shadow-flyout"),
+      ),
+    ),
+
+    (
+      selector: Class("overlay.modal.dimmer"),
+      setter: (
+        colors: (
+          bg: Var("overlay-dimmer"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("overlay.dialog.title"),
+      setter: (
+        text: (
+          size: Var("text-lg"),
+          text_align: Start,
+        ),
+        colors: (
+          text: Var("text-heading"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("overlay.dialog.body"),
+      setter: (
+        text: (
+          size: Var("text-md"),
+          text_align: Start,
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("overlay.dialog.dismiss"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          justify_content: Center,
+          align_items: Center,
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          border: Var("surface-accent"),
+          text: Var("text-on-accent"),
+        ),
+        text: (
+          size: Var("text-sm"),
+          text_align: Center,
+        ),
+        box_shadow: Var("shadow-ui-component"),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.dialog.dismiss"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-accent-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.dialog.dismiss"), PseudoClass(Pressed)]),
+      setter: (
+        layout: (
+          scale: 0.98,
+        ),
+        colors: (
+          bg: Var("surface-accent-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Class("overlay.dropdown.menu"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("gap-sm"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+        ),
+        box_shadow: Var("shadow-flyout"),
+      ),
+    ),
+    (
+      selector: Class("overlay.dropdown.item"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-sm"),
+        ),
+        text: (
+          size: Var("text-sm"),
+          text_align: Start,
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.dropdown.item"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.dropdown.item"), PseudoClass(Pressed)]),
+      setter: (
+        layout: (
+          scale: 0.98,
+        ),
+        colors: (
+          bg: Var("surface-overlay-item-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Class("overlay.menu.panel"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("space-xs"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+        ),
+        box_shadow: Var("shadow-flyout"),
+      ),
+    ),
+    (
+      selector: Class("overlay.menu.item"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+          border: Var("border-default"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.menu.item"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.menu.item"), PseudoClass(Pressed)]),
+      setter: (
+        layout: (
+          scale: 0.98,
+        ),
+        colors: (
+          bg: Var("surface-overlay-item-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Class("overlay.tooltip"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        box_shadow: Var("shadow-flyout"),
+      ),
+    ),
+
+    (
+      selector: Class("overlay.color_picker.panel"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("gap-sm"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+        ),
+        box_shadow: Var("shadow-flyout"),
+      ),
+    ),
+    (
+      selector: Class("overlay.color_picker.swatch"),
+      setter: (
+        layout: (
+          corner_radius: 3.0,
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("overlay.color_picker.value"),
+      setter: (
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Class("overlay.date_picker.panel"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+          gap: Var("space-xs"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-default"),
+        ),
+        box_shadow: Var("shadow-flyout"),
+      ),
+    ),
+    (
+      selector: Class("overlay.date_picker.cell"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+          border: Var("border-default"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.date_picker.cell"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("overlay.date_picker.cell"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("overlay.date_picker.nav"),
+      setter: (
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Class("widget.radio.item"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-sm"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("widget.radio.item"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("widget.radio.item"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-overlay-item-pressed"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Class("widget.tab.header"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("widget.tab.header"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("widget.tab.header"), PseudoClass(Pressed)]),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("widget.tab.active"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-tab-active"),
+          border: Var("accent-primary"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Class("widget.table.header"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("widget.table.cell"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-muted"),
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Class("widget.group_box.title"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+
+    (
+      selector: Class("template.checkbox.indicator"),
+      setter: (
+        colors: (
+          text: Var("accent-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.slider.track"),
+      setter: (
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.slider.thumb"),
+      setter: (
+        colors: (
+          text: Var("accent-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.switch.thumb"),
+      setter: (
+        colors: (
+          text: Var("accent-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.scroll_view.viewport"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-sm"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-elevated"),
+          border: Var("border-muted"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.scroll_view.scrollbar.vertical"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-pill"),
+        ),
+        colors: (
+          bg: Var("scrollbar-track"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.scroll_view.scrollbar.horizontal"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-pill"),
+        ),
+        colors: (
+          bg: Var("scrollbar-track"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("template.scroll_view.thumb.vertical"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-pill"),
+        ),
+        colors: (
+          bg: Var("scrollbar-thumb"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("template.scroll_view.thumb.horizontal"),
+      setter: (
+        layout: (
+          corner_radius: Var("radius-pill"),
+        ),
+        colors: (
+          bg: Var("scrollbar-thumb"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: And([Class("template.scroll_view.thumb.vertical"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("scrollbar-thumb-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("template.scroll_view.thumb.horizontal"), PseudoClass(Hovered)]),
+      setter: (
+        colors: (
+          bg: Var("scrollbar-thumb-hover"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("template.scroll_view.thumb.vertical"), PseudoClass(Pressed)]),
+      setter: (
+        layout: (
+          scale: 0.98,
+        ),
+        colors: (
+          bg: Var("scrollbar-thumb-pressed"),
+        ),
+      ),
+    ),
+    (
+      selector: And([Class("template.scroll_view.thumb.horizontal"), PseudoClass(Pressed)]),
+      setter: (
+        layout: (
+          scale: 0.98,
+        ),
+        colors: (
+          bg: Var("scrollbar-thumb-pressed"),
+        ),
+      ),
+    ),
+  ],
   variants: {
     "dark": (
       tokens: {
@@ -24,23 +1216,6 @@
         "text-on-accent": Color(Hex("#FFFFFF")),
         "text-heading": Color(Hex("#F9F9F9")),
         "accent-primary": Color(Hex("#0078D4")),
-        "radius-sm": Float(4.0),
-        "radius-md": Float(6.0),
-        "radius-lg": Float(8.0),
-        "radius-pill": Float(999.0),
-        "space-xs": Float(4.0),
-        "space-sm": Float(6.0),
-        "space-md": Float(8.0),
-        "space-lg": Float(10.0),
-        "space-xl": Float(16.0),
-        "gap-sm": Float(6.0),
-        "gap-md": Float(8.0),
-        "gap-lg": Float(10.0),
-        "border-thin": Float(1.0),
-        "text-sm": Float(15.0),
-        "text-md": Float(16.0),
-        "text-lg": Float(22.0),
-        "duration-fast": Float(0.10),
         "scrollbar-track": Color(Hex("#FFFFFF14")),
         "scrollbar-thumb": Color(Hex("#FFFFFF5C")),
         "scrollbar-thumb-hover": Color(Hex("#FFFFFF8C")),
@@ -58,1179 +1233,6 @@
           blur: 30.0,
         )),
       },
-      rules: [
-        (
-          selector: Type("UiRoot"),
-          setter: (
-            layout: (
-              justify_content: Start,
-              align_items: Stretch,
-            ),
-            colors: (
-              bg: Var("surface-bg"),
-            ),
-          ),
-        ),
-        (
-          selector: Type("UiFlexColumn"),
-          setter: (
-            layout: (
-              gap: Var("gap-md"),
-              justify_content: Start,
-              align_items: Stretch,
-            ),
-          ),
-        ),
-        (
-          selector: Type("UiFlexRow"),
-          setter: (
-            layout: (
-              gap: Var("gap-md"),
-              justify_content: Start,
-              align_items: Center,
-            ),
-          ),
-        ),
-        (
-          selector: Type("UiLabel"),
-          setter: (
-            colors: (
-              text: Var("text-primary"),
-            ),
-            text: (
-              size: Var("text-sm"),
-              text_align: Start,
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiButton"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              justify_content: Center,
-              align_items: Center,
-            ),
-            colors: (
-              bg: Var("surface-subtle"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-            text: (
-              text_align: Center,
-            ),
-            box_shadow: Var("shadow-ui-component"),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Type("UiButton"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Type("UiButton"), PseudoClass(Pressed)]),
-          setter: (
-            layout: (
-              scale: 0.98,
-            ),
-            colors: (
-              bg: Var("surface-subtle-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiCheckbox"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              gap: Var("gap-md"),
-            ),
-            colors: (
-              bg: Var("surface-subtle"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Type("UiCheckbox"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Type("UiCheckbox"), PseudoClass(Pressed)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiSlider"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              gap: Var("gap-md"),
-            ),
-            colors: (
-              bg: Var("surface-subtle"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Type("UiSlider"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Type("UiSlider"), PseudoClass(Pressed)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiSwitch"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-pill"),
-              border_width: Var("border-thin"),
-              gap: Var("gap-md"),
-            ),
-            colors: (
-              bg: Var("surface-panel"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Type("UiSwitch"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Type("UiSwitch"), PseudoClass(Pressed)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiTextInput"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              justify_content: Start,
-              align_items: Center,
-            ),
-            colors: (
-              bg: Var("surface-elevated"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-            text: (
-              text_align: Start,
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Type("UiTextInput"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Type("UiTextInput"), PseudoClass(Pressed)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiScrollView"),
-          setter: (
-            layout: (
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-panel"),
-              border: Var("border-default"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiComboBox"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              justify_content: Start,
-              align_items: Center,
-            ),
-            colors: (
-              bg: Var("surface-subtle"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-            text: (
-              text_align: Start,
-            ),
-            box_shadow: Var("shadow-ui-component"),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Type("UiComboBox"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Type("UiComboBox"), PseudoClass(Pressed)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiRadioGroup"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-subtle"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiTabBar"),
-          setter: (
-            layout: (
-              gap: Var("gap-sm"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiTreeNode"),
-          setter: (
-            layout: (
-              padding: Var("space-xs"),
-              corner_radius: Var("radius-sm"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-subtle"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Type("UiTreeNode"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Type("UiTreeNode"), PseudoClass(Pressed)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiTable"),
-          setter: (
-            layout: (
-              gap: Var("border-thin"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              border: Var("border-default"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiMenuBar"),
-          setter: (
-            layout: (
-              padding: Var("space-xs"),
-              gap: Var("space-xs"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-overlay"),
-              border: Var("border-default"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiMenuBarItem"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-sm"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-subtle"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Type("UiMenuBarItem"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Type("UiMenuBarItem"), PseudoClass(Pressed)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiMenuItemPanel"),
-          setter: (
-            layout: (
-              padding: Var("space-md"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              gap: Var("space-xs"),
-            ),
-            colors: (
-              bg: Var("surface-elevated"),
-              border: Var("border-default"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiTooltip"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-sm"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-panel"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiSpinner"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              gap: Var("gap-md"),
-            ),
-            colors: (
-              bg: Var("surface-subtle"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiColorPicker"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-subtle"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Type("UiColorPicker"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Type("UiColorPicker"), PseudoClass(Pressed)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiColorPickerPanel"),
-          setter: (
-            layout: (
-              padding: Var("space-md"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              gap: Var("gap-sm"),
-            ),
-            colors: (
-              bg: Var("surface-elevated"),
-              border: Var("border-default"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiGroupBox"),
-          setter: (
-            layout: (
-              padding: Var("space-lg"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              gap: Var("gap-sm"),
-            ),
-            colors: (
-              bg: Var("surface-panel"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiSplitPane"),
-          setter: (
-            layout: (
-              border_width: Var("border-thin"),
-              corner_radius: Var("radius-md"),
-            ),
-            colors: (
-              border: Var("border-default"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiToast"),
-          setter: (
-            layout: (
-              padding: Var("space-md"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              gap: Var("gap-md"),
-            ),
-            colors: (
-              bg: Var("surface-subtle"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiDatePicker"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-subtle"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Type("UiDatePicker"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Type("UiDatePicker"), PseudoClass(Pressed)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Type("UiDatePickerPanel"),
-          setter: (
-            layout: (
-              padding: Var("space-md"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              gap: Var("space-xs"),
-            ),
-            colors: (
-              bg: Var("surface-elevated"),
-              border: Var("border-default"),
-            ),
-            box_shadow: Var("shadow-flyout"),
-          ),
-        ),
-
-        (
-          selector: Type("UiDialog"),
-          setter: (
-            layout: (
-              padding: Var("space-xl"),
-              gap: Var("gap-lg"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              justify_content: Start,
-              align_items: Stretch,
-            ),
-            colors: (
-              bg: Var("surface-elevated"),
-              border: Var("border-default"),
-            ),
-            box_shadow: Var("shadow-flyout"),
-          ),
-        ),
-
-        (
-          selector: Type("UiDropdownMenu"),
-          setter: (
-            layout: (
-              padding: Var("space-md"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              gap: Var("gap-sm"),
-              justify_content: Start,
-              align_items: Stretch,
-            ),
-            colors: (
-              bg: Var("surface-elevated"),
-              border: Var("border-default"),
-            ),
-            box_shadow: Var("shadow-flyout"),
-          ),
-        ),
-
-        (
-          selector: Class("overlay.modal.dimmer"),
-          setter: (
-            colors: (
-              bg: Var("overlay-dimmer"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("overlay.dialog.title"),
-          setter: (
-            text: (
-              size: Var("text-lg"),
-              text_align: Start,
-            ),
-            colors: (
-              text: Var("text-heading"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("overlay.dialog.body"),
-          setter: (
-            text: (
-              size: Var("text-md"),
-              text_align: Start,
-            ),
-            colors: (
-              text: Var("text-secondary"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("overlay.dialog.dismiss"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              justify_content: Center,
-              align_items: Center,
-            ),
-            colors: (
-              bg: Var("surface-accent"),
-              border: Var("surface-accent"),
-              text: Var("text-on-accent"),
-            ),
-            text: (
-              size: Var("text-sm"),
-              text_align: Center,
-            ),
-            box_shadow: Var("shadow-ui-component"),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Class("overlay.dialog.dismiss"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-accent-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Class("overlay.dialog.dismiss"), PseudoClass(Pressed)]),
-          setter: (
-            layout: (
-              scale: 0.98,
-            ),
-            colors: (
-              bg: Var("surface-accent-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Class("overlay.dropdown.menu"),
-          setter: (
-            layout: (
-              padding: Var("space-md"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              gap: Var("gap-sm"),
-            ),
-            colors: (
-              bg: Var("surface-elevated"),
-              border: Var("border-default"),
-            ),
-            box_shadow: Var("shadow-flyout"),
-          ),
-        ),
-        (
-          selector: Class("overlay.dropdown.item"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-sm"),
-            ),
-            text: (
-              size: Var("text-sm"),
-              text_align: Start,
-            ),
-            colors: (
-              text: Var("text-primary"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Class("overlay.dropdown.item"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-overlay-item-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Class("overlay.dropdown.item"), PseudoClass(Pressed)]),
-          setter: (
-            layout: (
-              scale: 0.98,
-            ),
-            colors: (
-              bg: Var("surface-overlay-item-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Class("overlay.menu.panel"),
-          setter: (
-            layout: (
-              padding: Var("space-md"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              gap: Var("space-xs"),
-            ),
-            colors: (
-              bg: Var("surface-elevated"),
-              border: Var("border-default"),
-            ),
-            box_shadow: Var("shadow-flyout"),
-          ),
-        ),
-        (
-          selector: Class("overlay.menu.item"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-sm"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              text: Var("text-primary"),
-              border: Var("border-default"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Class("overlay.menu.item"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-overlay-item-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Class("overlay.menu.item"), PseudoClass(Pressed)]),
-          setter: (
-            layout: (
-              scale: 0.98,
-            ),
-            colors: (
-              bg: Var("surface-overlay-item-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Class("overlay.tooltip"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-sm"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-panel"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-            box_shadow: Var("shadow-flyout"),
-          ),
-        ),
-
-        (
-          selector: Class("overlay.color_picker.panel"),
-          setter: (
-            layout: (
-              padding: Var("space-md"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              gap: Var("gap-sm"),
-            ),
-            colors: (
-              bg: Var("surface-elevated"),
-              border: Var("border-default"),
-            ),
-            box_shadow: Var("shadow-flyout"),
-          ),
-        ),
-        (
-          selector: Class("overlay.color_picker.swatch"),
-          setter: (
-            layout: (
-              corner_radius: 3.0,
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              border: Var("border-default"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("overlay.color_picker.value"),
-          setter: (
-            colors: (
-              text: Var("text-primary"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Class("overlay.date_picker.panel"),
-          setter: (
-            layout: (
-              padding: Var("space-md"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-              gap: Var("space-xs"),
-            ),
-            colors: (
-              bg: Var("surface-elevated"),
-              border: Var("border-default"),
-            ),
-            box_shadow: Var("shadow-flyout"),
-          ),
-        ),
-        (
-          selector: Class("overlay.date_picker.cell"),
-          setter: (
-            layout: (
-              padding: Var("space-xs"),
-              corner_radius: Var("radius-sm"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              text: Var("text-primary"),
-              border: Var("border-default"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Class("overlay.date_picker.cell"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-overlay-item-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Class("overlay.date_picker.cell"), PseudoClass(Pressed)]),
-          setter: (
-            colors: (
-              bg: Var("surface-overlay-item-pressed"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("overlay.date_picker.nav"),
-          setter: (
-            colors: (
-              text: Var("text-primary"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Class("widget.radio.item"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-sm"),
-            ),
-            colors: (
-              text: Var("text-primary"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Class("widget.radio.item"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-overlay-item-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Class("widget.radio.item"), PseudoClass(Pressed)]),
-          setter: (
-            colors: (
-              bg: Var("surface-overlay-item-pressed"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Class("widget.tab.header"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-subtle"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Class("widget.tab.header"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Class("widget.tab.header"), PseudoClass(Pressed)]),
-          setter: (
-            colors: (
-              bg: Var("surface-subtle-pressed"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("widget.tab.active"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              corner_radius: Var("radius-md"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-tab-active"),
-              border: Var("accent-primary"),
-              text: Var("text-on-accent"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Class("widget.table.header"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-panel"),
-              border: Var("border-default"),
-              text: Var("text-primary"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("widget.table.cell"),
-          setter: (
-            layout: (
-              padding: Var("space-sm"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-panel"),
-              border: Var("border-muted"),
-              text: Var("text-secondary"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Class("widget.group_box.title"),
-          setter: (
-            text: (
-              size: Var("text-sm"),
-            ),
-            colors: (
-              text: Var("text-primary"),
-            ),
-          ),
-        ),
-
-        (
-          selector: Class("template.checkbox.indicator"),
-          setter: (
-            colors: (
-              text: Var("accent-primary"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("template.slider.track"),
-          setter: (
-            colors: (
-              text: Var("text-secondary"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("template.slider.thumb"),
-          setter: (
-            colors: (
-              text: Var("accent-primary"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("template.switch.thumb"),
-          setter: (
-            colors: (
-              text: Var("accent-primary"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("template.scroll_view.viewport"),
-          setter: (
-            layout: (
-              corner_radius: Var("radius-sm"),
-              border_width: Var("border-thin"),
-            ),
-            colors: (
-              bg: Var("surface-elevated"),
-              border: Var("border-muted"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("template.scroll_view.scrollbar.vertical"),
-          setter: (
-            layout: (
-              corner_radius: Var("radius-pill"),
-            ),
-            colors: (
-              bg: Var("scrollbar-track"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("template.scroll_view.scrollbar.horizontal"),
-          setter: (
-            layout: (
-              corner_radius: Var("radius-pill"),
-            ),
-            colors: (
-              bg: Var("scrollbar-track"),
-            ),
-          ),
-        ),
-        (
-          selector: Class("template.scroll_view.thumb.vertical"),
-          setter: (
-            layout: (
-              corner_radius: Var("radius-pill"),
-            ),
-            colors: (
-              bg: Var("scrollbar-thumb"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: Class("template.scroll_view.thumb.horizontal"),
-          setter: (
-            layout: (
-              corner_radius: Var("radius-pill"),
-            ),
-            colors: (
-              bg: Var("scrollbar-thumb"),
-            ),
-            transition: Var("duration-fast"),
-          ),
-        ),
-        (
-          selector: And([Class("template.scroll_view.thumb.vertical"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("scrollbar-thumb-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Class("template.scroll_view.thumb.horizontal"), PseudoClass(Hovered)]),
-          setter: (
-            colors: (
-              bg: Var("scrollbar-thumb-hover"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Class("template.scroll_view.thumb.vertical"), PseudoClass(Pressed)]),
-          setter: (
-            layout: (
-              scale: 0.98,
-            ),
-            colors: (
-              bg: Var("scrollbar-thumb-pressed"),
-            ),
-          ),
-        ),
-        (
-          selector: And([Class("template.scroll_view.thumb.horizontal"), PseudoClass(Pressed)]),
-          setter: (
-            layout: (
-              scale: 0.98,
-            ),
-            colors: (
-              bg: Var("scrollbar-thumb-pressed"),
-            ),
-          ),
-        ),
-      ],
     ),
 
     "light": (

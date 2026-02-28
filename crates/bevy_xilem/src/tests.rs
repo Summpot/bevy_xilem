@@ -111,7 +111,7 @@ fn embedded_fluent_light_theme_installs_and_overrides_surface_bg_token() {
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
-    crate::install_embedded_fluent_light_theme(app.world_mut())
+    crate::install_embedded_fluent_theme_variant_by_name(app.world_mut(), "light")
         .expect("embedded fluent light theme should install");
 
     let sheet = app.world().resource::<crate::StyleSheet>();
@@ -132,11 +132,8 @@ fn embedded_fluent_high_contrast_theme_installs_and_overrides_surface_bg_token()
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
-    crate::install_embedded_fluent_theme_variant(
-        app.world_mut(),
-        crate::FluentThemeVariant::HighContrast,
-    )
-    .expect("embedded fluent high-contrast theme should install");
+    crate::install_embedded_fluent_theme_variant_by_name(app.world_mut(), "high-contrast")
+        .expect("embedded fluent high-contrast theme should install");
 
     let sheet = app.world().resource::<crate::StyleSheet>();
     let token = sheet
@@ -156,7 +153,7 @@ fn embedded_fluent_theme_variant_api_switches_between_dark_light_and_high_contra
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin);
 
-    crate::install_embedded_fluent_theme_variant(app.world_mut(), crate::FluentThemeVariant::Light)
+    crate::install_embedded_fluent_theme_variant_by_name(app.world_mut(), "light")
         .expect("light variant should install");
 
     let light_surface = app
@@ -171,7 +168,7 @@ fn embedded_fluent_theme_variant_api_switches_between_dark_light_and_high_contra
         crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0xFA, 0xF9, 0xF8))
     );
 
-    crate::install_embedded_fluent_theme_variant(app.world_mut(), crate::FluentThemeVariant::Dark)
+    crate::install_embedded_fluent_theme_variant_by_name(app.world_mut(), "dark")
         .expect("dark variant should install");
 
     let dark_surface = app
@@ -186,11 +183,8 @@ fn embedded_fluent_theme_variant_api_switches_between_dark_light_and_high_contra
         crate::TokenValue::Color(crate::xilem::Color::from_rgb8(0x1F, 0x1F, 0x1F))
     );
 
-    crate::install_embedded_fluent_theme_variant(
-        app.world_mut(),
-        crate::FluentThemeVariant::HighContrast,
-    )
-    .expect("high-contrast variant should install");
+    crate::install_embedded_fluent_theme_variant_by_name(app.world_mut(), "high-contrast")
+        .expect("high-contrast variant should install");
 
     let hc_surface = app
         .world()
@@ -209,21 +203,21 @@ fn embedded_fluent_theme_variant_api_switches_between_dark_light_and_high_contra
 fn parse_stylesheet_variants_merges_default_rules_and_variant_overrides() {
     let ron_text = r##"(
         default_variant: "dark",
+        rules: [
+            (
+                selector: Class("demo.root"),
+                setter: (
+                    colors: (
+                        bg: Var("surface-bg"),
+                    ),
+                ),
+            ),
+        ],
         variants: {
             "dark": (
                 tokens: {
                     "surface-bg": Color(Hex("#111111")),
                 },
-                rules: [
-                    (
-                        selector: Class("demo.root"),
-                        setter: (
-                            colors: (
-                                bg: Var("surface-bg"),
-                            ),
-                        ),
-                    ),
-                ],
             ),
             "light": (
                 tokens: {
@@ -254,6 +248,40 @@ fn parse_stylesheet_variants_merges_default_rules_and_variant_overrides() {
             0xEE, 0xEE, 0xEE,
         )))
     );
+}
+
+#[test]
+fn embedded_fluent_variants_inherit_shared_top_level_rules() {
+    let variants = crate::styling::parse_stylesheet_variants_ron_for_tests(
+        crate::styling::BUILTIN_FLUENT_THEME_RON,
+    )
+    .expect("embedded fluent theme bundle should parse");
+
+    let dark = variants
+        .variants
+        .get("dark")
+        .expect("dark variant should exist");
+    let light = variants
+        .variants
+        .get("light")
+        .expect("light variant should exist");
+    let high_contrast = variants
+        .variants
+        .get("high-contrast")
+        .expect("high-contrast variant should exist");
+
+    assert!(!dark.rules.is_empty(), "dark variant rules should be non-empty");
+    assert!(
+        !light.rules.is_empty(),
+        "light variant should inherit non-empty shared rules"
+    );
+    assert!(
+        !high_contrast.rules.is_empty(),
+        "high-contrast variant should inherit non-empty shared rules"
+    );
+
+    assert_eq!(light.rules.len(), dark.rules.len());
+    assert_eq!(high_contrast.rules.len(), dark.rules.len());
 }
 
 #[test]
@@ -2365,18 +2393,14 @@ fn embedded_fluent_theme_color_fields_do_not_parse_hex_literals_as_var_tokens() 
             }
         };
 
-    for (theme_name, ron) in [
-        ("fluent_dark", crate::styling::BUILTIN_FLUENT_DARK_THEME_RON),
-        (
-            "fluent_light",
-            crate::styling::BUILTIN_FLUENT_LIGHT_THEME_RON,
-        ),
-    ] {
-        let sheet = crate::styling::parse_stylesheet_ron_for_tests(ron)
-            .unwrap_or_else(|_| panic!("embedded {theme_name} theme should parse"));
+    let variants = crate::styling::parse_stylesheet_variants_ron_for_tests(
+        crate::styling::BUILTIN_FLUENT_THEME_RON,
+    )
+    .expect("embedded fluent theme bundle should parse");
 
+    for (variant_name, sheet) in &variants.variants {
         for rule in &sheet.rules {
-            let selector = format!("{theme_name}::{:?}", rule.selector);
+            let selector = format!("{variant_name}::{:?}", rule.selector);
             let colors = &rule.setter.colors;
             assert_not_hex_var(&colors.bg, "bg", &selector);
             assert_not_hex_var(&colors.text, "text", &selector);

@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_xilem::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, BuiltinUiAction, ColorStyle, FluentThemeVariant,
-    HasTooltip, LayoutStyle, LocalizeText, ProjectionCtx, Selector, StyleClass, StyleRule,
-    StyleSetter, StyleSheet, StyleTransition, SyncAssetSource, SyncTextSource, TextStyle,
-    ToastKind, UiButton, UiCheckbox, UiCheckboxChanged, UiColorPicker, UiColorPickerChanged,
-    UiComboBox, UiComboBoxChanged, UiComboOption, UiDatePicker, UiDatePickerChanged, UiDialog,
-    UiEventQueue, UiFlexColumn, UiFlexRow, UiGroupBox, UiLabel, UiMenuBar, UiMenuBarItem,
-    UiMenuItem, UiMenuItemSelected, UiRadioGroup, UiRadioGroupChanged, UiRoot, UiScrollView,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, BuiltinUiAction, ColorStyle, HasTooltip,
+    LayoutStyle, LocalizeText, ProjectionCtx, Selector, StyleClass, StyleRule, StyleSetter,
+    StyleSheet, StyleTransition, SyncAssetSource, SyncTextSource, TextStyle, ToastKind, UiButton,
+    UiCheckbox, UiCheckboxChanged, UiColorPicker, UiColorPickerChanged, UiComboBox,
+    UiComboBoxChanged, UiComboOption, UiDatePicker, UiDatePickerChanged, UiDialog, UiEventQueue,
+    UiFlexColumn, UiFlexRow, UiGroupBox, UiLabel, UiMenuBar, UiMenuBarItem, UiMenuItem,
+    UiMenuItemSelected, UiRadioGroup, UiRadioGroupChanged, UiRoot, UiScrollView,
     UiScrollViewChanged, UiSlider, UiSliderChanged, UiSpinner, UiSplitPane, UiTabBar, UiTabChanged,
     UiTable, UiTextInput, UiTextInputChanged, UiToast, UiTreeNode, UiTreeNodeToggled, UiView,
     apply_label_style, apply_widget_style,
@@ -17,7 +17,7 @@ use bevy_xilem::{
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_math::Vec2,
     bevy_text::TextPlugin,
-    install_embedded_fluent_theme_variant, resolve_style, resolve_style_for_classes,
+    install_embedded_fluent_theme_variant_by_name, resolve_style, resolve_style_for_classes,
     run_app_with_window_options, spawn_in_overlay_root,
     xilem::{
         Color,
@@ -47,11 +47,11 @@ impl ThemeMode {
         }
     }
 
-    const fn variant(self) -> FluentThemeVariant {
+    const fn variant_name(self) -> &'static str {
         match self {
-            Self::FluentDark => FluentThemeVariant::Dark,
-            Self::FluentLight => FluentThemeVariant::Light,
-            Self::FluentHighContrast => FluentThemeVariant::HighContrast,
+            Self::FluentDark => "dark",
+            Self::FluentLight => "light",
+            Self::FluentHighContrast => "high-contrast",
         }
     }
 
@@ -1582,7 +1582,8 @@ fn drain_showcase_events(world: &mut World) {
 
         if event.action.combo == rt.theme_mode_combo {
             if let Some(theme) = ThemeMode::from_combo_value(event.action.value.as_str()) {
-                let install_result = install_embedded_fluent_theme_variant(world, theme.variant());
+                let install_result =
+                    install_embedded_fluent_theme_variant_by_name(world, theme.variant_name());
 
                 if let Err(error) = install_result {
                     update_status(

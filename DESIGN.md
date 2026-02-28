@@ -146,7 +146,9 @@ Baseline Fluent theme includes a global `Type("UiRoot")` preflight rule for app-
 
 `BevyXilemPlugin` boots with embedded **Fluent Dark** by default. Built-in Fluent theming is provided as a **single multi-variant bundle** (`fluent_theme.ron`) that contains named variants (`dark`, `light`, `high-contrast`, and future additions). The styling system parses/registers this bundle into `RegisteredStyleVariants`, then installs a chosen variant into `BaseStyleSheet`.
 
-Apps/examples can switch variants at runtime through `install_embedded_fluent_theme_variant(FluentThemeVariant::{Dark|Light|HighContrast})` or by name via `install_embedded_fluent_theme_variant_by_name(...)`. Non-default variants inherit full selector/rule coverage from the default variant and primarily override tokens, enabling palette-level switching without duplicating the full rule graph.
+Apps/examples can switch variants at runtime by name via `install_embedded_fluent_theme_variant_by_name(...)`, and plugin bootstrap installs the theme file's own default via `install_embedded_fluent_theme_default_variant(...)`.
+
+Variant bundles support top-level shared `rules`/`tokens` plus per-variant overrides. This keeps common selector graphs out of any single variant and lets each variant focus on palette/token deltas.
 
 ### 6.3 Hit-testing invariants
 

@@ -639,33 +639,8 @@ fn apply_base_stylesheet(world: &mut World, new_base: StyleSheet) {
     upsert_rules_by_selector(&mut runtime_sheet, filtered_rules);
 }
 
-/// Embedded baseline Fluent-inspired dark theme used with zero filesystem configuration.
-pub const BUILTIN_FLUENT_DARK_THEME_RON: &str = include_str!("theme/fluent_dark.ron");
-
-/// Embedded Fluent-inspired light palette overrides.
-pub const BUILTIN_FLUENT_LIGHT_THEME_RON: &str = include_str!("theme/fluent_light.ron");
-
 /// Embedded Fluent theme bundle containing multiple named variants.
 pub const BUILTIN_FLUENT_THEME_RON: &str = include_str!("theme/fluent_theme.ron");
-
-/// Built-in Fluent theme variants.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FluentThemeVariant {
-    Dark,
-    Light,
-    HighContrast,
-}
-
-impl FluentThemeVariant {
-    #[must_use]
-    pub const fn as_name(self) -> &'static str {
-        match self {
-            Self::Dark => "dark",
-            Self::Light => "light",
-            Self::HighContrast => "high-contrast",
-        }
-    }
-}
 
 /// Register built-in ECS component type aliases usable from RON selectors.
 pub fn register_builtin_style_type_aliases(world: &mut World) {
@@ -767,6 +742,22 @@ pub fn install_registered_style_variant(world: &mut World, variant_name: &str) -
     Ok(())
 }
 
+/// Install the default registered stylesheet variant.
+pub fn install_registered_default_style_variant(world: &mut World) -> io::Result<()> {
+    let default_variant = world
+        .get_resource::<RegisteredStyleVariants>()
+        .ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "style variants are not registered in this world",
+            )
+        })?
+        .default_variant
+        .clone();
+
+    install_registered_style_variant(world, default_variant.as_str())
+}
+
 /// Register all embedded Fluent variants from the bundled multi-variant theme file.
 pub fn register_embedded_fluent_theme_variants(world: &mut World) -> io::Result<()> {
     register_stylesheet_variants_ron(world, BUILTIN_FLUENT_THEME_RON)
@@ -781,25 +772,10 @@ pub fn install_embedded_fluent_theme_variant_by_name(
     install_registered_style_variant(world, variant_name)
 }
 
-/// Install the embedded Fluent-inspired dark baseline stylesheet.
-pub fn install_embedded_fluent_dark_theme(world: &mut World) -> io::Result<()> {
-    install_embedded_fluent_theme_variant_by_name(world, FluentThemeVariant::Dark.as_name())
-}
-
-/// Install one of the embedded Fluent theme variants.
-pub fn install_embedded_fluent_theme_variant(
-    world: &mut World,
-    variant: FluentThemeVariant,
-) -> io::Result<()> {
-    install_embedded_fluent_theme_variant_by_name(world, variant.as_name())
-}
-
-/// Install the embedded Fluent-inspired light theme.
-///
-/// This keeps selector/rule coverage identical to Fluent dark by first installing
-/// the dark baseline and then applying light token overrides.
-pub fn install_embedded_fluent_light_theme(world: &mut World) -> io::Result<()> {
-    install_embedded_fluent_theme_variant_by_name(world, FluentThemeVariant::Light.as_name())
+/// Install the default variant from the embedded Fluent theme bundle.
+pub fn install_embedded_fluent_theme_default_variant(world: &mut World) -> io::Result<()> {
+    register_embedded_fluent_theme_variants(world)?;
+    install_registered_default_style_variant(world)
 }
 
 /// Merge a baseline stylesheet RON into the base + runtime tiers.
@@ -2345,6 +2321,10 @@ struct StyleSheetDef {
 struct StyleSheetVariantsDef {
     default_variant: String,
     #[serde(default)]
+    tokens: HashMap<String, TokenDef>,
+    #[serde(default)]
+    rules: Vec<StyleRuleDef>,
+    #[serde(default)]
     variants: HashMap<String, StyleSheetDef>,
 }
 
@@ -3040,26 +3020,26 @@ fn stylesheet_variants_from_ron_bytes(bytes: &[u8]) -> io::Result<RegisteredStyl
     }
 
     let default_variant = parsed.default_variant;
+    let base_sheet = stylesheet_from_def(StyleSheetDef {
+        tokens: parsed.tokens,
+        rules: parsed.rules,
+    })?;
+
     let mut raw_variants = HashMap::new();
     for (name, def) in parsed.variants {
         raw_variants.insert(name, stylesheet_from_def(def)?);
     }
 
-    let default_sheet = raw_variants.get(&default_variant).cloned().ok_or_else(|| {
-        io::Error::new(
+    if !raw_variants.contains_key(&default_variant) {
+        return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("stylesheet variants RON default_variant `{default_variant}` is not defined"),
-        )
-    })?;
+        ));
+    }
 
     let mut variants = HashMap::new();
     for (name, variant_sheet) in raw_variants {
-        if name == default_variant {
-            variants.insert(name, default_sheet.clone());
-            continue;
-        }
-
-        let mut merged = default_sheet.clone();
+        let mut merged = base_sheet.clone();
         merge_sheet_inplace(&mut merged, variant_sheet);
         variants.insert(name, merged);
     }
