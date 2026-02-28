@@ -1,0 +1,169 @@
+(
+  rules: [
+    (
+      selector: Class("example.theme-toggle"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("todo.root"),
+      setter: (
+        layout: (
+          gap: Var("gap-xs"),
+          padding: 50.0,
+        ),
+      ),
+    ),
+    (
+      selector: Class("todo.header"),
+      setter: (
+        text: (
+          size: 80.0,
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("todo.input-area"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("todo.input"),
+      setter: (
+        text: (
+          size: Var("text-md"),
+        ),
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("todo.add-button"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          hover_bg: Var("surface-accent-hover"),
+          pressed_bg: Var("surface-accent-pressed"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("todo.empty"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-md"),
+        ),
+        colors: (
+          border: Var("border-default"),
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("todo.list-viewport"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-md"),
+        ),
+        colors: (
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("todo.item"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-md"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          hover_bg: Var("surface-subtle-hover"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("todo.item-checkbox"),
+      setter: (
+        text: (
+          size: Var("text-md"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("todo.delete-button"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("todo.filter-bar"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("todo.filter-toggle"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+        ),
+      ),
+    ),
+  ],
+)

@@ -1,0 +1,113 @@
+(
+  rules: [
+    (
+      selector: Class("example.theme-toggle"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("download.root"),
+      setter: (
+        layout: (
+          padding: Var("space-xl"),
+          gap: Var("gap-md"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("download.title"),
+      setter: (
+        text: (
+          size: 22.0,
+        ),
+        colors: (
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("download.row"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("download.url-input"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+        layout: (
+          padding: Var("space-sm"),
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-md"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("download.button"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          hover_bg: Var("surface-accent-hover"),
+          pressed_bg: Var("surface-accent-pressed"),
+          text: Var("text-on-accent"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("download.status"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("download.dialog"),
+      setter: (
+        layout: (
+          padding: Var("space-lg"),
+          gap: Var("gap-md"),
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-lg"),
+        ),
+        colors: (
+          bg: Var("surface-overlay"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+  ],
+)

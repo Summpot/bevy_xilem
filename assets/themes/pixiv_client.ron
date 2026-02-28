@@ -1,0 +1,249 @@
+(
+  rules: [
+    (
+      selector: Class("example.theme-toggle"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("pixiv.root"),
+      setter: (
+        layout: (
+          padding: Var("space-lg"),
+          gap: Var("gap-lg"),
+        ),
+        colors: (
+          bg: Var("surface-bg"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.sidebar"),
+      setter: (
+        layout: (
+          padding: Var("space-lg"),
+          gap: Var("gap-md"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.sidebar.section"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.sidebar.title"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.sidebar.button"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("pixiv.sidebar.button.active"),
+      setter: (
+        colors: (
+          bg: Var("surface-accent"),
+          hover_bg: Var("surface-accent-hover"),
+          pressed_bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.auth-panel"),
+      setter: (
+        layout: (
+          padding: Var("space-lg"),
+          gap: Var("gap-md"),
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-lg"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.button"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        text: (
+          size: Var("text-sm"),
+          text_align: Center,
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("pixiv.button.primary"),
+      setter: (
+        colors: (
+          bg: Var("surface-accent"),
+          hover_bg: Var("surface-accent-hover"),
+          pressed_bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.button.subtle"),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.button.sidebar"),
+      setter: (
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.button.warn"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#7A2E2E")),
+          hover_bg: Color(Hex("#8F3838")),
+          pressed_bg: Color(Hex("#692626")),
+          border: Color(Hex("#A65252")),
+          text: Color(Hex("#FFF4F4")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.primary-btn"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-sm"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("pixiv.card"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          gap: Var("gap-sm"),
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-lg"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+          hover_bg: Var("surface-subtle-hover"),
+        ),
+        text: (
+          size: Var("text-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("pixiv.tag"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+          corner_radius: Var("radius-md"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-accent"),
+          pressed_bg: Var("surface-accent-pressed"),
+          text: Var("text-primary"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("pixiv.overlay"),
+      setter: (
+        layout: (
+          padding: Var("space-xl"),
+          gap: Var("gap-lg"),
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-lg"),
+        ),
+        colors: (
+          bg: Var("surface-overlay"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+        box_shadow: Var("shadow-ui-component"),
+      ),
+    ),
+  ],
+)

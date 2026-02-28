@@ -6,9 +6,8 @@ use std::{
 };
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiDialog, UiEventQueue, UiRoot, UiView,
-    apply_label_style, apply_text_input_style, apply_widget_style,
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiDialog, UiEventQueue, UiRoot,
+    UiView, apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{IoTaskPool, TaskPoolBuilder},
@@ -435,154 +434,6 @@ fn setup_download_world(mut commands: Commands) {
     commands.spawn((DownloadProgressPanel, ChildOf(root)));
 }
 
-fn setup_download_styles(mut style_sheet: ResMut<StyleSheet>) {
-    style_sheet.set_class(
-        "download.root",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(16.0),
-                gap: Some(8.0),
-                corner_radius: Some(10.0),
-                border_width: Some(1.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x1F, 0x1F, 0x24)),
-                border: Some(bevy_xilem::xilem::Color::from_rgb8(0x3A, 0x3A, 0x42)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "download.title",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(22.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(bevy_xilem::xilem::Color::from_rgb8(0xF5, 0xF5, 0xFA)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "download.row",
-        StyleSetter {
-            layout: LayoutStyle {
-                gap: Some(8.0),
-                ..LayoutStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "download.url-input",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(14.0),
-                ..Default::default()
-            },
-            layout: LayoutStyle {
-                padding: Some(6.0),
-                border_width: Some(1.0),
-                corner_radius: Some(8.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x2A, 0x2A, 0x31)),
-                border: Some(bevy_xilem::xilem::Color::from_rgb8(0x47, 0x47, 0x50)),
-                text: Some(bevy_xilem::xilem::Color::from_rgb8(0xEF, 0xEF, 0xF4)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "download.button",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(6.0),
-                corner_radius: Some(8.0),
-                border_width: Some(0.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x25, 0x63, 0xEB)),
-                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x1D, 0x4E, 0xD8)),
-                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x1E, 0x40, 0xAF)),
-                ..ColorStyle::default()
-            },
-            transition: Some(StyleTransition { duration: 0.12 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "download.status",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(13.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(bevy_xilem::xilem::Color::from_rgb8(0xD6, 0xD6, 0xDD)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "download.dialog",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(10.0),
-                gap: Some(8.0),
-                border_width: Some(1.0),
-                corner_radius: Some(8.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x26, 0x26, 0x2F)),
-                border: Some(bevy_xilem::xilem::Color::from_rgb8(0x54, 0x54, 0x66)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "overlay.dialog.dismiss",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(14.0),
-                ..Default::default()
-            },
-            layout: LayoutStyle {
-                padding: Some(8.0),
-                corner_radius: Some(6.0),
-                border_width: Some(0.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x37, 0x6F, 0xD8)),
-                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x4A, 0x80, 0xE8)),
-                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x28, 0x5C, 0xC0)),
-                text: Some(bevy_xilem::xilem::Color::from_rgb8(0xF0, 0xF6, 0xFF)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-}
-
 fn drain_download_events(world: &mut World) {
     let events = world
         .resource_mut::<UiEventQueue>()
@@ -706,6 +557,7 @@ fn build_async_downloader_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
+        .load_style_sheet("assets/themes/async_downloader.ron")
         .insert_resource(DownloadState::default())
         .register_ui_component::<DownloadRootView>()
         .register_ui_component::<DownloadTitle>()
@@ -713,14 +565,7 @@ fn build_async_downloader_app() -> App {
         .register_ui_component::<DownloadActionRow>()
         .register_ui_component::<DownloadDialogModeRow>()
         .register_ui_component::<DownloadProgressPanel>()
-        .add_systems(
-            Startup,
-            (
-                setup_download_styles,
-                setup_download_world,
-                setup_fluent_theme_toggle,
-            ),
-        )
+        .add_systems(Startup, (setup_download_world, setup_fluent_theme_toggle))
         .add_systems(
             PreUpdate,
             (drain_fluent_theme_toggle_events, drain_download_events),

@@ -1,0 +1,108 @@
+(
+  rules: [
+    (
+      selector: Class("example.theme-toggle"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("calc.root"),
+      setter: (
+        layout: (
+          padding: Var("space-lg"),
+          gap: Var("gap-xs"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("calc.display.row"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          border_width: Var("border-thin"),
+          corner_radius: Var("radius-md"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("calc.display.text"),
+      setter: (
+        text: (
+          size: 30.0,
+        ),
+      ),
+    ),
+    (
+      selector: Class("calc.row"),
+      setter: (
+        layout: (
+          gap: Var("gap-xs"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("calc.button.digit"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("calc.button.action"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          hover_bg: Var("surface-accent-hover"),
+          pressed_bg: Var("surface-accent-pressed"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("calc.button.operator"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("surface-accent"),
+          hover_bg: Var("surface-accent-hover"),
+          pressed_bg: Var("surface-accent-pressed"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+  ],
+)

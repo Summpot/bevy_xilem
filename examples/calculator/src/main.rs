@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -477,148 +476,6 @@ fn setup_calculator_world(mut commands: Commands) {
     }
 }
 
-fn setup_calculator_styles(mut style_sheet: ResMut<StyleSheet>) {
-    style_sheet.set_class(
-        "calc.root",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(12.0),
-                gap: Some(2.0),
-                ..LayoutStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "calc.display.row",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(8.0),
-                border_width: Some(1.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                border: Some(bevy_xilem::xilem::palette::css::DARK_SLATE_GRAY),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "calc.display.text",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(30.0),
-                ..Default::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "calc.row",
-        StyleSetter {
-            layout: LayoutStyle {
-                gap: Some(2.0),
-                ..LayoutStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "calc.button.digit",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(10.0),
-                corner_radius: Some(10.0),
-                border_width: Some(0.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x3a, 0x3a, 0x3a)),
-                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x4a, 0x4a, 0x4a)),
-                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x2e, 0x2e, 0x2e)),
-                ..ColorStyle::default()
-            },
-            transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "calc.button.action",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(10.0),
-                corner_radius: Some(10.0),
-                border_width: Some(0.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x8d, 0xdd)),
-                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x7b, 0xc2)),
-                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x64, 0x9c)),
-                ..ColorStyle::default()
-            },
-            transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "calc.button.operator",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(10.0),
-                corner_radius: Some(10.0),
-                border_width: Some(0.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x8d, 0xdd)),
-                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x7b, 0xc2)),
-                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x00, 0x64, 0x9c)),
-                ..ColorStyle::default()
-            },
-            transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "calc.button.label.default",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(18.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(bevy_xilem::xilem::palette::css::WHITE),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "calc.button.label.clear",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(18.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(bevy_xilem::xilem::palette::css::MEDIUM_VIOLET_RED),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-}
-
 fn drain_calc_events(world: &mut World) {
     let events = world
         .resource_mut::<UiEventQueue>()
@@ -644,20 +501,14 @@ fn build_bevy_calculator_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
+        .load_style_sheet("assets/themes/calculator.ron")
         .insert_resource(CalculatorEngine::default())
         .register_ui_component::<CalcRoot>()
         .register_ui_component::<CalcDisplayPanel>()
         .register_ui_component::<CalcKeypad>()
         .register_ui_component::<CalcButtonRow>()
         .register_ui_component::<CalcButtonSpec>()
-        .add_systems(
-            Startup,
-            (
-                setup_calculator_styles,
-                setup_calculator_world,
-                setup_fluent_theme_toggle,
-            ),
-        );
+        .add_systems(Startup, (setup_calculator_world, setup_fluent_theme_toggle));
 
     app.add_systems(
         PreUpdate,

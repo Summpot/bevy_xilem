@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{
@@ -12,8 +11,8 @@ use bevy_xilem::{
     button, checkbox, emit_ui_action, resolve_style, resolve_style_for_classes,
     resolve_style_for_entity_classes, run_app, text_input,
     xilem::{
-        Color, InsertNewline,
-        masonry::{layout::Length, theme::DEFAULT_GAP},
+        InsertNewline,
+        masonry::layout::Length,
         view::{
             FlexExt as _, FlexSpacer, MainAxisAlignment, flex_col, flex_row, label, sized_box,
             virtual_scroll,
@@ -334,244 +333,6 @@ fn setup_todo_world(mut commands: Commands) {
     }
 }
 
-fn setup_todo_styles(mut style_sheet: ResMut<StyleSheet>) {
-    style_sheet.set_class(
-        "todo.root",
-        StyleSetter {
-            layout: LayoutStyle {
-                gap: Some(4.0),
-                padding: Some(50.0),
-                ..LayoutStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "todo.header",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(80.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(Color::from_rgb8(0xE5, 0xE7, 0xEB)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "todo.input-area",
-        StyleSetter {
-            layout: LayoutStyle {
-                gap: Some(DEFAULT_GAP.get()),
-                ..LayoutStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "todo.input",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(16.0),
-                ..Default::default()
-            },
-            layout: LayoutStyle {
-                padding: Some(6.0),
-                corner_radius: Some(8.0),
-                border_width: Some(1.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x22, 0x22, 0x22)),
-                border: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
-                text: Some(Color::from_rgb8(0xF4, 0xF4, 0xF5)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "todo.add-button",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(6.0),
-                corner_radius: Some(8.0),
-                border_width: Some(0.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x25, 0x63, 0xEB)),
-                hover_bg: Some(Color::from_rgb8(0x1D, 0x4E, 0xD8)),
-                pressed_bg: Some(Color::from_rgb8(0x1E, 0x40, 0xAF)),
-                ..ColorStyle::default()
-            },
-            transition: Some(StyleTransition { duration: 0.12 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "todo.add-label",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(16.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class("todo.list-container", StyleSetter::default());
-
-    style_sheet.set_class(
-        "todo.empty",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(8.0),
-                border_width: Some(1.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                border: Some(Color::from_rgb8(0x27, 0x2A, 0x36)),
-                text: Some(Color::from_rgb8(0xA1, 0xA1, 0xAA)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "todo.list-viewport",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(4.0),
-                border_width: Some(1.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                border: Some(Color::from_rgb8(0x27, 0x2A, 0x36)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "todo.item",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(DEFAULT_GAP.get()),
-                border_width: Some(1.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x16, 0x17, 0x1C)),
-                hover_bg: Some(Color::from_rgb8(0x20, 0x22, 0x2B)),
-                border: Some(Color::from_rgb8(0x27, 0x2A, 0x36)),
-                ..ColorStyle::default()
-            },
-            transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "todo.item-checkbox",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(16.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE7)),
-                hover_text: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
-                ..ColorStyle::default()
-            },
-            transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "todo.delete-button",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(5.0),
-                corner_radius: Some(6.0),
-                border_width: Some(0.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x45, 0x45, 0x45)),
-                hover_bg: Some(Color::from_rgb8(0x55, 0x55, 0x55)),
-                pressed_bg: Some(Color::from_rgb8(0x35, 0x35, 0x35)),
-                ..ColorStyle::default()
-            },
-            transition: Some(StyleTransition { duration: 0.12 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "todo.delete-label",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(14.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(Color::from_rgb8(0xFA, 0xFA, 0xFA)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "todo.filter-bar",
-        StyleSetter {
-            layout: LayoutStyle {
-                gap: Some(DEFAULT_GAP.get()),
-                ..LayoutStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "todo.filter-toggle",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(14.0),
-                ..Default::default()
-            },
-            layout: LayoutStyle {
-                padding: Some(4.0),
-                corner_radius: Some(6.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x22, 0x23, 0x28)),
-                hover_bg: Some(Color::from_rgb8(0x2D, 0x30, 0x3A)),
-                pressed_bg: Some(Color::from_rgb8(0x1B, 0x1D, 0x24)),
-                ..ColorStyle::default()
-            },
-            transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleSetter::default()
-        },
-    );
-}
-
 fn drain_todo_events_and_mutate_world(world: &mut World) {
     let events = world
         .resource_mut::<UiEventQueue>()
@@ -629,6 +390,7 @@ fn build_bevy_todo_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
+        .load_style_sheet("assets/themes/todo_list.ron")
         .insert_resource(ActiveFilter(FilterType::All))
         .insert_resource(DraftTodo("My Next Task".to_string()))
         .register_ui_component::<TodoRootView>()
@@ -638,14 +400,7 @@ fn build_bevy_todo_app() -> App {
         .register_ui_component::<TodoItem>()
         .register_ui_component::<TodoFilterBar>()
         .register_ui_component::<FilterToggle>()
-        .add_systems(
-            Startup,
-            (
-                setup_todo_styles,
-                setup_todo_world,
-                setup_fluent_theme_toggle,
-            ),
-        );
+        .add_systems(Startup, (setup_todo_world, setup_fluent_theme_toggle));
 
     app.add_systems(
         PreUpdate,

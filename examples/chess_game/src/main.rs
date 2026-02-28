@@ -5,8 +5,7 @@ use std::{
 };
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -625,230 +624,6 @@ fn setup_chess_world(mut commands: Commands) {
     commands.spawn((ChessBoardPanel, ChildOf(root)));
 }
 
-fn setup_chess_styles(mut style_sheet: ResMut<StyleSheet>) {
-    style_sheet.set_class(
-        "chess.root",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(8.0),
-                gap: Some(8.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x1A, 0x1A, 0x1A)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "chess.ui-components",
-        StyleSetter {
-            layout: LayoutStyle {
-                gap: Some(6.0),
-                padding: Some(6.0),
-                corner_radius: Some(8.0),
-                border_width: Some(1.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x24, 0x24, 0x24)),
-                border: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "chess.status",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(16.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE7)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "chess.clock",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(14.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(Color::from_rgb8(0xD4, 0xD4, 0xD8)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "chess.time-per-move",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(14.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(Color::from_rgb8(0xA1, 0xA1, 0xAA)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "chess.toggle",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(14.0),
-                ..Default::default()
-            },
-            layout: LayoutStyle {
-                padding: Some(2.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x2B, 0x2B, 0x2F)),
-                hover_bg: Some(Color::from_rgb8(0x3A, 0x3A, 0x40)),
-                pressed_bg: Some(Color::from_rgb8(0x22, 0x22, 0x25)),
-                ..ColorStyle::default()
-            },
-            transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "chess.action-button",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(6.0),
-                border_width: Some(0.0),
-                corner_radius: Some(8.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
-                hover_bg: Some(Color::from_rgb8(0x52, 0x52, 0x5B)),
-                pressed_bg: Some(Color::from_rgb8(0x27, 0x27, 0x2A)),
-                ..ColorStyle::default()
-            },
-            transition: Some(StyleTransition { duration: 0.1 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "chess.action-label",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(14.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(Color::from_rgb8(0xFA, 0xFA, 0xFA)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "chess.movelist",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(6.0),
-                border_width: Some(1.0),
-                corner_radius: Some(8.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x11, 0x11, 0x13)),
-                border: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "chess.board",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(4.0),
-                border_width: Some(1.0),
-                corner_radius: Some(8.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x24, 0x24, 0x24)),
-                border: Some(Color::from_rgb8(0x3F, 0x3F, 0x46)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "chess.cell",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(0.0),
-                corner_radius: Some(0.0),
-                ..LayoutStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "chess.cell.light",
-        StyleSetter {
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0xFF, 0xFF, 0xFF)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "chess.cell.dark",
-        StyleSetter {
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0xCD, 0xCD, 0xCD)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "chess.cell-piece",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(48.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(Color::BLACK),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-}
-
 fn drain_events_and_tick(world: &mut World) {
     let events = world
         .resource_mut::<UiEventQueue>()
@@ -874,20 +649,14 @@ fn build_bevy_chess_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
+        .load_style_sheet("assets/themes/chess_game.ron")
         .insert_resource(ChessGameResource::new(game))
         .insert_resource(ui)
         .insert_resource(ChessFlowResource::default())
         .register_ui_component::<ChessRootView>()
         .register_ui_component::<ChessUiComponentsPanel>()
         .register_ui_component::<ChessBoardPanel>()
-        .add_systems(
-            Startup,
-            (
-                setup_chess_styles,
-                setup_chess_world,
-                setup_fluent_theme_toggle,
-            ),
-        );
+        .add_systems(Startup, (setup_chess_world, setup_fluent_theme_toggle));
 
     app.add_systems(
         PreUpdate,

@@ -1,0 +1,29 @@
+(
+  rules: [
+    (
+      selector: Type("UiRoot"),
+      setter: (
+        layout: (
+          padding: Var("space-xl"),
+          gap: Var("gap-md"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiFlexColumn"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Type("UiLabel"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+      ),
+    ),
+  ],
+)

@@ -1,0 +1,109 @@
+(
+  rules: [
+    (
+      selector: Class("example.theme-toggle"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("timer.root"),
+      setter: (
+        layout: (
+          padding: Var("space-xl"),
+          gap: Var("gap-md"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("timer.title"),
+      setter: (
+        text: (
+          size: 24.0,
+        ),
+      ),
+    ),
+    (
+      selector: Class("timer.dial-shell"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-bg"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("timer.row"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("timer.body-text"),
+      setter: (
+        text: (
+          size: Var("text-md"),
+        ),
+        layout: (
+          padding: Var("space-xs"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("timer.pause-button"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Color(Hex("#3A5376")),
+          hover_bg: Color(Hex("#4D6A92")),
+          pressed_bg: Color(Hex("#2E4564")),
+          text: Color(Hex("#FFFFFF")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("timer.reset-button"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: 0.0,
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+  ],
+)

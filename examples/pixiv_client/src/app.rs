@@ -11,18 +11,18 @@ use bevy_embedded_assets::{EmbeddedAssetPlugin, PluginMode};
 use bevy_image::Image as BevyImage;
 use bevy_text::TextPlugin;
 use bevy_xilem::{
-    AppBevyXilemExt, AppI18n, BevyXilemPlugin, ColorStyle, LayoutStyle, OverlayConfig,
-    OverlayPlacement, OverlayState, ProjectionCtx, ResolvedStyle, StyleClass, StyleSetter,
-    StyleSheet, StyleTransition, SyncAssetSource, SyncTextSource, TextStyle, UiComboBox,
-    UiComboBoxChanged, UiComboOption, UiEventQueue, UiRoot, UiView, apply_label_style,
+    AppBevyXilemExt, AppI18n, BevyXilemPlugin, OverlayConfig, OverlayPlacement, OverlayState,
+    ProjectionCtx, ResolvedStyle, StyleClass, StyleSheet, SyncAssetSource, SyncTextSource,
+    UiComboBox, UiComboBoxChanged, UiComboOption, UiEventQueue, UiRoot, UiView, apply_label_style,
     apply_text_input_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup, Update},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
     bevy_tasks::{AsyncComputeTaskPool, IoTaskPool, TaskPool},
     bevy_tweening::{EaseMethod, Lens, Tween, TweenAnim},
     bevy_window::WindowResized,
-    button, resolve_style, resolve_style_for_classes, resolve_style_for_entity_classes,
-    run_app_with_window_options, spawn_in_overlay_root, text_input,
+    button, button_with_child, resolve_style, resolve_style_for_classes,
+    resolve_style_for_entity_classes, run_app_with_window_options, spawn_in_overlay_root,
+    text_input,
     xilem::{
         Color,
         masonry::layout::{Dim, Length},
@@ -273,6 +273,12 @@ struct CardAnimState {
     heart_scale: f32,
 }
 
+#[derive(Component, Debug, Clone, Copy)]
+struct IllustActionEntities {
+    open_thumbnail: Entity,
+    bookmark: Entity,
+}
+
 impl Default for CardAnimState {
     fn default() -> Self {
         Self {
@@ -282,9 +288,6 @@ impl Default for CardAnimState {
         }
     }
 }
-
-#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Eq)]
-struct CardHoverFlag(bool);
 
 #[derive(Debug, Clone, Copy)]
 enum ImageKind {
@@ -440,14 +443,6 @@ fn register_bridge_fonts(app: &mut App) {
     app.register_xilem_font(SyncAssetSource::FilePath(
         "assets/fonts/NotoSansCJKkr-Regular.otf",
     ));
-}
-
-fn ease_quadratic_in_out(t: f32) -> f32 {
-    if t < 0.5 {
-        2.0 * t * t
-    } else {
-        1.0 - ((-2.0 * t + 2.0).powi(2) / 2.0)
-    }
 }
 
 fn ease_elastic_out(t: f32) -> f32 {
@@ -858,7 +853,7 @@ fn setup(mut commands: Commands) {
                 PixivDetailOverlay,
                 StyleClass(vec!["pixiv.overlay".to_string()]),
                 OverlayState {
-                    is_modal: false,
+                    is_modal: true,
                     anchor: None,
                 },
                 OverlayConfig {
@@ -883,297 +878,12 @@ fn setup(mut commands: Commands) {
 }
 
 fn setup_styles(mut sheet: ResMut<StyleSheet>, i18n: Option<Res<AppI18n>>) {
-    let default_fonts = i18n
+    let font_stack = i18n
         .as_ref()
         .map(|current| current.get_font_stack())
         .filter(|stack| !stack.is_empty());
 
-    sheet.set_class(
-        "pixiv.root",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(10.0),
-                gap: Some(10.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x1E, 0x1E, 0x1E)),
-                text: Some(Color::from_rgb8(0xEE, 0xEE, 0xEE)),
-                ..ColorStyle::default()
-            },
-            font_family: default_fonts.clone(),
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.sidebar",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(10.0),
-                gap: Some(8.0),
-                border_width: Some(1.0),
-                corner_radius: Some(8.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgba8(0xFF, 0xFF, 0xFF, 0x12)),
-                border: Some(Color::from_rgb8(0x44, 0x4E, 0x62)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.sidebar.section",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(2.0),
-                ..LayoutStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.sidebar.title",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(13.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(Color::from_rgb8(0xB9, 0xC6, 0xDD)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.sidebar.button",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(8.0),
-                corner_radius: Some(7.0),
-                border_width: Some(1.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgba8(255, 255, 255, 18)),
-                hover_bg: Some(Color::from_rgba8(255, 255, 255, 34)),
-                pressed_bg: Some(Color::from_rgba8(255, 255, 255, 42)),
-                border: Some(Color::from_rgb8(0x55, 0x66, 0x8D)),
-                text: Some(Color::from_rgb8(0xE9, 0xF0, 0xFF)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.sidebar.button.active",
-        StyleSetter {
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x2F, 0x66, 0xE5)),
-                hover_bg: Some(Color::from_rgb8(0x3C, 0x73, 0xF1)),
-                pressed_bg: Some(Color::from_rgb8(0x25, 0x57, 0xC5)),
-                border: Some(Color::from_rgb8(0x2F, 0x66, 0xE5)),
-                text: Some(Color::from_rgb8(0xF8, 0xFB, 0xFF)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.auth-panel",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(10.0),
-                gap: Some(8.0),
-                border_width: Some(1.0),
-                corner_radius: Some(10.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x19, 0x19, 0x19)),
-                border: Some(Color::from_rgb8(0x30, 0x30, 0x30)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.button",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(8.0),
-                corner_radius: Some(10.0),
-                border_width: Some(1.0),
-                ..LayoutStyle::default()
-            },
-            text: TextStyle {
-                size: Some(14.0),
-                ..Default::default()
-            },
-            font_family: default_fonts.clone(),
-            transition: Some(StyleTransition { duration: 0.14 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.button.primary",
-        StyleSetter {
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x12, 0x89, 0xE4)),
-                hover_bg: Some(Color::from_rgb8(0x2D, 0x9B, 0xEB)),
-                pressed_bg: Some(Color::from_rgb8(0x0D, 0x73, 0xBF)),
-                border: Some(Color::from_rgb8(0x2D, 0x9B, 0xEB)),
-                text: Some(Color::from_rgb8(0xF7, 0xFB, 0xFF)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.button.subtle",
-        StyleSetter {
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x2A, 0x2A, 0x2A)),
-                hover_bg: Some(Color::from_rgb8(0x36, 0x36, 0x36)),
-                pressed_bg: Some(Color::from_rgb8(0x1E, 0x1E, 0x1E)),
-                border: Some(Color::from_rgb8(0x40, 0x40, 0x40)),
-                text: Some(Color::from_rgb8(0xE7, 0xE7, 0xE7)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.button.sidebar",
-        StyleSetter {
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x20, 0x20, 0x20)),
-                hover_bg: Some(Color::from_rgb8(0x2C, 0x2C, 0x2C)),
-                pressed_bg: Some(Color::from_rgb8(0x16, 0x16, 0x16)),
-                border: Some(Color::from_rgb8(0x36, 0x36, 0x36)),
-                text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE4)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.button.warn",
-        StyleSetter {
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x5D, 0x2A, 0x2A)),
-                hover_bg: Some(Color::from_rgb8(0x73, 0x34, 0x34)),
-                pressed_bg: Some(Color::from_rgb8(0x49, 0x21, 0x21)),
-                border: Some(Color::from_rgb8(0x8B, 0x45, 0x45)),
-                text: Some(Color::from_rgb8(0xFF, 0xEF, 0xEF)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.primary-btn",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(6.0),
-                corner_radius: Some(6.0),
-                border_width: Some(0.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x2A, 0x2A, 0x2A)),
-                hover_bg: Some(Color::from_rgb8(0x36, 0x36, 0x36)),
-                pressed_bg: Some(Color::from_rgb8(0x1E, 0x1E, 0x1E)),
-                border: Some(Color::from_rgb8(0x40, 0x40, 0x40)),
-                text: Some(Color::from_rgb8(0xE7, 0xE7, 0xE7)),
-                ..ColorStyle::default()
-            },
-            font_family: default_fonts.clone(),
-            transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.card",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(8.0),
-                gap: Some(6.0),
-                border_width: Some(1.0),
-                corner_radius: Some(8.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x24, 0x24, 0x24)),
-                border: Some(Color::from_rgb8(0x3A, 0x3A, 0x3A)),
-                hover_bg: Some(Color::from_rgb8(0x2A, 0x2A, 0x2A)),
-                ..ColorStyle::default()
-            },
-            text: TextStyle {
-                size: Some(14.0),
-                ..Default::default()
-            },
-            font_family: default_fonts.clone(),
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.tag",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(4.0),
-                corner_radius: Some(6.0),
-                border_width: Some(0.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x2C, 0x2C, 0x2C)),
-                hover_bg: Some(Color::from_rgb8(0x00, 0x96, 0xFA)),
-                pressed_bg: Some(Color::from_rgb8(0x00, 0x7C, 0xD0)),
-                text: Some(Color::from_rgb8(0xE4, 0xE4, 0xE4)),
-                ..ColorStyle::default()
-            },
-            font_family: default_fonts.clone(),
-            transition: Some(StyleTransition { duration: 0.15 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    sheet.set_class(
-        "pixiv.overlay",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(14.0),
-                gap: Some(10.0),
-                border_width: Some(1.0),
-                corner_radius: Some(12.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(Color::from_rgb8(0x10, 0x14, 0x1F)),
-                border: Some(Color::from_rgb8(0x52, 0x63, 0x8D)),
-                ..ColorStyle::default()
-            },
-            font_family: default_fonts,
-            ..StyleSetter::default()
-        },
-    );
+    sync_font_stack_for_locale(&mut sheet, font_stack.as_deref());
 }
 
 fn empty_ui() -> UiView {
@@ -1610,14 +1320,17 @@ fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
         .copied()
         .unwrap_or_default();
     let style = resolve_style(ctx.world, ctx.entity);
-    let primary_button_style = resolve_style_for_entity_classes(
-        ctx.world,
-        ctx.entity,
-        ["pixiv.button", "pixiv.button.primary"],
-    );
+    let action_entities = ctx
+        .world
+        .get::<IllustActionEntities>(ctx.entity)
+        .copied()
+        .unwrap_or(IllustActionEntities {
+            open_thumbnail: ctx.entity,
+            bookmark: ctx.entity,
+        });
     let subtle_button_style = resolve_style_for_entity_classes(
         ctx.world,
-        ctx.entity,
+        action_entities.bookmark,
         ["pixiv.button", "pixiv.button.subtle"],
     );
 
@@ -1640,7 +1353,7 @@ fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
     let heart = if illust.is_bookmarked { "♥" } else { "♡" };
 
     let heart_button = sized_box(button_from_style(
-        ctx.entity,
+        action_entities.bookmark,
         AppAction::Bookmark(ctx.entity),
         heart,
         &subtle_button_style,
@@ -1650,25 +1363,23 @@ fn project_illust_card(_: &PixivIllustCard, ctx: ProjectionCtx<'_>) -> UiView {
     Arc::new(
         sized_box(apply_widget_style(
             flex_col(vec![
-                sized_box(illust_thumbnail_view(ctx.world, &visual))
-                    .dims((Dim::Stretch, Length::px(image_height)))
-                    .into_any_flex(),
+                button_with_child(
+                    action_entities.open_thumbnail,
+                    AppAction::OpenIllust(ctx.entity),
+                    sized_box(illust_thumbnail_view(ctx.world, &visual))
+                        .dims((Dim::Stretch, Length::px(image_height))),
+                )
+                .padding(0.0)
+                .border(Color::TRANSPARENT, 0.0)
+                .background_color(Color::TRANSPARENT)
+                .into_any_flex(),
                 apply_label_style(label(illust.title.clone()), &style).into_any_flex(),
                 illust_author_row(&illust.user.name, illust_avatar_view(&visual), &style)
                     .into_any_flex(),
                 illust_stats_view(illust, &style).into_any_flex(),
-                flex_row((
-                    button_from_style(
-                        ctx.entity,
-                        AppAction::OpenIllust(ctx.entity),
-                        tr(ctx.world, "pixiv.feed.open", "Details"),
-                        &primary_button_style,
-                    )
+                flex_row((heart_button.into_any_flex(),))
+                    .main_axis_alignment(MainAxisAlignment::End)
                     .into_any_flex(),
-                    heart_button.into_any_flex(),
-                ))
-                .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                .into_any_flex(),
             ]),
             &style,
         ))
@@ -1790,9 +1501,6 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
     let events = world
         .resource_mut::<UiEventQueue>()
         .drain_actions::<AppAction>();
-    if events.is_empty() {
-        return;
-    }
 
     for event in events {
         match event.action {
@@ -1868,6 +1576,7 @@ fn drain_ui_actions_and_dispatch(world: &mut World) {
             AppAction::OpenIllust(entity) => {
                 world.resource_mut::<UiState>().selected_illust = Some(entity);
                 prepare_overlay_tags(world, entity);
+                set_status_key(world, "pixiv.overlay.title", "Illustration details");
 
                 if let Some(illust) = world.get::<Illust>(entity) {
                     let high_res = illust
@@ -2172,54 +1881,6 @@ fn trigger_bookmark_pulse(world: &mut World, entity: Entity) {
     );
 }
 
-fn animate_card_hover(world: &mut World) {
-    let entities = {
-        let mut q = world.query::<(
-            Entity,
-            Option<&bevy_xilem::InteractionState>,
-            &CardHoverFlag,
-            &CardAnimState,
-            &Illust,
-        )>();
-        q.iter(world)
-            .map(|(entity, hovered, hover_flag, anim, _)| {
-                (
-                    entity,
-                    hovered.is_some_and(|state| state.hovered),
-                    hover_flag.0,
-                    *anim,
-                )
-            })
-            .collect::<Vec<_>>()
-    };
-
-    for (entity, hovered_now, hovered_before, anim) in entities {
-        if hovered_now == hovered_before {
-            continue;
-        }
-
-        world.entity_mut(entity).insert(CardHoverFlag(hovered_now));
-
-        let mut end = anim;
-        if hovered_now {
-            end.card_scale = 1.02;
-            end.image_brightness = 1.08;
-        } else {
-            end.card_scale = 1.0;
-            end.image_brightness = 1.0;
-        }
-
-        spawn_card_tween(
-            world,
-            entity,
-            anim,
-            end,
-            150,
-            EaseMethod::CustomFunction(ease_quadratic_in_out),
-        );
-    }
-}
-
 fn spawn_network_tasks(world: &mut World) {
     let cmd_rx = world.resource::<NetworkBridge>().cmd_rx.clone();
     let result_tx = world.resource::<NetworkBridge>().result_tx.clone();
@@ -2388,13 +2049,18 @@ fn apply_network_results(world: &mut World) {
 
                 let mut new_order = Vec::new();
                 for illust in payload.illusts {
+                    let open_thumbnail = world.spawn_empty().id();
+                    let bookmark = world.spawn_empty().id();
                     let entity = world
                         .spawn((
                             PixivIllustCard,
                             illust.clone(),
                             IllustVisual::default(),
                             CardAnimState::default(),
-                            CardHoverFlag(false),
+                            IllustActionEntities {
+                                open_thumbnail,
+                                bookmark,
+                            },
                             StyleClass(vec!["pixiv.card".to_string()]),
                             ChildOf(home_feed),
                         ))
@@ -2612,6 +2278,7 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
         TextPlugin::default(),
         BevyXilemPlugin,
     ))
+    .load_style_sheet("assets/themes/pixiv_client.ron")
     .insert_resource(AppI18n::new(parse_locale("en-US")))
     .register_i18n_bundle(
         "en-US",
@@ -2677,7 +2344,6 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
             apply_network_results,
             spawn_image_tasks,
             apply_image_results,
-            animate_card_hover,
         ),
     );
     app
@@ -2775,6 +2441,47 @@ mod tests {
     }
 
     #[test]
+    fn locale_combo_event_applies_even_without_app_action_events() {
+        let mut world = World::new();
+        world.insert_resource(UiEventQueue::default());
+        world.insert_resource(AppI18n::new(parse_locale("en-US")));
+        world.insert_resource(StyleSheet::default());
+        world.insert_resource(UiState::default());
+
+        let locale_combo = world.spawn_empty().id();
+        world.insert_resource(PixivUiComponents {
+            toggle_sidebar: Entity::PLACEHOLDER,
+            locale_combo,
+            home_tab: Entity::PLACEHOLDER,
+            rankings_tab: Entity::PLACEHOLDER,
+            search_tab: Entity::PLACEHOLDER,
+            open_browser_login: Entity::PLACEHOLDER,
+            exchange_auth_code: Entity::PLACEHOLDER,
+            refresh_token: Entity::PLACEHOLDER,
+            search_submit: Entity::PLACEHOLDER,
+            copy_response: Entity::PLACEHOLDER,
+            clear_response: Entity::PLACEHOLDER,
+            close_overlay: Entity::PLACEHOLDER,
+        });
+
+        world.resource::<UiEventQueue>().push_typed(
+            locale_combo,
+            UiComboBoxChanged {
+                combo: locale_combo,
+                selected: 1,
+                value: "zh-CN".to_string(),
+            },
+        );
+
+        drain_ui_actions_and_dispatch(&mut world);
+
+        assert_eq!(
+            world.resource::<AppI18n>().active_locale,
+            parse_locale("zh-CN")
+        );
+    }
+
+    #[test]
     fn auth_code_can_be_extracted_from_nested_redirect() {
         let nested = "https://example.com/callback?redirect_uri=https%3A%2F%2Fapp.example.com%2Fauth%3Fcode%3Dabc123";
         assert_eq!(
@@ -2804,6 +2511,14 @@ mod tests {
         let ui_components = *world.resource::<PixivUiComponents>();
         assert!(world.get::<PixivHomeFeed>(tree.home_feed).is_some());
         assert!(world.get::<PixivOverlayTags>(tree.overlay_tags).is_some());
+        let overlay_parent = world
+            .get::<ChildOf>(tree.overlay_tags)
+            .map(ChildOf::parent)
+            .expect("overlay tags should be parented to detail overlay");
+        let overlay_state = world
+            .get::<OverlayState>(overlay_parent)
+            .expect("detail overlay should carry OverlayState");
+        assert!(overlay_state.is_modal);
         assert!(
             world
                 .get::<UiComboBox>(ui_components.locale_combo)

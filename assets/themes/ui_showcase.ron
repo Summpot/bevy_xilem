@@ -1,0 +1,248 @@
+(
+  rules: [
+    (
+      selector: Class("showcase.root"),
+      setter: (
+        layout: (
+          padding: Var("space-xl"),
+          gap: Var("gap-md"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("showcase.title"),
+      setter: (
+        text: (
+          size: 24.0,
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.status"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.status.text"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.body"),
+      setter: (
+        layout: (
+          gap: Var("gap-md"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.sidebar"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          gap: Var("gap-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.sidebar.button"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.sidebar.button.active"),
+      setter: (
+        colors: (
+          bg: Var("surface-accent"),
+          hover_bg: Var("surface-accent-hover"),
+          pressed_bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.pages"),
+      setter: (
+        layout: (
+          padding: Var("space-xs"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.page.scroll"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.page.column"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          gap: Var("gap-md"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.split.panel"),
+      setter: (
+        layout: (
+          padding: Var("space-lg"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.theme.combo"),
+      setter: (
+        text: (
+          size: Var("text-md"),
+        ),
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.theme.button"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.theme.button.primary"),
+      setter: (
+        colors: (
+          bg: Var("surface-accent"),
+          hover_bg: Var("surface-accent-hover"),
+          pressed_bg: Var("surface-accent-pressed"),
+          border: Var("surface-accent"),
+          text: Var("text-on-accent"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.theme.button.danger"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#D64545")),
+          hover_bg: Color(Hex("#E25A5A")),
+          pressed_bg: Color(Hex("#AF2F2F")),
+          border: Color(Hex("#D64545")),
+          text: Color(Hex("#FFF1F1")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.theme.button.outline"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#00000000")),
+          hover_bg: Color(Hex("#4E66994D")),
+          pressed_bg: Color(Hex("#3E568566")),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.locale.combo"),
+      setter: (
+        text: (
+          size: Var("text-md"),
+        ),
+        layout: (
+          padding: Var("space-md"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.locale.title"),
+      setter: (
+        text: (
+          size: 26.0,
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.locale.han"),
+      setter: (
+        text: (
+          size: 44.0,
+        ),
+      ),
+    ),
+    (
+      selector: Class("showcase.cjk.text"),
+      setter: (
+        text: (
+          size: 24.0,
+        ),
+        font_family: [
+          "Inter",
+          "Noto Sans CJK SC",
+          "NotoSansCJKsc",
+          "Noto Sans CJK JP",
+          "NotoSansCJKjp",
+          "PingFang SC",
+          "Hiragino Sans",
+          "Apple SD Gothic Neo",
+          "sans-serif",
+        ],
+      ),
+    ),
+  ],
+)

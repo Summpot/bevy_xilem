@@ -1,0 +1,421 @@
+(
+  rules: [
+    (
+      selector: Class("example.theme-toggle"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-subtle"),
+          hover_bg: Var("surface-subtle-hover"),
+          pressed_bg: Var("surface-subtle-pressed"),
+          border: Var("border-default"),
+          text: Var("text-primary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.root"),
+      setter: (
+        layout: (
+          padding: Var("space-xl"),
+          gap: Var("gap-md"),
+          corner_radius: Var("radius-lg"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-bg"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.header"),
+      setter: (
+        layout: (
+          gap: Var("gap-xs"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.title"),
+      setter: (
+        text: (
+          size: 58.0,
+        ),
+        colors: (
+          text: Color(Hex("#F5B45B")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.subtitle"),
+      setter: (
+        text: (
+          size: 15.0,
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.score-strip"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.flow"),
+      setter: (
+        layout: (
+          gap: Var("gap-lg"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.side-panel"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.score-card"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.score-caption"),
+      setter: (
+        text: (
+          size: 12.0,
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.score-value"),
+      setter: (
+        text: (
+          size: 24.0,
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.status"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        text: (
+          size: Var("text-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.status.running"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#203354")),
+          border: Color(Hex("#3C5B89")),
+          text: Color(Hex("#D8EAFF")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.status.won"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#3E2F06")),
+          border: Color(Hex("#B98B17")),
+          text: Color(Hex("#FFEEB5")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.status.over"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#4D2026")),
+          border: Color(Hex("#AA4B59")),
+          text: Color(Hex("#FFD5DB")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.board"),
+      setter: (
+        layout: (
+          padding: Var("space-md"),
+          gap: Var("gap-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        colors: (
+          bg: Var("surface-panel"),
+          border: Var("border-default"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.board-row"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        text: (
+          size: 28.0,
+          text_align: Center,
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile.empty"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#313744")),
+          border: Color(Hex("#42495A")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile.v2"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#EEE4DA")),
+          border: Color(Hex("#D1C5B6")),
+          text: Color(Hex("#5B534B")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile.v4"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#EDE0C8")),
+          border: Color(Hex("#CFC09E")),
+          text: Color(Hex("#5A5145")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile.v8"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#F2B179")),
+          border: Color(Hex("#D8915B")),
+          text: Color(Hex("#FFFAF2")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile.v16"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#F59563")),
+          border: Color(Hex("#DA7648")),
+          text: Color(Hex("#FFF9EF")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile.v32"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#F67C5F")),
+          border: Color(Hex("#D0634A")),
+          text: Color(Hex("#FFF5EC")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile.v64"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#F65E3B")),
+          border: Color(Hex("#CB4A2A")),
+          text: Color(Hex("#FFF4ED")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile.v128"),
+      setter: (
+        text: (
+          size: 24.0,
+        ),
+        colors: (
+          bg: Color(Hex("#EDCF72")),
+          border: Color(Hex("#CFB45A")),
+          text: Color(Hex("#F9FAF8")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile.v256"),
+      setter: (
+        text: (
+          size: 24.0,
+        ),
+        colors: (
+          bg: Color(Hex("#EDCC61")),
+          border: Color(Hex("#CDAF4A")),
+          text: Color(Hex("#F9FAF8")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile.v512"),
+      setter: (
+        text: (
+          size: 24.0,
+        ),
+        colors: (
+          bg: Color(Hex("#EDC850")),
+          border: Color(Hex("#CBAA37")),
+          text: Color(Hex("#F9FAF8")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile.v1024"),
+      setter: (
+        text: (
+          size: 20.0,
+        ),
+        colors: (
+          bg: Color(Hex("#EDC53F")),
+          border: Color(Hex("#C7A22A")),
+          text: Color(Hex("#FEFAF1")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile.v2048"),
+      setter: (
+        text: (
+          size: 20.0,
+        ),
+        colors: (
+          bg: Color(Hex("#EDC22E")),
+          border: Color(Hex("#C89C13")),
+          text: Color(Hex("#FFFAF2")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.tile.super"),
+      setter: (
+        text: (
+          size: 18.0,
+        ),
+        colors: (
+          bg: Color(Hex("#6241F2")),
+          border: Color(Hex("#8869FF")),
+          text: Color(Hex("#F3EEFF")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.ui-components"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.ui-component-row"),
+      setter: (
+        layout: (
+          gap: Var("gap-sm"),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.ui-component.button"),
+      setter: (
+        layout: (
+          padding: Var("space-sm"),
+          corner_radius: Var("radius-md"),
+          border_width: Var("border-thin"),
+        ),
+        text: (
+          size: Var("text-md"),
+        ),
+        transition: Var("duration-fast"),
+      ),
+    ),
+    (
+      selector: Class("g2048.ui-component.button.primary"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#355385")),
+          border: Color(Hex("#5A7AB2")),
+          text: Color(Hex("#EAF0FF")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.ui-component.button.secondary"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#4A4F5C")),
+          border: Color(Hex("#757B8D")),
+          text: Color(Hex("#EEF2FC")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.ui-component.button.danger"),
+      setter: (
+        colors: (
+          bg: Color(Hex("#7A2F3A")),
+          border: Color(Hex("#B54F5F")),
+          text: Color(Hex("#FFE8EC")),
+        ),
+      ),
+    ),
+    (
+      selector: Class("g2048.hint"),
+      setter: (
+        text: (
+          size: Var("text-sm"),
+        ),
+        colors: (
+          text: Var("text-secondary"),
+        ),
+      ),
+    ),
+  ],
+)

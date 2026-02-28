@@ -6,8 +6,7 @@ use std::{
 use tokio::time;
 
 use bevy_xilem::{
-    AppBevyXilemExt, BevyXilemPlugin, ColorStyle, LayoutStyle, ProjectionCtx, StyleClass,
-    StyleSetter, StyleSheet, StyleTransition, TextStyle, UiEventQueue, UiRoot, UiView,
+    AppBevyXilemExt, BevyXilemPlugin, ProjectionCtx, StyleClass, UiEventQueue, UiRoot, UiView,
     apply_label_style, apply_widget_style,
     bevy_app::{App, PreUpdate, Startup},
     bevy_ecs::{hierarchy::ChildOf, prelude::*},
@@ -381,139 +380,6 @@ fn setup_timer_world(mut commands: Commands) {
     commands.spawn((TimerUiComponentsRow, ChildOf(root)));
 }
 
-fn setup_timer_styles(mut style_sheet: ResMut<StyleSheet>) {
-    style_sheet.set_class(
-        "timer.root",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(16.0),
-                gap: Some(10.0),
-                corner_radius: Some(12.0),
-                border_width: Some(1.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x20, 0x20, 0x20)),
-                border: Some(bevy_xilem::xilem::palette::css::DARK_SLATE_GRAY),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "timer.title",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(24.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(bevy_xilem::xilem::palette::css::WHITE),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "timer.dial-shell",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(6.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x14, 0x14, 0x15)),
-                border: Some(bevy_xilem::xilem::Color::from_rgb8(0x37, 0x3A, 0x44)),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "timer.row",
-        StyleSetter {
-            layout: LayoutStyle {
-                gap: Some(8.0),
-                ..LayoutStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "timer.body-text",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(16.0),
-                ..Default::default()
-            },
-            layout: LayoutStyle {
-                padding: Some(4.0),
-                ..LayoutStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "timer.pause-button",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(6.0),
-                corner_radius: Some(8.0),
-                border_width: Some(0.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x3A, 0x53, 0x76)),
-                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x4D, 0x6A, 0x92)),
-                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x2E, 0x45, 0x64)),
-                ..ColorStyle::default()
-            },
-            transition: Some(StyleTransition { duration: 0.22 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "timer.reset-button",
-        StyleSetter {
-            layout: LayoutStyle {
-                padding: Some(6.0),
-                corner_radius: Some(8.0),
-                border_width: Some(0.0),
-                ..LayoutStyle::default()
-            },
-            colors: ColorStyle {
-                bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x35, 0x35, 0x35)),
-                hover_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x64, 0x64, 0x64)),
-                pressed_bg: Some(bevy_xilem::xilem::Color::from_rgb8(0x1B, 0x1B, 0x1B)),
-                ..ColorStyle::default()
-            },
-            transition: Some(StyleTransition { duration: 0.22 }),
-            ..StyleSetter::default()
-        },
-    );
-
-    style_sheet.set_class(
-        "timer.reset-label",
-        StyleSetter {
-            text: TextStyle {
-                size: Some(16.0),
-                ..Default::default()
-            },
-            colors: ColorStyle {
-                text: Some(bevy_xilem::xilem::palette::css::WHITE),
-                ..ColorStyle::default()
-            },
-            ..StyleSetter::default()
-        },
-    );
-}
-
 fn drain_timer_events_and_tick(world: &mut World) {
     let events = world
         .resource_mut::<UiEventQueue>()
@@ -541,6 +407,7 @@ fn build_bevy_timer_app() -> App {
 
     let mut app = App::new();
     app.add_plugins(BevyXilemPlugin)
+        .load_style_sheet("assets/themes/timer.ron")
         .insert_resource(TimerState::default())
         .register_ui_component::<TimerRootView>()
         .register_ui_component::<TimerTitle>()
@@ -549,14 +416,7 @@ fn build_bevy_timer_app() -> App {
         .register_ui_component::<TimerProgressRow>()
         .register_ui_component::<TimerDurationRow>()
         .register_ui_component::<TimerUiComponentsRow>()
-        .add_systems(
-            Startup,
-            (
-                setup_timer_styles,
-                setup_timer_world,
-                setup_fluent_theme_toggle,
-            ),
-        );
+        .add_systems(Startup, (setup_timer_world, setup_fluent_theme_toggle));
 
     app.add_systems(
         PreUpdate,
