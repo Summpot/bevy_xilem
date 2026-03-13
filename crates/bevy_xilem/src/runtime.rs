@@ -553,14 +553,14 @@ impl MasonryRuntime {
             .render_root
             .handle_window_event(WindowEvent::AnimFrame(delta));
         let logical_size = self.render_root.size();
-        let (scene, _tree_update) = self.render_root.redraw();
+        let (paint_result, _tree_update) = self.render_root.redraw();
 
         let Some(surface) = self.window_surface.as_mut() else {
             return;
         };
         surface.render_scene(
             &mut self.renderer,
-            scene,
+            paint_result.composite(),
             logical_size.width.max(1),
             logical_size.height.max(1),
             Color::BLACK,

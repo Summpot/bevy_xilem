@@ -238,7 +238,7 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
 
     let tick_entity = ctx.entity;
     let heartbeat = task(
-        |proxy, _| async move {
+        |proxy, _: &mut ()| async move {
             let mut interval = time::interval(std::time::Duration::from_millis(50));
             loop {
                 interval.tick().await;
@@ -247,7 +247,7 @@ fn project_timer_root(_: &TimerRootView, ctx: ProjectionCtx<'_>) -> UiView {
                 };
             }
         },
-        move |_: (), ()| {
+        move |_: &mut (), ()| {
             emit_ui_action(tick_entity, TimerEvent::Tick);
         },
     );
@@ -272,20 +272,20 @@ fn project_timer_dial(_: &TimerDialView, ctx: ProjectionCtx<'_>) -> UiView {
 
     Arc::new(
         sized_box(
-            canvas(move |_: (), _ctx, scene: &mut Scene, size: Size| {
+            canvas(move |_: &mut (), _ctx: &mut _, scene: &mut Scene, size: Size| {
                 draw_timer_dial(scene, size, progress_value, state.running);
             })
-            .alt_text("Timer dial"),
+            .alt_text("Timer dial")
+            .padding(dial_shell_style.layout.padding)
+            .corner_radius(dial_shell_style.layout.corner_radius)
+            .border(
+                dial_shell_style.colors.border.unwrap_or(Color::TRANSPARENT),
+                dial_shell_style.layout.border_width,
+            )
+            .background_color(dial_shell_style.colors.bg.unwrap_or(Color::TRANSPARENT)),
         )
         .fixed_width(Length::px(DIAL_SIZE))
-        .fixed_height(Length::px(DIAL_SIZE))
-        .padding(dial_shell_style.layout.padding)
-        .corner_radius(dial_shell_style.layout.corner_radius)
-        .border(
-            dial_shell_style.colors.border.unwrap_or(Color::TRANSPARENT),
-            dial_shell_style.layout.border_width,
-        )
-        .background_color(dial_shell_style.colors.bg.unwrap_or(Color::TRANSPARENT)),
+        .fixed_height(Length::px(DIAL_SIZE)),
     )
 }
 

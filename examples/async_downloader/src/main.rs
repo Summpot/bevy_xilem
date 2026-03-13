@@ -297,7 +297,7 @@ fn project_download_root(_: &DownloadRootView, ctx: ProjectionCtx<'_>) -> UiView
 
     let heartbeat_entity = ctx.entity;
     let heartbeat = task(
-        |proxy, _| async move {
+        |proxy, _: &mut ()| async move {
             let mut interval = tokio::time::interval(Duration::from_millis(HEARTBEAT_MS));
             loop {
                 interval.tick().await;
@@ -306,7 +306,7 @@ fn project_download_root(_: &DownloadRootView, ctx: ProjectionCtx<'_>) -> UiView
                 };
             }
         },
-        move |_: (), ()| {
+        move |_: &mut (), ()| {
             emit_ui_action(heartbeat_entity, DownloadEvent::Tick);
         },
     );

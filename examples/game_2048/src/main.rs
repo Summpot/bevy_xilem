@@ -23,7 +23,7 @@ use bevy_xilem::{
     },
     xilem_masonry::{
         Pod, ViewCtx, WidgetView,
-        core::{Arg, MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker},
+        core::{MessageCtx, MessageResult, Mut, View, ViewId, ViewMarker, ViewPathTracker},
     },
 };
 use masonry::{
@@ -612,8 +612,7 @@ impl<W: Widget + FromDynWidget + ?Sized> Widget for HotkeyCaptureWidget<W> {
     fn layout(&mut self, ctx: &mut LayoutCtx<'_>, _props: &PropertiesRef<'_>, size: Size) {
         ctx.run_layout(&mut self.child, size);
         ctx.place_child(&mut self.child, Point::ORIGIN);
-        let child_baseline = ctx.child_baseline_offset(&self.child);
-        ctx.set_baseline_offset(child_baseline);
+        ctx.derive_baselines(&self.child);
     }
 
     fn paint(&mut self, _ctx: &mut PaintCtx<'_>, _props: &PropertiesRef<'_>, _scene: &mut Scene) {}
@@ -665,10 +664,10 @@ where
     fn build(
         &self,
         ctx: &mut ViewCtx,
-        _app_state: Arg<'_, ()>,
+        _app_state: &mut (),
     ) -> (Self::Element, Self::ViewState) {
         let (child, child_state) = ctx.with_id(HOTKEY_CAPTURE_CHILD_VIEW_ID, |ctx| {
-            self.child.build(ctx, ())
+            self.child.build(ctx, &mut ())
         });
         (
             ctx.with_action_widget(|ctx| {
@@ -684,7 +683,7 @@ where
         view_state: &mut Self::ViewState,
         ctx: &mut ViewCtx,
         mut element: Mut<'_, Self::Element>,
-        _app_state: Arg<'_, ()>,
+        _app_state: &mut (),
     ) {
         if self.entity != prev.entity {
             HotkeyCaptureWidget::set_entity(&mut element, self.entity);
@@ -696,7 +695,7 @@ where
                 view_state,
                 ctx,
                 HotkeyCaptureWidget::child_mut(&mut element),
-                (),
+                &mut (),
             );
         });
     }
@@ -722,14 +721,14 @@ where
         view_state: &mut Self::ViewState,
         message: &mut MessageCtx,
         mut element: Mut<'_, Self::Element>,
-        _app_state: Arg<'_, ()>,
+        _app_state: &mut (),
     ) -> MessageResult<()> {
         match message.take_first() {
             Some(HOTKEY_CAPTURE_CHILD_VIEW_ID) => self.child.message(
                 view_state,
                 message,
                 HotkeyCaptureWidget::child_mut(&mut element),
-                (),
+                &mut (),
             ),
             None => match message.take_message::<()>() {
                 Some(_) => MessageResult::Action(()),
