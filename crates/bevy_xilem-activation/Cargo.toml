@@ -12,4 +12,7 @@ path = "src/lib.rs"
 app-single-instance.workspace = true
 ipc-channel.workspace = true
 serde.workspace = true
-sysuri.workspace = true
+plist = "1.8"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56"

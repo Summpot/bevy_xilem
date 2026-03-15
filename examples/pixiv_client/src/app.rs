@@ -1,3 +1,5 @@
+#[cfg(target_os = "macos")]
+use std::path::PathBuf;
 use std::{
     process::Command,
     sync::{Arc, Mutex},
@@ -40,6 +42,8 @@ use bevy_xilem::{
         winit::{dpi::LogicalSize, error::EventLoopError},
     },
 };
+#[cfg(target_os = "macos")]
+use bevy_xilem_activation::MacosBundleConfig;
 use bevy_xilem_activation::{
     ActivationConfig, ActivationService, BootstrapOutcome, ProtocolRegistration, bootstrap,
 };
@@ -65,74 +69,6 @@ const PIXIV_AUTH_TOKEN_FALLBACK: &str = "https://oauth.secure.pixiv.net/auth/tok
 const PIXIV_WEB_REDIRECT_FALLBACK: &str =
     "https://app-api.pixiv.net/web/v1/users/auth/pixiv/callback";
 const PIXIV_ACTIVATION_APP_ID: &str = "bevy-xilem-example-pixiv-client";
-#[cfg(target_os = "macos")]
-const PIXIV_CALLBACK_BUNDLE_ID: &str = "dev.summpot.example-pixiv-client";
-
-#[cfg(target_os = "macos")]
-mod macos_scheme_takeover {
-    use std::ffi::{CString, c_char, c_void};
-
-    type CFAllocatorRef = *const c_void;
-    type CFStringRef = *const c_void;
-    type OSStatus = i32;
-
-    const K_CFSTRING_ENCODING_UTF8: u32 = 0x0800_0100;
-
-    #[link(name = "CoreFoundation", kind = "framework")]
-    unsafe extern "C" {
-        fn CFStringCreateWithCString(
-            alloc: CFAllocatorRef,
-            c_str: *const c_char,
-            encoding: u32,
-        ) -> CFStringRef;
-        fn CFRelease(cf: *const c_void);
-    }
-
-    #[link(name = "ApplicationServices", kind = "framework")]
-    unsafe extern "C" {
-        fn LSSetDefaultHandlerForURLScheme(
-            in_url_scheme: CFStringRef,
-            in_handler_bundle_id: CFStringRef,
-        ) -> OSStatus;
-    }
-
-    fn make_cf_string(value: &str) -> Result<CFStringRef, String> {
-        let c_string = CString::new(value)
-            .map_err(|_| format!("value contains embedded NUL byte: {value:?}"))?;
-        let value_ref = unsafe {
-            CFStringCreateWithCString(
-                std::ptr::null(),
-                c_string.as_ptr(),
-                K_CFSTRING_ENCODING_UTF8,
-            )
-        };
-        if value_ref.is_null() {
-            Err(format!("failed to create CFString for {value:?}"))
-        } else {
-            Ok(value_ref)
-        }
-    }
-
-    pub(super) fn take_over_url_scheme(scheme: &str, bundle_id: &str) -> Result<(), String> {
-        let scheme_ref = make_cf_string(scheme)?;
-        let bundle_ref = make_cf_string(bundle_id)?;
-
-        let status = unsafe { LSSetDefaultHandlerForURLScheme(scheme_ref, bundle_ref) };
-
-        unsafe {
-            CFRelease(bundle_ref);
-            CFRelease(scheme_ref);
-        }
-
-        if status == 0 {
-            Ok(())
-        } else {
-            Err(format!(
-                "LSSetDefaultHandlerForURLScheme failed with OSStatus {status}"
-            ))
-        }
-    }
-}
 
 mod actions;
 mod activation;
@@ -201,13 +137,9 @@ fn set_status_key(world: &mut World, key: &str, fallback: &str) {
     set_status(world, message);
 }
 
-pub(super) fn ensure_pixiv_scheme_takeover_for_dev() {
-    #[cfg(target_os = "macos")]
-    if let Err(error) =
-        macos_scheme_takeover::take_over_url_scheme("pixiv", PIXIV_CALLBACK_BUNDLE_ID)
-    {
-        eprintln!("pixiv scheme takeover failed: {error}");
-    }
+#[cfg(target_os = "macos")]
+fn pixiv_macos_bundle_config() -> MacosBundleConfig {
+    MacosBundleConfig::new(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Info.plist"))
 }
 
 fn sync_font_stack_for_locale(sheet: &mut StyleSheet, stack: Option<&[String]>) {
@@ -999,9 +931,13 @@ fn build_app(mut activation_service: Option<ActivationService>) -> App {
 }
 
 pub fn run() -> std::result::Result<(), EventLoopError> {
-    let activation_config = ActivationConfig::new(PIXIV_ACTIVATION_APP_ID).with_protocol(
-        ProtocolRegistration::new("pixiv", "Pixiv OAuth callback", None),
-    );
+    let mut protocol = ProtocolRegistration::new("pixiv", "Pixiv OAuth callback", None);
+    #[cfg(target_os = "macos")]
+    {
+        protocol = protocol.with_macos_bundle(pixiv_macos_bundle_config());
+    }
+
+    let activation_config = ActivationConfig::new(PIXIV_ACTIVATION_APP_ID).with_protocol(protocol);
 
     let activation_service = match bootstrap(activation_config) {
         Ok(BootstrapOutcome::Primary(service)) => Some(service),
@@ -1011,8 +947,6 @@ pub fn run() -> std::result::Result<(), EventLoopError> {
             None
         }
     };
-
-    ensure_pixiv_scheme_takeover_for_dev();
 
     run_app_with_window_options(build_app(activation_service), "Pixiv Desktop", |options| {
         options.with_initial_inner_size(LogicalSize::new(1360.0, 860.0))
@@ -1172,11 +1106,11 @@ mod tests {
     }
 
     #[test]
-    fn info_plist_bundle_identifier_matches_takeover_bundle_id() {
+    fn info_plist_keeps_expected_bundle_identifier() {
         let plist = include_str!("../Info.plist");
         assert!(
             plist.contains("<string>dev.summpot.example-pixiv-client</string>"),
-            "Info.plist should keep the macOS URL-handler bundle id in sync"
+            "Info.plist should keep the Pixiv app bundle identifier stable"
         );
     }
 

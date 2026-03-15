@@ -236,9 +236,9 @@ The workspace now includes a dedicated crate: `bevy_xilem-activation`.
 - **Single-instance gate** (`app-single-instance`): `notify_if_running(app_id)` is used before startup to detect an already-running primary instance and signal it to show. On the first instance, `start_primary(app_id, ...)` keeps the primary ownership alive.
 - **Activation IPC bridge** (`ipc-channel` one-shot rendezvous): primary continuously rotates `IpcOneShotServer` endpoints and publishes the active server name in a per-app rendezvous file under temp dir. Secondary launches read that name, connect through `IpcSender::connect`, forward URI payloads, and wait for explicit ack (`Ack` / `Nack`) over an embedded IPC ack channel before exiting.
 - **Cross-platform transport consistency:** activation parameter forwarding now uses `ipc-channel` on all supported desktop platforms, relying on crate-native platform backends (Unix sockets / Mach ports / named pipes) instead of custom line-protocol socket framing.
-- **Custom URI protocol registration + callback dispatch** (`sysuri`): app-managed registration for OS-level protocol handling and callback dispatch (`register_handler` + `should_handle_uri`) instead of manual per-platform callback parsing.
-- **Startup URI collection hardening:** activation collects protocol callback URIs from both `sysuri::parse_args()` and raw process arguments (scheme-filtered, case-insensitive) before dedupe, so callback launchers that bypass `sysuri` argv parsing still forward payloads correctly.
-- **macOS callback dispatch tolerance:** activation always performs a best-effort `should_handle_uri` pass on macOS protocol boots (even when argv contains no callback URI), preventing missed callback deliveries from platform dispatch paths that do not populate command-line arguments.
+- **Custom URI protocol registration is crate-native:** `bevy_xilem-activation` implements its own protocol registration instead of depending on `sysuri`. Windows uses the same HKCU registry layout as `sysuri`; Linux writes the same `~/.local/share/applications/*.desktop` entry + `xdg-mime` default-handler flow.
+- **Startup URI collection:** activation scans raw process arguments directly, normalizes quoted values, filters callback URIs by case-insensitive scheme match, and deduplicates before secondary-to-primary IPC forwarding.
+- **macOS bundle workflow:** apps supply their own `Info.plist` through `MacosBundleConfig`. `bevy_xilem-activation` reads that plist, creates/updates a runnable `.app` bundle around the current executable when needed, registers it with Launch Services, and then forcibly rebinds the configured URL scheme to the current app via `LSSetDefaultHandlerForURLScheme` during startup.
 
 ### 12.2 Pixiv callback flow
 
@@ -246,7 +246,7 @@ The workspace now includes a dedicated crate: `bevy_xilem-activation`.
 
 1. User starts browser OAuth from running app.
 2. Browser callback opens `pixiv://account/login?code=...&via=login`.
-3. `bevy_xilem-activation` registers a `sysuri` scheme handler in bootstrap; callback URIs are dispatched via `sysuri` handler flow, then secondary launches forward URI payloads over activation IPC to the primary and exit.
+3. `bevy_xilem-activation` registers `pixiv:` directly during bootstrap; on macOS it reads the example's checked-in `Info.plist`, generates/refreshes the app bundle used for protocol launches, force-takes over the scheme with `LSSetDefaultHandlerForURLScheme`, then forwards callback URIs from secondary launches over activation IPC to the primary and exits.
 4. Primary instance auto-extracts `code` and triggers token exchange (`authorization_code`) using current PKCE verifier.
 
 This removes the manual copy/paste requirement in normal desktop callback flow while preserving manual fallback input behavior.

@@ -2,10 +2,7 @@ use std::{
     collections::HashSet,
     fs, io,
     path::PathBuf,
-    sync::{
-        Arc, Mutex,
-        mpsc::{self, Receiver, Sender},
-    },
+    sync::mpsc::{self, Receiver, Sender},
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -16,11 +13,64 @@ use ipc_channel::{
     ipc::{IpcOneShotServer, IpcSender, channel},
 };
 use serde::{Deserialize, Serialize};
-use sysuri::{FnHandler, UriScheme};
+
+mod platform;
+
+#[cfg(target_os = "macos")]
+pub use platform::macos::{
+    create_app_bundle_from_plist as create_macos_app_bundle_from_plist,
+    read_info_plist as read_macos_info_plist,
+};
 
 const IPC_CONNECT_RETRY_ATTEMPTS: usize = 120;
 const IPC_CONNECT_RETRY_DELAY: Duration = Duration::from_millis(50);
 const IPC_ACK_TIMEOUT: Duration = Duration::from_secs(2);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MacosBundleConfig {
+    pub info_plist: PathBuf,
+    pub bundle_name: Option<String>,
+    pub applications_dir: Option<PathBuf>,
+}
+
+impl MacosBundleConfig {
+    #[must_use]
+    pub fn new(info_plist: impl Into<PathBuf>) -> Self {
+        Self {
+            info_plist: info_plist.into(),
+            bundle_name: None,
+            applications_dir: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_bundle_name(mut self, bundle_name: impl Into<String>) -> Self {
+        self.bundle_name = Some(bundle_name.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_applications_dir(mut self, applications_dir: impl Into<PathBuf>) -> Self {
+        self.applications_dir = Some(applications_dir.into());
+        self
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MacosInfoPlist {
+    pub bundle_identifier: String,
+    pub bundle_name: String,
+    pub executable_name: String,
+    pub url_schemes: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MacosAppBundle {
+    pub bundle_path: PathBuf,
+    pub info_plist_path: PathBuf,
+    pub executable_path: PathBuf,
+    pub info_plist: MacosInfoPlist,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ActivationForwardMessage {
@@ -41,8 +91,9 @@ pub type Result<T> = std::result::Result<T, ActivationError>;
 pub enum ActivationError {
     InvalidConfig(String),
     Io(io::Error),
-    Protocol(sysuri::Error),
+    Plist(plist::Error),
     SingleInstance(String),
+    Platform(String),
 }
 
 impl std::fmt::Display for ActivationError {
@@ -50,8 +101,9 @@ impl std::fmt::Display for ActivationError {
         match self {
             Self::InvalidConfig(reason) => write!(f, "invalid activation config: {reason}"),
             Self::Io(error) => write!(f, "activation io error: {error}"),
-            Self::Protocol(error) => write!(f, "protocol registration error: {error}"),
+            Self::Plist(error) => write!(f, "activation plist error: {error}"),
             Self::SingleInstance(error) => write!(f, "single-instance error: {error}"),
+            Self::Platform(error) => write!(f, "activation platform error: {error}"),
         }
     }
 }
@@ -64,9 +116,9 @@ impl From<io::Error> for ActivationError {
     }
 }
 
-impl From<sysuri::Error> for ActivationError {
-    fn from(value: sysuri::Error) -> Self {
-        Self::Protocol(value)
+impl From<plist::Error> for ActivationError {
+    fn from(value: plist::Error) -> Self {
+        Self::Plist(value)
     }
 }
 
@@ -76,6 +128,7 @@ pub struct ProtocolRegistration {
     pub description: String,
     pub executable: Option<PathBuf>,
     pub icon: Option<PathBuf>,
+    pub macos_bundle: Option<MacosBundleConfig>,
 }
 
 impl ProtocolRegistration {
@@ -90,12 +143,19 @@ impl ProtocolRegistration {
             description: description.into(),
             executable,
             icon: None,
+            macos_bundle: None,
         }
     }
 
     #[must_use]
     pub fn with_icon(mut self, icon: PathBuf) -> Self {
         self.icon = Some(icon);
+        self
+    }
+
+    #[must_use]
+    pub fn with_macos_bundle(mut self, macos_bundle: MacosBundleConfig) -> Self {
+        self.macos_bundle = Some(macos_bundle);
         self
     }
 }
@@ -149,6 +209,15 @@ impl ActivationService {
     }
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct ResolvedProtocolRegistration {
+    pub scheme: String,
+    pub description: String,
+    pub executable: PathBuf,
+    pub icon: Option<PathBuf>,
+    pub macos_bundle: Option<MacosBundleConfig>,
+}
+
 pub fn bootstrap(config: ActivationConfig) -> Result<BootstrapOutcome> {
     validate_config(&config)?;
 
@@ -181,67 +250,34 @@ pub fn bootstrap(config: ActivationConfig) -> Result<BootstrapOutcome> {
 }
 
 fn finalize_secondary_forward_result(forward_result: Result<()>) -> BootstrapOutcome {
-    // Secondary launches should never become an interactive UI process, even if
-    // forwarding to the primary fails transiently. This avoids dual-instance
-    // regressions on macOS callback relaunch races.
     let _ = forward_result;
     BootstrapOutcome::SecondaryForwarded
 }
 
 fn collect_startup_uris(protocol: Option<&ProtocolRegistration>) -> Result<Vec<String>> {
-    let Some(protocol) = protocol else {
-        return Ok(sysuri::parse_args().into_iter().collect());
+    let startup_uris = match protocol {
+        Some(protocol) => {
+            collect_matching_protocol_uris_from_process_args(protocol.scheme.as_str())
+        }
+        None => collect_protocol_uris_from_process_args(),
     };
 
-    let pending_uris = Arc::new(Mutex::new(Vec::<String>::new()));
-    let pending_uris_for_handler = Arc::clone(&pending_uris);
-    let expected_scheme = protocol.scheme.clone();
-    let expected_scheme_for_handler = expected_scheme.clone();
-
-    sysuri::register_handler(
-        protocol.scheme.as_str(),
-        FnHandler::new(move |uri| {
-            let Some(scheme) = sysuri::extract_scheme(uri) else {
-                return;
-            };
-
-            if !scheme.eq_ignore_ascii_case(expected_scheme_for_handler.as_str()) {
-                return;
-            }
-
-            if let Ok(mut uris) = pending_uris_for_handler.lock() {
-                uris.push(uri.to_string());
-            }
-        }),
-    );
-
-    let mut startup_uris =
-        collect_matching_protocol_uris_from_process_args(expected_scheme.as_str());
-    let mut should_dispatch_sysuri = cfg!(target_os = "macos") || !startup_uris.is_empty();
-
-    if let Some(uri) = sysuri::parse_args()
-        && let Some(scheme) = sysuri::extract_scheme(&uri)
-        && scheme.eq_ignore_ascii_case(protocol.scheme.as_str())
-    {
-        startup_uris.push(uri);
-        should_dispatch_sysuri = true;
-    }
-
-    if should_dispatch_sysuri && let Err(error) = sysuri::should_handle_uri() {
-        eprintln!("activation: sysuri callback dispatch failed: {error}");
-    }
-
-    startup_uris.extend(
-        pending_uris
-            .lock()
-            .map_err(|_| {
-                ActivationError::SingleInstance("sysuri callback buffer mutex poisoned".to_string())
-            })?
-            .iter()
-            .cloned(),
-    );
-
     Ok(dedupe_preserve_order(startup_uris))
+}
+
+fn collect_protocol_uris_from_process_args() -> Vec<String> {
+    collect_protocol_uris_from_iter(std::env::args().skip(1))
+}
+
+fn collect_protocol_uris_from_iter<I>(args: I) -> Vec<String>
+where
+    I: IntoIterator,
+    I::Item: AsRef<str>,
+{
+    args.into_iter()
+        .filter_map(|arg| normalize_uri_candidate(arg.as_ref()).map(ToOwned::to_owned))
+        .filter(|candidate| parse_scheme_from_uri(candidate).is_some())
+        .collect()
 }
 
 fn collect_matching_protocol_uris_from_process_args(expected_scheme: &str) -> Vec<String> {
@@ -254,18 +290,40 @@ where
     I::Item: AsRef<str>,
 {
     args.into_iter()
-        .filter_map(|arg| {
-            let raw = arg.as_ref().trim();
-            let candidate = raw.trim_matches('"').trim_matches('\'');
-
-            let scheme = sysuri::extract_scheme(candidate)?;
-            if scheme.eq_ignore_ascii_case(expected_scheme) {
-                Some(candidate.to_string())
-            } else {
-                None
-            }
+        .filter_map(|arg| normalize_uri_candidate(arg.as_ref()).map(ToOwned::to_owned))
+        .filter(|candidate| {
+            parse_scheme_from_uri(candidate)
+                .is_some_and(|scheme| scheme.eq_ignore_ascii_case(expected_scheme))
         })
         .collect()
+}
+
+fn normalize_uri_candidate(raw: &str) -> Option<&str> {
+    let candidate = raw.trim().trim_matches('"').trim_matches('\'');
+    (!candidate.is_empty()).then_some(candidate)
+}
+
+pub(crate) fn parse_scheme_from_uri(uri: &str) -> Option<&str> {
+    let candidate = normalize_uri_candidate(uri)?;
+    let (scheme, _rest) = candidate.split_once("://")?;
+    is_valid_scheme_name(scheme).then_some(scheme)
+}
+
+pub(crate) fn is_valid_scheme_name(scheme: &str) -> bool {
+    if scheme.is_empty() {
+        return false;
+    }
+
+    let mut chars = scheme.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+
+    if !first.is_ascii_alphabetic() {
+        return false;
+    }
+
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.')
 }
 
 fn dedupe_preserve_order(values: Vec<String>) -> Vec<String> {
@@ -282,30 +340,39 @@ fn dedupe_preserve_order(values: Vec<String>) -> Vec<String> {
 }
 
 pub fn ensure_protocol_registered(protocol: &ProtocolRegistration) -> Result<()> {
+    let resolved = resolve_protocol_registration(protocol)?;
+    platform::register(&resolved)
+}
+
+fn resolve_protocol_registration(
+    protocol: &ProtocolRegistration,
+) -> Result<ResolvedProtocolRegistration> {
+    if !is_valid_scheme_name(protocol.scheme.as_str()) {
+        return Err(ActivationError::InvalidConfig(format!(
+            "scheme `{}` is invalid",
+            protocol.scheme
+        )));
+    }
+
     let executable = match protocol.executable.clone() {
         Some(path) => path,
         None => std::env::current_exe()?,
     };
 
-    let mut scheme = UriScheme::new(
-        protocol.scheme.clone(),
-        protocol.description.clone(),
-        executable,
-    );
-
-    if let Some(icon) = protocol.icon.clone() {
-        scheme = scheme.with_icon(icon);
-    }
-
-    if !scheme.is_valid_scheme() {
+    if !executable.exists() {
         return Err(ActivationError::InvalidConfig(format!(
-            "scheme `{}` is invalid",
-            scheme.scheme
+            "executable does not exist: {:?}",
+            executable
         )));
     }
 
-    sysuri::register(&scheme)?;
-    Ok(())
+    Ok(ResolvedProtocolRegistration {
+        scheme: protocol.scheme.clone(),
+        description: protocol.description.clone(),
+        executable,
+        icon: protocol.icon.clone(),
+        macos_bundle: protocol.macos_bundle.clone(),
+    })
 }
 
 fn spawn_ipc_listener(app_id: &str, thread_name: String, sender: Sender<String>) -> Result<()> {
@@ -577,6 +644,16 @@ mod tests {
         let registration = ProtocolRegistration::new("pixiv", "Pixiv", None);
         assert_eq!(registration.scheme, "pixiv");
         assert_eq!(registration.description, "Pixiv");
+        assert!(registration.macos_bundle.is_none());
+    }
+
+    #[test]
+    fn protocol_builder_can_store_macos_bundle_config() {
+        let config = MacosBundleConfig::new("Info.plist").with_bundle_name("Pixiv Desktop");
+        let registration =
+            ProtocolRegistration::new("pixiv", "Pixiv", None).with_macos_bundle(config.clone());
+
+        assert_eq!(registration.macos_bundle, Some(config));
     }
 
     #[test]
@@ -607,6 +684,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_scheme_from_uri_requires_valid_custom_url_form() {
+        assert_eq!(
+            parse_scheme_from_uri("pixiv://account/login"),
+            Some("pixiv")
+        );
+        assert_eq!(parse_scheme_from_uri("HTTP://example.com"), Some("HTTP"));
+        assert_eq!(parse_scheme_from_uri("pixiv:/broken"), None);
+        assert_eq!(parse_scheme_from_uri("1pixiv://broken"), None);
+        assert_eq!(parse_scheme_from_uri("not-a-uri"), None);
+    }
+
+    #[test]
     fn protocol_uri_fallback_from_raw_args_filters_by_scheme() {
         let args = vec![
             "-psn_0_12345".to_string(),
@@ -621,6 +710,24 @@ mod tests {
             vec![
                 "pixiv://account/login?code=first".to_string(),
                 "PIXIV://account/login?code=second".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn collect_protocol_uris_from_iter_returns_all_uri_like_args() {
+        let args = vec![
+            "pixiv://account/login?code=first".to_string(),
+            "\"https://example.com/callback\"".to_string(),
+            "not-a-uri".to_string(),
+        ];
+
+        let uris = collect_protocol_uris_from_iter(args);
+        assert_eq!(
+            uris,
+            vec![
+                "pixiv://account/login?code=first".to_string(),
+                "https://example.com/callback".to_string(),
             ]
         );
     }

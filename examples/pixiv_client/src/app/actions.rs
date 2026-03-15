@@ -229,8 +229,6 @@ pub(super) fn drain_ui_actions_and_dispatch(world: &mut World) {
                 );
             }
             AppAction::OpenBrowserLogin => {
-                ensure_pixiv_scheme_takeover_for_dev();
-
                 let (idp_urls, verifier) = {
                     let mut auth = world.resource_mut::<AuthState>();
                     let idp_urls = auth.idp_urls.clone();
